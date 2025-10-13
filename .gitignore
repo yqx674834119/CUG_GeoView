@@ -1,0 +1,6 @@
+!backend/model/.gitkeep
+backend/model/*
+.uuid
+backend/static/*
+backend/model/**/*.zip
+backend/model/**/*.pdiparams
