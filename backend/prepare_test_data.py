@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GeoView 测试数据快速准备脚本
+cugrs 测试数据快速准备脚本
 
 本脚本用于快速生成 API 测试所需的合成遥感图像数据。
 如果无法获取真实的遥感图像，可以使用此脚本生成模拟数据进行测试。
@@ -379,7 +379,7 @@ def validate_test_data(data_dir='test_data'):
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='GeoView 测试数据准备工具')
+    parser = argparse.ArgumentParser(description='cugrs 测试数据准备工具')
     parser.add_argument('--output-dir', '-o', default='test_data', 
                        help='输出目录 (默认: test_data)')
     parser.add_argument('--size', '-s', nargs=2, type=int, default=[512, 512],
@@ -392,7 +392,7 @@ def main():
     
     args = parser.parse_args()
     
-    print("🌍 GeoView 测试数据准备工具")
+    print("🌍 cugrs 测试数据准备工具")
     print("=" * 40)
     
     # 如果只是验证

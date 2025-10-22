@@ -1,8 +1,8 @@
 # 影像NDVI处理功能扩展教程（新手友好版）
 
-本教程手把手教你在 GeoView 前端中新增一个“影像NDVI处理”功能页面，并给出一个最小可运行的后端 FastAPI 示例，帮助你快速联调与演示。内容参考并复用“影像超分重建”页面（`RestoreImgs.vue`）的交互与数据流，保持项目风格一致。
+本教程手把手教你在 cugrs 前端中新增一个“影像NDVI处理”功能页面，并给出一个最小可运行的后端 FastAPI 示例，帮助你快速联调与演示。内容参考并复用“影像超分重建”页面（`RestoreImgs.vue`）的交互与数据流，保持项目风格一致。
 
-> 路径和命令均可直接复制执行。以下示例默认仓库根目录为 `/home/livablecity/GeoView`。
+> 路径和命令均可直接复制执行。以下示例默认仓库根目录为 `/home/livablecity/cugrs`。
 
 ---
 
@@ -24,7 +24,7 @@
 执行命令创建新页面（简单版，复用“影像超分重建”核心交互）：
 
 ```bash
-cat > /home/livablecity/GeoView/frontend/src/views/mainfun/NDVI.vue << 'EOF'
+cat > /home/livablecity/cugrs/frontend/src/views/mainfun/NDVI.vue << 'EOF'
 <template>
   <div>
     <Tabinfor>
@@ -152,8 +152,8 @@ EOF
 插入 NDVI 路由与懒加载导入（紧邻“影像超分重建”）：
 
 ```bash
-sed -i "/const RestoreImgs/a const NDVI = ()=> import('@\\/views\\/mainfun\\/NDVI.vue')" /home/livablecity/GeoView/frontend/src/router/index.js
-sed -i "/component: RestoreImgs/a \ \ \ \ \ \ \ \ { path: '\/ndvi', name:'NDVI', component: NDVI }" /home/livablecity/GeoView/frontend/src/router/index.js
+sed -i "/const RestoreImgs/a const NDVI = ()=> import('@\\/views\\/mainfun\\/NDVI.vue')" /home/livablecity/cugrs/frontend/src/router/index.js
+sed -i "/component: RestoreImgs/a \ \ \ \ \ \ \ \ { path: '\/ndvi', name:'NDVI', component: NDVI }" /home/livablecity/cugrs/frontend/src/router/index.js
 ```
 
 > 使用项目别名 `@` 以确保在 Vue 项目中动态导入路径可解析。
@@ -164,13 +164,13 @@ sed -i "/component: RestoreImgs/a \ \ \ \ \ \ \ \ { path: '\/ndvi', name:'NDVI',
 
 ```bash
 # 侧边菜单新增一项（插在 goRestoreImgs 后面）
-sed -i "/@click=\"goRestoreImgs\"/a \    <el-menu-item\n      index=\"/ndvi\"\n      @click=\"goNDVI\"\n    >\n      <i v-show=\"isCollapse\" class=\"icon-enhance\" />\n      <h3 v-show=\"!isCollapse\">\n        <i class=\"icon-enhance\" />影像NDVI处理\n      </h3>\n    </el-menu-item>" /home/livablecity/GeoView/frontend/src/components/AsideVue.vue
+sed -i "/@click=\"goRestoreImgs\"/a \    <el-menu-item\n      index=\"/ndvi\"\n      @click=\"goNDVI\"\n    >\n      <i v-show=\"isCollapse\" class=\"icon-enhance\" />\n      <h3 v-show=\"!isCollapse\">\n        <i class=\"icon-enhance\" />影像NDVI处理\n      </h3>\n    </el-menu-item>" /home/livablecity/cugrs/frontend/src/components/AsideVue.vue
 
 # 导入 goNDVI 方法
-sed -i "s/goRestoreImgs,\n  goHistory/goRestoreImgs,\n  goNDVI,\n  goHistory/" /home/livablecity/GeoView/frontend/src/components/AsideVue.vue
+sed -i "s/goRestoreImgs,\n  goHistory/goRestoreImgs,\n  goNDVI,\n  goHistory/" /home/livablecity/cugrs/frontend/src/components/AsideVue.vue
 
 # 在跳转工具中新增 goNDVI
-cat >> /home/livablecity/GeoView/frontend/src/utils/gosomewhere.js << 'EOF'
+cat >> /home/livablecity/cugrs/frontend/src/utils/gosomewhere.js << 'EOF'
 export function goNDVI(){
   window.location.hash = '';
   window.location.pathname = '/ndvi';
@@ -204,7 +204,7 @@ EOF
 ### 3.1 创建后端文件
 
 ```bash
-cat > /home/livablecity/GeoView/backend/ndvi_demo_fastapi.py << 'EOF'
+cat > /home/livablecity/cugrs/backend/ndvi_demo_fastapi.py << 'EOF'
 import os
 import json
 import uuid
@@ -333,8 +333,8 @@ EOF
 ### 3.2 安装与启动后端（默认 5000 端口）
 
 ```bash
-python3 -m venv /home/livablecity/GeoView/.venv
-source /home/livablecity/GeoView/.venv/bin/activate
+python3 -m venv /home/livablecity/cugrs/.venv
+source /home/livablecity/cugrs/.venv/bin/activate
 pip install --upgrade pip
 pip install fastapi uvicorn python-multipart pillow numpy
 
@@ -348,7 +348,7 @@ uvicorn backend.ndvi_demo_fastapi:app --host 127.0.0.1 --port 5000
 将前端 `.env` 指向上面 FastAPI 的地址（如非使用 `backend/app.py` 自动写入）：
 
 ```bash
-cat > /home/livablecity/GeoView/frontend/.env << 'EOF'
+cat > /home/livablecity/cugrs/frontend/.env << 'EOF'
 VUE_APP_BACKEND_IP=127.0.0.1
 VUE_APP_BACKEND_PORT=5000
 EOF
@@ -357,7 +357,7 @@ EOF
 然后启动前端：
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm install
 npm run serve
 ```
@@ -371,7 +371,7 @@ npm run serve
 ### 4.1 上传文件
 
 ```bash
-curl -F "files=@/home/livablecity/GeoView/frontend/public/logo.svg" \
+curl -F "files=@/home/livablecity/cugrs/frontend/public/logo.svg" \
      -F "type=影像NDVI处理" \
      http://127.0.0.1:5000/api/file/upload
 ```

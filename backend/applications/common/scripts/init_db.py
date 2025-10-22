@@ -1,20 +1,29 @@
+import os
+
 import pymysql
 import sqlparse
 from dotenv import dotenv_values
 
-config = dotenv_values('.flaskenv')
+_dotenv = dotenv_values('.flaskenv')
+
+
+def _config(key: str, default: str) -> str:
+    """Read configuration value from environment first, then .flaskenv, fallback to default."""
+    return os.getenv(key) or _dotenv.get(key) or default
+
+
 # MySql配置信息
-HOST = config.get('MYSQL_HOST') or '127.0.0.1'
-PORT = config.get('MYSQL_PORT') or 3306
-DATABASE = config.get('MYSQL_DATABASE') or 'AdminFlask'
-USERNAME = config.get('MYSQL_USERNAME') or 'root'
-PASSWORD = config.get('MYSQL_PASSWORD') or '123456'
+HOST = _config('MYSQL_HOST', '127.0.0.1')
+PORT = int(_config('MYSQL_PORT', 3306))
+DATABASE = _config('MYSQL_DATABASE', 'AdminFlask')
+USERNAME = _config('MYSQL_USERNAME', 'root')
+PASSWORD = _config('MYSQL_PASSWORD', '123456')
 
 
 def is_exist_database():
     db = pymysql.connect(
         host=HOST,
-        port=int(PORT),
+        port=PORT,
         user=USERNAME,
         password=PASSWORD,
         charset='utf8mb4')
@@ -29,7 +38,7 @@ def is_exist_database():
 def init_database():
     db = pymysql.connect(
         host=HOST,
-        port=int(PORT),
+        port=PORT,
         user=USERNAME,
         password=PASSWORD,
         charset='utf8mb4')
@@ -43,7 +52,7 @@ def init_database():
 def execute_fromfile(filename):
     db = pymysql.connect(
         host=HOST,
-        port=int(PORT),
+        port=PORT,
         user=USERNAME,
         password=PASSWORD,
         database=DATABASE,

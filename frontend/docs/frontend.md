@@ -1,13 +1,13 @@
-# GeoView 前端说明文档
+# cugrs 前端说明文档
 
 目标：帮助新开发者快速理解前端的用途、定位与核心逻辑，并可直接复制执行文档中的命令与路径。
 
 ## 1. 项目结构（整体目录树）
 
-前端位于：`/home/livablecity/GeoView/frontend/`
+前端位于：`/home/livablecity/cugrs/frontend/`
 
 ```plain
-/home/livablecity/GeoView/frontend
+/home/livablecity/cugrs/frontend
 ├── .env                       # 前端环境变量文件（后端首次启动会自动写入，可以手动修改）
 ├── package.json               # 项目依赖与脚本
 ├── vue.config.js              # 开发服务配置（读取根目录 config.yaml）
@@ -57,7 +57,7 @@
 
 前端依赖：Node.js（建议 LTS 版本），npm。后端为 Flask（Python 3）。
 
-- 根目录配置文件：`/home/livablecity/GeoView/config.yaml`
+- 根目录配置文件：`/home/livablecity/cugrs/config.yaml`
 - 前端开发服务器的 `host/port` 会从该文件读取：
 
 ```yaml
@@ -74,14 +74,14 @@ host:
 ### 2.1 启动后端（写入前端 .env）
 
 ```bash
-cd /home/livablecity/GeoView/backend
+cd /home/livablecity/cugrs/backend
 python app.py
 ```
 
 启动后会在 `frontend/.env` 写入如下环境变量（由 `config.yaml` 推导）：
 
 ```ini
-# /home/livablecity/GeoView/frontend/.env
+# /home/livablecity/cugrs/frontend/.env
 VUE_APP_BACKEND_PORT = 5008
 VUE_APP_BACKEND_IP = 127.0.0.1
 VUE_APP_BAIDU_MAP_ACCESS_KEY = <ACCESS_KEY>
@@ -92,7 +92,7 @@ VUE_APP_BAIDU_MAP_ACCESS_KEY = <ACCESS_KEY>
 ### 2.2 安装前端依赖并启动开发服务器
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm install
 npm run serve
 ```
@@ -102,7 +102,7 @@ npm run serve
 ### 2.3 生产构建
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm run build
 ```
 
@@ -111,14 +111,14 @@ npm run build
 ### 2.4 代码检查（可选）
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npx eslint --ext .js,.vue --fix src
 ```
 
 或在根目录执行完整检查脚本：
 
 ```bash
-cd /home/livablecity/GeoView/tests
+cd /home/livablecity/cugrs/tests
 bash lint.sh
 ```
 
@@ -129,7 +129,7 @@ bash lint.sh
 `src/global.vue` 中根据 `.env` 的值拼接后端地址：
 
 ```js
-// /home/livablecity/GeoView/frontend/src/global.vue
+// /home/livablecity/cugrs/frontend/src/global.vue
 const BASEURL = "http://" + process.env.VUE_APP_BACKEND_IP + ":" + process.env.VUE_APP_BACKEND_PORT + "/";
 export default { BASEURL };
 ```
@@ -302,14 +302,14 @@ curl -X DELETE \
 
 ```bash
 # 查看根配置
-cat /home/livablecity/GeoView/config.yaml
+cat /home/livablecity/cugrs/config.yaml
 
 # 启动后端（写入前端 .env）
-cd /home/livablecity/GeoView/backend
+cd /home/livablecity/cugrs/backend
 python app.py
 
 # 安装并启动前端
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm install
 npm run serve
 

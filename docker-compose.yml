@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+    image: cugrs/app:latest
+    container_name: cugrs-app
+    ports:
+      - "5008:5008"
+      - "3000:3000"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USERNAME: paddle_rs
+      MYSQL_PASSWORD: "Yqx090315."
+      MYSQL_DATABASE: paddle_rs
+      FLASK_CONFIG: production
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    depends_on:
+      - mysql
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  mysql:
+    image: mysql:5.7
+    container_name: cugrs-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: "root"
+      MYSQL_DATABASE: paddle_rs
+      MYSQL_USER: paddle_rs
+      MYSQL_PASSWORD: "Yqx090315."
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

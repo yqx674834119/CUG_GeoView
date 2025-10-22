@@ -1,0 +1,12 @@
+.git
+.gitignore
+*.pyc
+__pycache__/
+frontend/node_modules
+frontend/dist
+backend/app.log
+tests/
+docker-compose.yml
+install.md
+demo.md
+Modified/

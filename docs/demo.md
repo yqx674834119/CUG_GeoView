@@ -8,14 +8,14 @@
 - 启动后端并写入前端环境：
 
 ```bash
-cd /home/livablecity/GeoView
+cd /home/livablecity/cugrs
 python backend/app.py
 ```
 
 - 启动前端开发服务：
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm install
 npm run serve
 ```
@@ -23,7 +23,7 @@ npm run serve
 - 后端需提供 `POST /api/analysis/ndvi` 接口（与其他分析接口保持一致，入参结构相同）。如后端暂未就绪，可先复用 `image_restoration` 验证前端流程。
 
 一、复制并改造“影像超分重建”页面
-- 在仓库根路径 `/home/livablecity/GeoView` 执行：
+- 在仓库根路径 `/home/livablecity/cugrs` 执行：
 
 ```bash
 # 1) 复制页面为 NDVI 页面
@@ -118,7 +118,7 @@ curl -X POST "http://$(grep ^VUE_APP_BACKEND_IP= frontend/.env | cut -d= -f2):$(
 - 启动前端（首次需安装依赖）：
 
 ```bash
-cd /home/livablecity/GeoView/frontend
+cd /home/livablecity/cugrs/frontend
 npm install
 npm run serve
 ```

@@ -1,4 +1,4 @@
-# GeoView
+# cugrs
 
 ## Project setup
 ```

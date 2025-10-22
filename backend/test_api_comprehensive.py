@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-GeoView 后端 API 接口全面测试脚本
+cugrs 后端 API 接口全面测试脚本
 
 本脚本测试所有API接口的各种功能和参数组合，包括：
 1. 文件上传接口
@@ -25,8 +25,8 @@ import unittest
 from unittest import TestCase
 
 
-class GeoViewAPITester(TestCase):
-    """GeoView API 全面测试类"""
+class cugrsAPITester(TestCase):
+    """cugrs API 全面测试类"""
     
     def setUp(self):
         """测试初始化"""
@@ -721,7 +721,7 @@ class GeoViewAPITester(TestCase):
 def run_comprehensive_test():
     """运行全面测试"""
     print("\n" + "="*60)
-    print("🚀 GeoView 后端 API 全面测试开始")
+    print("🚀 cugrs 后端 API 全面测试开始")
     print("="*60)
     
     # 检查服务是否可用
