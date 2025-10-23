@@ -20,6 +20,8 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     depends_on:
       - mysql
+    volumes:
+      - ./backend/static:/app/backend/static
     restart: unless-stopped
     deploy:
       resources:

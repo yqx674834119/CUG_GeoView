@@ -62,7 +62,12 @@ COPY frontend ./frontend
 COPY PaddleRS ./PaddleRS
 COPY config.yaml .
 
-# 1️⃣ 升级 pip / setuptools
+# 1️⃣ 设置 pip 清华镜像源 升级 pip / setuptools
+RUN mkdir -p /root/.pip && \
+    echo "[global]" > /root/.pip/pip.conf && \
+    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip.conf && \
+    echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> /root/.pip/pip.conf
+
 RUN conda run -n PaddleRS37 python -m pip install --upgrade pip && \
     conda run -n PaddleRS37 pip install "setuptools<=65.5.0"
 

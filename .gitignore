@@ -4,3 +4,4 @@ backend/model/*
 backend/static/*
 backend/model/**/*.zip
 backend/model/**/*.pdiparams
+offline_package
