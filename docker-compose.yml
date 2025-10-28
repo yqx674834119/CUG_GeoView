@@ -4,7 +4,7 @@ services:
   app:
     build:
       context: .
-    image: cugrs/app:latest
+    image: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
     container_name: cugrs-app
     ports:
       - "5008:5008"
@@ -32,7 +32,7 @@ services:
               capabilities: [gpu]
 
   mysql:
-    image: mysql:5.7
+    image:  registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
     container_name: cugrs-mysql
     command: --default-authentication-plugin=mysql_native_password
     environment:
@@ -43,7 +43,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     ports:
-      - "3306:3306"
+      - "3307:3306"
     restart: unless-stopped
 
 volumes:

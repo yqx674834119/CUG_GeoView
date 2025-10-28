@@ -119,28 +119,28 @@ docker compose exec app bash
 构建完成后，推荐将镜像推送到云端仓库（如 Docker Hub、阿里云、华为云等），方便团队成员直接拉取。
 
 1. 选择并创建镜像仓库  
-   - Docker Hub: 新建公开或私有仓库，例如 `yourname/geoview`。  
-   - 阿里云等企业仓库：按照各自控制台提示创建命名空间与仓库，记下完整仓库地址（例如 `registry.cn-hangzhou.aliyuncs.com/yourteam/geoview`）。
+   - Docker Hub: 新建公开或私有仓库，例如 `yourname/cugrs`。  
+   - 阿里云等企业仓库：按照各自控制台提示创建命名空间与仓库，记下完整仓库地址（例如 `registry.cn-hangzhou.aliyuncs.com/yourteam/cugrs`）。
 
 2. 登录镜像仓库  
    ```bash
    # Docker Hub
    docker login
    # 其他仓库需指定 Registry 地址，例如阿里云：
-   docker login registry.cn-hangzhou.aliyuncs.com
+   docker login --username=13997543646yqx crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com
    ```
 
 3. 为本地镜像重新打 Tag  
    构建完成后默认镜像名为 `cugrs/app:latest`。根据创建的仓库地址重新打标签，例如：
    ```bash
-   docker tag cugrs/app:latest yourname/geoview:latest
+   docker tag cugrs/app:latest yourname/cugrs:latest
    # 或针对阿里云仓库
    docker tag cugrs/app:latest crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
    ```
 
 4. 推送镜像  
    ```bash
-   docker push yourname/geoview:latest
+   docker push yourname/cugrs:latest
    # 或阿里云仓库地址
    docker push crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
    ```
@@ -148,7 +148,7 @@ docker compose exec app bash
 5. 团队成员使用  
    接收方只需执行：
    ```bash
-   docker pull crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest  # 按需替换为真实仓库地址
+   docker pull crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest  
    docker compose up -d
    ```
    如需覆盖更新，可在推送新版本前调整标签（例如 `:v1.0.1`），或使用 `docker compose pull` 自动拉取最新镜像。
@@ -159,7 +159,7 @@ docker compose exec app bash
 #### 5.1 准备项目目录
 确保当前仓库包含以下最小结构（可用 `tree -L 1` 查看）：
 ```
-GeoView/
+cugrs/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── config.yaml
@@ -173,36 +173,33 @@ GeoView/
 #### 5.2 导出 Docker 镜像
 在项目根目录执行：
 ```bash
-docker save cugrs/app:latest -o geoview-image.tar
+docker save cugrs/app:latest -o cugrs-image.tar
 ```
 > 如果本地镜像标签不同，请将 `cugrs/app:latest` 替换为实际名称。
 
 #### 5.3 打包项目代码
 ```bash
-tar czf geoview-project.tar.gz Dockerfile docker-compose.yml config.yaml backend frontend docs install.md
-```
-有额外文件时请追加到命令中，或直接打包整个目录：
-```bash
-tar czf geoview-project.tar.gz .
+tar czf cugrs-project.tar.gz .
 ```
 
+
 #### 5.4 汇总离线包
-将导出的镜像 `geoview-image.tar` 与项目压缩包 `geoview-project.tar.gz`（或直接的项目文件夹）一起分享给接收方，可配合 MD5 等校验值确保传输完整。
+将导出的镜像 `cugrs-image.tar` 与项目压缩包 `cugrs-project.tar.gz`（或直接的项目文件夹）一起分享给接收方，可配合 MD5 等校验值确保传输完整。
 
 ---
 
 ### 6. 使用离线包（接收方操作）
 1. 解压代码包  
    ```bash
-   tar xzf geoview-project.tar.gz
-   cd GeoView  # 进入解压后的项目目录
+   tar xzf cugrs-project.tar.gz
+   cd cugrs  # 进入解压后的项目目录
    ```
 
 2. 导入 Docker 镜像  
    ```bash
-   docker load -i ../geoview-image.tar   # 路径按实际位置调整
+   docker load -i ../cugrs-image.tar   # 路径按实际位置调整
    ```
-   使用 `docker images | grep geoview` 确认镜像已导入。
+   使用 `docker images | grep cugrs` 确认镜像已导入。
 
 3. 准备配置  
    - 根据需要修改 `config.yaml`、`docker-compose.yml`（例如端口、数据库密码）。  
