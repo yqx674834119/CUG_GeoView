@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -499,8 +499,8 @@ class PicoHeadV2(GFLHead):
         self.gfl_head_reg = None
         self.scales_regs = None
 
-        self.head_cls_list = nn.LayerList()
-        self.head_reg_list = nn.LayerList()
+        self.head_cls_list = []
+        self.head_reg_list = []
         self.cls_align = nn.LayerList()
 
         for i in range(len(fpn_stride)):

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -108,7 +108,7 @@ class CascadeRCNN(BaseArch):
             im_shape = self.inputs['im_shape']
             scale_factor = self.inputs['scale_factor']
 
-            bbox, bbox_num, nms_keep_idx = self.bbox_post_process(
+            bbox, bbox_num = self.bbox_post_process(
                 preds, (refined_rois, rois_num), im_shape, scale_factor)
             # rescale the prediction back to origin image
             bbox, bbox_pred, bbox_num = self.bbox_post_process.get_pred(

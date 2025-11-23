@@ -23,11 +23,11 @@ import paddle.nn.functional as F
 from paddle.static import InputSpec
 
 import paddlers
-import paddlers.models.paddleseg as ppseg
+import paddlers.models.ppseg as ppseg
 import paddlers.rs_models.seg as cmseg
 import paddlers.utils.logging as logging
 from paddlers.models import seg_losses
-from paddlers.transforms import Resize, decode_image, construct_sample
+from paddlers.transforms import Resize, decode_image
 from paddlers.utils import get_single_card_bs, DisablePrint
 from paddlers.utils.checkpoint import seg_pretrain_weights_dict
 from .base import BaseModel
@@ -36,8 +36,7 @@ from .utils.infer_nets import InferSegNet
 from .utils.slider_predict import slider_predict
 
 __all__ = [
-    "UNet", "DeepLabV3P", "FastSCNN", "HRNet", "BiSeNetV2", "FarSeg", "FactSeg",
-    "C2FNet"
+    "UNet", "DeepLabV3P", "FastSCNN", "HRNet", "BiSeNetV2", "FarSeg", "FactSeg"
 ]
 
 
@@ -64,6 +63,7 @@ class BaseSegmenter(BaseModel):
         if params.get('with_net', True):
             params.pop('with_net', None)
             self.net = self.build_net(**params)
+        self.find_unused_parameters = True
 
     def build_net(self, **params):
         # TODO: when using paddle.utils.unique_name.guard,
@@ -113,16 +113,17 @@ class BaseSegmenter(BaseModel):
         return input_spec
 
     def run(self, net, inputs, mode):
-        inputs, batch_restore_list = inputs
-        net_out = net(inputs['image'])
+        net_out = net(inputs[0])
         logit = net_out[0]
         outputs = OrderedDict()
         if mode == 'test':
+            origin_shape = inputs[1]
             if self.status == 'Infer':
                 label_map_list, score_map_list = self.postprocess(
-                    net_out, batch_restore_list)
+                    net_out, origin_shape, transforms=inputs[2])
             else:
-                logit_list = self.postprocess(logit, batch_restore_list)
+                logit_list = self.postprocess(
+                    logit, origin_shape, transforms=inputs[2])
                 label_map_list = []
                 score_map_list = []
                 for logit in logit_list:
@@ -142,13 +143,15 @@ class BaseSegmenter(BaseModel):
                 pred = paddle.unsqueeze(net_out[0], axis=1)  # NCHW
             else:
                 pred = paddle.argmax(logit, axis=1, keepdim=True, dtype='int32')
-            label = inputs['mask'].astype('int64')
+            label = inputs[1]
             if label.ndim == 3:
                 paddle.unsqueeze_(label, axis=1)
             if label.ndim != 4:
                 raise ValueError("Expected label.ndim == 4 but got {}".format(
                     label.ndim))
-            pred = self.postprocess(pred, batch_restore_list)[0]  # NCHW
+            origin_shape = [label.shape[-2:]]
+            pred = self.postprocess(
+                pred, origin_shape, transforms=inputs[2])[0]  # NCHW
             intersect_area, pred_area, label_area = ppseg.utils.metrics.calculate_area(
                 pred, label, self.num_classes)
             outputs['intersect_area'] = intersect_area
@@ -158,9 +161,7 @@ class BaseSegmenter(BaseModel):
                                                            self.num_classes)
         if mode == 'train':
             loss_list = metrics.loss_computation(
-                logits_list=net_out,
-                labels=inputs['mask'].astype('int64'),
-                losses=self.losses)
+                logits_list=net_out, labels=inputs[1], losses=self.losses)
             loss = sum(loss_list)
             outputs['loss'] = loss
         return outputs
@@ -220,11 +221,7 @@ class BaseSegmenter(BaseModel):
               early_stop=False,
               early_stop_patience=5,
               use_vdl=True,
-              resume_checkpoint=None,
-              precision='fp32',
-              amp_level='O1',
-              custom_white_list=None,
-              custom_black_list=None):
+              resume_checkpoint=None):
         """
         Train the model.
 
@@ -257,23 +254,7 @@ class BaseSegmenter(BaseModel):
                 training from. If None, no training checkpoint will be resumed. At most
                 Aone of `resume_checkpoint` and `pretrain_weights` can be set simultaneously.
                 Defaults to None.
-            precision (str, optional): Use AMP (auto mixed precision) training if `precision`
-                is set to 'fp16'. Defaults to 'fp32'.
-            amp_level (str, optional): Auto mixed precision level. Accepted values are 'O1' 
-                and 'O2': At O1 level, the input data type of each operator will be casted 
-                according to a white list and a black list. At O2 level, all parameters and 
-                input data will be casted to FP16, except those for the operators in the black 
-                list, those without the support for FP16 kernel, and those for the batchnorm 
-                layers. Defaults to 'O1'.
-            custom_white_list(set|list|tuple|None, optional): Custom white list to use when 
-                `amp_level` is set to 'O1'. Defaults to None.
-            custom_black_list(set|list|tuple|None, optional): Custom black list to use in AMP 
-                training. Defaults to None.
         """
-        self.precision = precision
-        self.amp_level = amp_level
-        self.custom_white_list = custom_white_list
-        self.custom_black_list = custom_black_list
 
         if self.status == 'Infer':
             logging.error(
@@ -428,7 +409,8 @@ class BaseSegmenter(BaseModel):
 
         """
 
-        self._check_transforms(eval_dataset.transforms)
+        self._check_transforms(eval_dataset.transforms, 'eval')
+
         self.net.eval()
         nranks = paddle.distributed.get_world_size()
         local_rank = paddle.distributed.get_rank()
@@ -454,20 +436,13 @@ class BaseSegmenter(BaseModel):
         label_area_all = 0
         conf_mat_all = []
         logging.info(
-            "Start to evaluate (total_samples={}, total_steps={})...".format(
+            "Start to evaluate(total_samples={}, total_steps={})...".format(
                 eval_dataset.num_samples,
                 math.ceil(eval_dataset.num_samples * 1.0 / batch_size)))
         with paddle.no_grad():
             for step, data in enumerate(self.eval_data_loader):
-                if self.precision == 'fp16':
-                    with paddle.amp.auto_cast(
-                            level=self.amp_level,
-                            enable=True,
-                            custom_white_list=self.custom_white_list,
-                            custom_black_list=self.custom_black_list):
-                        outputs = self.run(self.net, data, 'eval')
-                else:
-                    outputs = self.run(self.net, data, 'eval')
+                data.append(eval_dataset.transforms.transforms)
+                outputs = self.run(self.net, data, 'eval')
                 pred_area = outputs['pred_area']
                 label_area = outputs['label_area']
                 intersect_area = outputs['intersect_area']
@@ -554,8 +529,10 @@ class BaseSegmenter(BaseModel):
             images = [img_file]
         else:
             images = img_file
-        data = self.preprocess(images, transforms, self.model_type)
+        batch_im, batch_origin_shape = self.preprocess(images, transforms,
+                                                       self.model_type)
         self.net.eval()
+        data = (batch_im, batch_origin_shape, transforms.transforms)
         outputs = self.run(self.net, data, 'test')
         label_map_list = outputs['label_map']
         score_map_list = outputs['score_map']
@@ -580,7 +557,6 @@ class BaseSegmenter(BaseModel):
                        invalid_value=255,
                        merge_strategy='keep_last',
                        batch_size=1,
-                       eager_load=False,
                        quiet=False):
         """
         Do inference using sliding windows.
@@ -605,36 +581,83 @@ class BaseSegmenter(BaseModel):
                 order, respectively. 'accum' means determining the class of an overlapping 
                 pixel according to accumulated probabilities. Defaults to 'keep_last'.
             batch_size (int, optional): Batch size used in inference. Defaults to 1.
-            eager_load (bool, optional): Whether to load the whole image(s) eagerly.
-                Defaults to False.
             quiet (bool, optional): If True, disable the progress bar. Defaults to False.
         """
 
         slider_predict(self.predict, img_file, save_dir, block_size, overlap,
                        transforms, invalid_value, merge_strategy, batch_size,
-                       eager_load, not quiet)
+                       not quiet)
 
     def preprocess(self, images, transforms, to_tensor=True):
-        self._check_transforms(transforms)
+        self._check_transforms(transforms, 'test')
         batch_im = list()
-        batch_trans_info = list()
+        batch_ori_shape = list()
         for im in images:
             if isinstance(im, str):
                 im = decode_image(im, read_raw=True)
-            sample = construct_sample(image=im)
-            data = transforms(sample)
-            im = data[0]['image']
-            trans_info = data[1]
+            ori_shape = im.shape[:2]
+            sample = {'image': im}
+            im = transforms(sample)[0]
             batch_im.append(im)
-            batch_trans_info.append(trans_info)
+            batch_ori_shape.append(ori_shape)
         if to_tensor:
             batch_im = paddle.to_tensor(batch_im)
         else:
             batch_im = np.asarray(batch_im)
 
-        return {'image': batch_im}, batch_trans_info
+        return batch_im, batch_ori_shape
 
-    def postprocess(self, batch_pred, batch_restore_list):
+    @staticmethod
+    def get_transforms_shape_info(batch_ori_shape, transforms):
+        batch_restore_list = list()
+        for ori_shape in batch_ori_shape:
+            restore_list = list()
+            h, w = ori_shape[0], ori_shape[1]
+            for op in transforms:
+                if op.__class__.__name__ == 'Resize':
+                    restore_list.append(('resize', (h, w)))
+                    h, w = op.target_size
+                elif op.__class__.__name__ == 'ResizeByShort':
+                    restore_list.append(('resize', (h, w)))
+                    im_short_size = min(h, w)
+                    im_long_size = max(h, w)
+                    scale = float(op.short_size) / float(im_short_size)
+                    if 0 < op.max_size < np.round(scale * im_long_size):
+                        scale = float(op.max_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'ResizeByLong':
+                    restore_list.append(('resize', (h, w)))
+                    im_long_size = max(h, w)
+                    scale = float(op.long_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'Pad':
+                    if op.target_size:
+                        target_h, target_w = op.target_size
+                    else:
+                        target_h = int(
+                            (np.ceil(h / op.size_divisor) * op.size_divisor))
+                        target_w = int(
+                            (np.ceil(w / op.size_divisor) * op.size_divisor))
+
+                    if op.pad_mode == -1:
+                        offsets = op.offsets
+                    elif op.pad_mode == 0:
+                        offsets = [0, 0]
+                    elif op.pad_mode == 1:
+                        offsets = [(target_h - h) // 2, (target_w - w) // 2]
+                    else:
+                        offsets = [target_h - h, target_w - w]
+                    restore_list.append(('padding', (h, w), offsets))
+                    h, w = target_h, target_w
+
+            batch_restore_list.append(restore_list)
+        return batch_restore_list
+
+    def postprocess(self, batch_pred, batch_origin_shape, transforms):
+        batch_restore_list = BaseSegmenter.get_transforms_shape_info(
+            batch_origin_shape, transforms)
         if isinstance(batch_pred, (tuple, list)) and self.status == 'Infer':
             return self._infer_postprocess(
                 batch_label_map=batch_pred[0],
@@ -656,7 +679,7 @@ class BaseSegmenter(BaseModel):
                     x, y = item[2]
                     pred = pred[:, :, y:y + h, x:x + w]
                 else:
-                    raise RuntimeError
+                    pass
             results.append(pred)
         return results
 
@@ -695,7 +718,7 @@ class BaseSegmenter(BaseModel):
                         label_map = label_map[:, y:y + h, x:x + w, :]
                         score_map = score_map[:, y:y + h, x:x + w, :]
                 else:
-                    raise RuntimeError
+                    pass
             label_map = label_map.squeeze()
             score_map = score_map.squeeze()
             if not isinstance(label_map, np.ndarray):
@@ -704,6 +727,13 @@ class BaseSegmenter(BaseModel):
             label_maps.append(label_map.squeeze())
             score_maps.append(score_map.squeeze())
         return label_maps, score_maps
+
+    def _check_transforms(self, transforms, mode):
+        super()._check_transforms(transforms, mode)
+        if not isinstance(transforms.arrange,
+                          paddlers.transforms.ArrangeSegmenter):
+            raise TypeError(
+                "`transforms.arrange` must be an ArrangeSegmenter object.")
 
     def set_losses(self, losses, weights=None):
         if weights is None:
@@ -881,125 +911,3 @@ class FactSeg(BaseSegmenter):
             losses=losses,
             in_channels=in_channels,
             **params)
-
-
-class C2FNet(BaseSegmenter):
-    def __init__(self,
-                 in_channels=3,
-                 num_classes=2,
-                 backbone='HRNet_W18',
-                 use_mixed_loss=False,
-                 losses=None,
-                 output_stride=8,
-                 backbone_indices=(-1, ),
-                 kernel_sizes=(128, 128),
-                 training_stride=32,
-                 samples_per_gpu=32,
-                 channels=None,
-                 align_corners=False,
-                 coarse_model=None,
-                 coarse_model_backbone=None,
-                 coarse_model_path=None,
-                 **params):
-        self.backbone_name = backbone
-        if params.get('with_net', True):
-            with DisablePrint():
-                backbone = getattr(ppseg.models, self.backbone_name)(
-                    in_channels=in_channels, align_corners=align_corners)
-        else:
-            backbone = None
-        if coarse_model_backbone in ['ResNet50_vd', 'ResNet101_vd']:
-            self.coarse_model_backbone = getattr(
-                ppseg.models, coarse_model_backbone)(output_stride=8)
-        elif coarse_model_backbone in ['HRNet_W18', 'HRNet_W48']:
-            self.coarse_model_backbone = getattr(
-                ppseg.models, coarse_model_backbone)(align_corners=False)
-        else:
-            raise ValueError(
-                "coarse_model_backbone: {} is not supported. Please choose one of "
-                "{'ResNet50_vd', 'ResNet101_vd', 'HRNet_W18', 'HRNet_W48'}.".
-                format(coarse_model_backbone))
-        self.coarse_model = dict(ppseg.models.__dict__)[coarse_model](
-            num_classes=num_classes, backbone=self.coarse_model_backbone)
-        self.coarse_params = paddle.load(coarse_model_path)
-        self.coarse_model.set_state_dict(self.coarse_params)
-        self.coarse_model.eval()
-        params.update({
-            'backbone': backbone,
-            'backbone_indices': backbone_indices,
-            'kernel_sizes': kernel_sizes,
-            'training_stride': training_stride,
-            'samples_per_gpu': samples_per_gpu,
-            'align_corners': align_corners
-        })
-        super(C2FNet, self).__init__(
-            model_name='C2FNet',
-            num_classes=num_classes,
-            use_mixed_loss=use_mixed_loss,
-            losses=losses,
-            **params)
-
-    def run(self, net, inputs, mode):
-        inputs, batch_restore_list = inputs
-        with paddle.no_grad():
-            pre_coarse = self.coarse_model(inputs['image'])
-            pre_coarse = pre_coarse[0]
-            heatmaps = pre_coarse
-
-        if mode == 'test':
-            net_out = net(inputs['image'], heatmaps)
-            logit = net_out[0]
-            outputs = OrderedDict()
-            if self.status == 'Infer':
-                label_map_list, score_map_list = self.postprocess(
-                    net_out, batch_restore_list)
-            else:
-                logit_list = self.postprocess(logit, batch_restore_list)
-                label_map_list = []
-                score_map_list = []
-                for logit in logit_list:
-                    logit = paddle.transpose(logit, perm=[0, 2, 3, 1])  # NHWC
-                    label_map_list.append(
-                        paddle.argmax(
-                            logit, axis=-1, keepdim=False, dtype='int32')
-                        .squeeze().numpy())
-                    score_map_list.append(
-                        F.softmax(
-                            logit, axis=-1).squeeze().numpy().astype('float32'))
-            outputs['label_map'] = label_map_list
-            outputs['score_map'] = score_map_list
-
-        if mode == 'eval':
-            net_out = net(inputs['image'], heatmaps)
-            logit = net_out[0]
-            outputs = OrderedDict()
-            if self.status == 'Infer':
-                pred = paddle.unsqueeze(net_out[0], axis=1)  # NCHW
-            else:
-                pred = paddle.argmax(logit, axis=1, keepdim=True, dtype='int32')
-            label = inputs['mask'].astype('int64')
-            if label.ndim == 3:
-                paddle.unsqueeze_(label, axis=1)
-            if label.ndim != 4:
-                raise ValueError(
-                    "Expected `label.ndim` == 4 but got {}.".format(label.ndim))
-            pred = self.postprocess(pred, batch_restore_list)[0]  # NCHW
-            intersect_area, pred_area, label_area = ppseg.utils.metrics.calculate_area(
-                pred, label, self.num_classes)
-            outputs['intersect_area'] = intersect_area
-            outputs['pred_area'] = pred_area
-            outputs['label_area'] = label_area
-            outputs['conf_mat'] = metrics.confusion_matrix(pred, label,
-                                                           self.num_classes)
-        if mode == 'train':
-            net_out = net(inputs['image'], heatmaps,
-                          inputs['mask'].astype('int64'))
-            logit = [net_out[0], ]
-            labels = net_out[1]
-            outputs = OrderedDict()
-            loss_list = metrics.loss_computation(
-                logits_list=logit, labels=labels, losses=self.losses)
-            loss = sum(loss_list)
-            outputs['loss'] = loss
-
-        return outputs

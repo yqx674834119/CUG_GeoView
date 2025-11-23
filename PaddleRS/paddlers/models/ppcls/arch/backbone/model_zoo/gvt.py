@@ -1,4 +1,4 @@
-# copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Code was based on https://github.com/Meituan-AutoML/Twins
-# reference: https://arxiv.org/abs/2104.13840
 
 from functools import partial
 
@@ -25,7 +24,7 @@ from paddle.regularizer import L2Decay
 from .vision_transformer import trunc_normal_, normal_, zeros_, ones_, to_2tuple, DropPath, Identity, Mlp
 from .vision_transformer import Block as ViTBlock
 
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "pcpvt_small":
@@ -126,8 +125,7 @@ class Attention(nn.Layer):
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
-            self.sr = nn.Conv2D(
-                dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+            self.sr = nn.Conv2D(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
 
     def forward(self, x, H, W):
@@ -235,8 +233,8 @@ class GroupBlock(ViTBlock):
                          attn_drop, drop_path, act_layer, norm_layer)
         del self.attn
         if ws == 1:
-            self.attn = Attention(dim, num_heads, qkv_bias, qk_scale,
-                                  attn_drop, drop, sr_ratio)
+            self.attn = Attention(dim, num_heads, qkv_bias, qk_scale, attn_drop,
+                                  drop, sr_ratio)
         else:
             self.attn = GroupAttention(dim, num_heads, qkv_bias, qk_scale,
                                        attn_drop, drop, ws)

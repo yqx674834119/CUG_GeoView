@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -66,15 +66,6 @@ class AttrDict(dict):
         if key in self:
             return self[key]
         raise AttributeError("object has no attribute '{}'".format(key))
-
-    def __setattr__(self, key, value):
-        self[key] = value
-
-    def copy(self):
-        new_dict = AttrDict()
-        for k, v in self.items():
-            new_dict.update({k: v})
-        return new_dict
 
 
 global_config = AttrDict()

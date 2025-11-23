@@ -26,18 +26,15 @@ class ResDataset(BaseDataset):
     Args:
         data_dir (str): Root directory of the dataset.
         file_list (str): Path of the file that contains relative paths of source and target image files.
-        transforms (paddlers.transforms.Compose|list): Data preprocessing and data augmentation operators to apply.
+        transforms (paddlers.transforms.Compose): Data preprocessing and data augmentation operators to apply.
         num_workers (int|str, optional): Number of processes used for data loading. If `num_workers` is 'auto',
             the number of workers will be automatically determined according to the number of CPU cores: If 
-            there are more than 16 cores, 8 workers will be used. Otherwise, the number of workers will be half 
+            there are more than 16 cores，8 workers will be used. Otherwise, the number of workers will be half 
             the number of CPU cores. Defaults: 'auto'.
         shuffle (bool, optional): Whether to shuffle the samples. Defaults to False.
         sr_factor (int|None, optional): Scaling factor of image super-resolution task. None for other image 
             restoration tasks. Defaults to None.
     """
-
-    _KEYS_TO_KEEP = ['image', 'target']
-    _collate_trans_info = True
 
     def __init__(self,
                  data_dir,
@@ -45,10 +42,10 @@ class ResDataset(BaseDataset):
                  transforms,
                  num_workers='auto',
                  shuffle=False,
-                 sr_factor=None,
-                 batch_transforms=None):
+                 sr_factor=None):
         super(ResDataset, self).__init__(data_dir, None, transforms,
-                                         num_workers, shuffle, batch_transforms)
+                                         num_workers, shuffle)
+        self.batch_transforms = None
         self.file_list = list()
 
         with open(file_list, encoding=get_encoding(file_list)) as f:

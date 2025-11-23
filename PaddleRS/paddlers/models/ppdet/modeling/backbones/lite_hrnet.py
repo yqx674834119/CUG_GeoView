@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -854,11 +854,6 @@ class LiteHRNet(nn.Layer):
 
     def forward(self, inputs):
         x = inputs['image']
-        dims = x.shape
-        if len(dims) == 5:
-            x = paddle.reshape(x, (dims[0] * dims[1], dims[2], dims[3],
-                                   dims[4]))  # [6, 3, 128, 96]
-
         x = self.stem(x)
         y_list = [x]
         for stage_idx in range(3):

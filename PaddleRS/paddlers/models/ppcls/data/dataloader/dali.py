@@ -23,6 +23,7 @@ import nvidia.dali.types as types
 import paddle
 from nvidia.dali import fn
 from nvidia.dali.pipeline import Pipeline
+from nvidia.dali.plugin.base_iterator import LastBatchPolicy
 from nvidia.dali.plugin.paddle import DALIGenericIterator
 
 
@@ -143,14 +144,13 @@ class HybridValPipe(Pipeline):
         return self.epoch_size("Reader")
 
 
-def dali_dataloader(config, mode, device, num_threads=4, seed=None):
+def dali_dataloader(config, mode, device, seed=None):
     assert "gpu" in device, "gpu training is required for DALI"
     device_id = int(device.split(':')[1])
     config_dataloader = config[mode]
     seed = 42 if seed is None else seed
     ops = [
-        list(x.keys())[0]
-        for x in config_dataloader["dataset"]["transform_ops"]
+        list(x.keys())[0] for x in config_dataloader["dataset"]["transform_ops"]
     ]
     support_ops_train = [
         "DecodeImage", "NormalizeImage", "RandFlipImage", "RandCropImage"
@@ -229,7 +229,7 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
         lower = ratio[0]
         upper = ratio[1]
 
-        if 'PADDLE_TRAINER_ID' in env and 'PADDLE_TRAINERS_NUM' in env and 'FLAGS_selected_gpus' in env:
+        if 'PADDLE_TRAINER_ID' in env and 'PADDLE_TRAINERS_NUM' in env:
             shard_id = int(env['PADDLE_TRAINER_ID'])
             num_shards = int(env['PADDLE_TRAINERS_NUM'])
             device_id = int(env['FLAGS_selected_gpus'])
@@ -248,7 +248,6 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
                 device_id,
                 shard_id,
                 num_shards,
-                num_threads=num_threads,
                 seed=seed + shard_id,
                 pad_output=pad_output,
                 output_dtype=output_dtype)
@@ -271,7 +270,6 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
                 device_id=device_id,
                 shard_id=0,
                 num_shards=1,
-                num_threads=num_threads,
                 seed=seed,
                 pad_output=pad_output,
                 output_dtype=output_dtype)
@@ -283,7 +281,7 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
     else:
         resize_shorter = transforms["ResizeImage"].get("resize_short", 256)
         crop = transforms["CropImage"]["size"]
-        if 'PADDLE_TRAINER_ID' in env and 'PADDLE_TRAINERS_NUM' in env and 'FLAGS_selected_gpus' in env and sampler_name == "DistributedBatchSampler":
+        if 'PADDLE_TRAINER_ID' in env and 'PADDLE_TRAINERS_NUM' in env and sampler_name == "DistributedBatchSampler":
             shard_id = int(env['PADDLE_TRAINER_ID'])
             num_shards = int(env['PADDLE_TRAINERS_NUM'])
             device_id = int(env['FLAGS_selected_gpus'])
@@ -300,7 +298,6 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
                 device_id=device_id,
                 shard_id=shard_id,
                 num_shards=num_shards,
-                num_threads=num_threads,
                 pad_output=pad_output,
                 output_dtype=output_dtype)
         else:
@@ -314,7 +311,6 @@ def dali_dataloader(config, mode, device, num_threads=4, seed=None):
                 mean,
                 std,
                 device_id=device_id,
-                num_threads=num_threads,
                 pad_output=pad_output,
                 output_dtype=output_dtype)
         pipe.build()

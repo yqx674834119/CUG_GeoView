@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -15,9 +15,6 @@
 from . import trainer
 from .trainer import *
 
-from . import trainer_cot
-from .trainer_cot import *
-
 from . import callbacks
 from .callbacks import *
 
@@ -31,7 +28,3 @@ __all__ = trainer.__all__ \
 from . import tracker
 from .tracker import *
 __all__ = __all__ + tracker.__all__
-
-from . import trainer_ssod
-from .trainer_ssod import *
-__all__ = __all__ + trainer_ssod.__all__

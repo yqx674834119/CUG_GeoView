@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -152,8 +152,7 @@ def save_vis_results(data,
                      average_time,
                      show_image,
                      save_dir,
-                     num_classes=1,
-                     ids2names=[]):
+                     num_classes=1):
     if show_image or save_dir is not None:
         assert 'ori_image' in data
         img0 = data['ori_image'].numpy()[0]
@@ -168,8 +167,7 @@ def save_vis_results(data,
                     online_ids,
                     online_scores,
                     frame_id=frame_id,
-                    fps=1. / average_time,
-                    ids2names=ids2names)
+                    fps=1. / average_time)
             else:
                 online_im = plot_tracking(
                     img0,
@@ -177,8 +175,7 @@ def save_vis_results(data,
                     online_ids,
                     online_scores,
                     frame_id=frame_id,
-                    fps=1. / average_time,
-                    ids2names=ids2names)
+                    fps=1. / average_time)
     if show_image:
         cv2.imshow('online_im', online_im)
     if save_dir is not None:

@@ -121,7 +121,7 @@ def parse_args(*args, **kwargs):
     cfg_parser = argparse.ArgumentParser(add_help=False)
     cfg_parser.add_argument('--config', type=str, default='')
     cfg_parser.add_argument('--inherit_off', action='store_true')
-    cfg_args = cfg_parser.parse_known_args(*args, **kwargs)[0]
+    cfg_args = cfg_parser.parse_known_args()[0]
     cfg_path = cfg_args.config
     inherit_on = not cfg_args.inherit_off
 
@@ -171,7 +171,7 @@ def parse_args(*args, **kwargs):
     elif cfg_path != '':
         raise FileNotFoundError
     else:
-        args = parser.parse_args(*args, **kwargs)
+        args = parser.parse_args()
         return _args2cfg(dict(), args, set())
 
 

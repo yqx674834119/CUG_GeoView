@@ -14,8 +14,6 @@
 import os
 import yaml
 
-from .logger import get_logger
-
 __all__ = ['get_config']
 
 
@@ -56,84 +54,6 @@ def parse_config(cfg_file):
     create_attr_dict(yaml_config)
     return yaml_config
 
-Color = {
-    'RED': '\033[31m',
-    'HEADER': '\033[35m',  # deep purple
-    'PURPLE': '\033[95m',  # purple
-    'OKBLUE': '\033[94m',
-    'OKGREEN': '\033[92m',
-    'WARNING': '\033[93m',
-    'FAIL': '\033[91m',
-    'ENDC': '\033[0m'
-}
-
-
-def coloring(message, color="OKGREEN"):
-    assert color in Color.keys()
-    if os.environ.get('PADDLEGAN_COLORING', False):
-        return Color[color] + str(message) + Color["ENDC"]
-    else:
-        return message
-
-def print_dict(d, logger, delimiter=0):
-    """
-    Recursively visualize a dict and
-    indenting acrrording by the relationship of keys.
-    """
-    placeholder = "-" * 60
-    for k, v in sorted(d.items()):
-        if isinstance(v, dict):
-            logger.info("{}{} : ".format(delimiter * " ",
-                                         coloring(k, "HEADER")))
-            print_dict(v, logger, delimiter + 4)
-        elif isinstance(v, list) and len(v) >= 1 and isinstance(v[0], dict):
-            logger.info("{}{} : ".format(delimiter * " ",
-                                        coloring(str(k), "HEADER")))
-            for value in v:
-                print_dict(value, logger, delimiter + 4)
-        else:
-            logger.info("{}{} : {}".format(delimiter * " ",
-                                           coloring(k, "HEADER"),
-                                           coloring(v, "OKGREEN")))
-        if k.isupper():
-            logger.info(placeholder)
-
-def advertise(logger):
-    """
-    Show the advertising message like the following:
-    ===========================================================
-    ==        PaddleGAN is powered by PaddlePaddle !        ==
-    ===========================================================
-    ==                                                       ==
-    ==   For more info please go to the following website.   ==
-    ==                                                       ==
-    ==       https://github.com/PaddlePaddle/PaddleGAN      ==
-    ===========================================================
-    """
-    copyright = "PaddleGAN is powered by PaddlePaddle !"
-    ad = "For more info please go to the following website."
-    website = "https://github.com/PaddlePaddle/PaddleGAN"
-    AD_LEN = 6 + len(max([copyright, ad, website], key=len))
-
-    logger.info(
-        coloring("\n{0}\n{1}\n{2}\n{3}\n{4}\n{5}\n{6}\n{7}\n".format(
-            "=" * (AD_LEN + 4),
-            "=={}==".format(copyright.center(AD_LEN)),
-            "=" * (AD_LEN + 4),
-            "=={}==".format(' ' * AD_LEN),
-            "=={}==".format(ad.center(AD_LEN)),
-            "=={}==".format(' ' * AD_LEN),
-            "=={}==".format(website.center(AD_LEN)),
-            "=" * (AD_LEN + 4), ), "RED"))
-
-def print_config(config, logger):
-    """
-    visualize configs
-    Arguments:
-        config: configs
-    """
-    advertise(logger)
-    print_dict(config, logger)
 
 def override(dl, ks, v):
     """
@@ -143,6 +63,7 @@ def override(dl, ks, v):
         ks(list): list of keys
         v(str): value to be replaced
     """
+
     def str2num(v):
         try:
             return eval(v)
@@ -195,25 +116,12 @@ def override_config(config, options=None):
     return config
 
 
-def get_config(fname, overrides=None, show=False):
+def get_config(fname, overrides=None, show=True):
     """
     Read config from file
     """
     assert os.path.exists(fname), ('config file({}) is not exist'.format(fname))
     config = parse_config(fname)
     override_config(config, overrides)
-    if show:
-        logger = get_logger(name='ppgan.config')
-        print_config(config, logger)
 
     return config
-
-
-def cfg2dict(cfg):
-    if isinstance(cfg, AttrDict):
-        cfg = dict(cfg)
-    for k in cfg.keys():
-        if isinstance(cfg[k], AttrDict):
-            cfg[k] = cfg2dict(cfg[k])
-    return cfg
-    

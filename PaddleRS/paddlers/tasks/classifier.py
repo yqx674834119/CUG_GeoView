@@ -12,24 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 import os.path as osp
 from collections import OrderedDict
 from operator import itemgetter
 
 import numpy as np
 import paddle
+import paddle.nn.functional as F
 from paddle.static import InputSpec
 
 import paddlers
 import paddlers.models.ppcls as ppcls
 import paddlers.rs_models.clas as cmcls
 import paddlers.utils.logging as logging
+from paddlers.utils import get_single_card_bs, DisablePrint
 from paddlers.models.ppcls.metric import build_metrics
 from paddlers.models import clas_losses
 from paddlers.models.ppcls.data.postprocess import build_postprocess
 from paddlers.utils.checkpoint import cls_pretrain_weights_dict
-from paddlers.transforms import Resize, decode_image, construct_sample
-
+from paddlers.transforms import Resize, decode_image
 from .base import BaseModel
 
 __all__ = ["ResNet50_vd", "MobileNetV3", "HRNet", "CondenseNetV2"]
@@ -62,6 +64,7 @@ class BaseClassifier(BaseModel):
         if params.get('with_net', True):
             params.pop('with_net', None)
             self.net = self.build_net(**params)
+        self.find_unused_parameters = True
 
     def build_net(self, **params):
         with paddle.utils.unique_name.guard():
@@ -119,13 +122,13 @@ class BaseClassifier(BaseModel):
         return input_spec
 
     def run(self, net, inputs, mode):
-        net_out = net(inputs['image'])
+        net_out = net(inputs[0])
 
         if mode == 'test':
             return self.postprocess(net_out)
 
         outputs = OrderedDict()
-        label = paddle.to_tensor(inputs['label'], dtype="int64")
+        label = paddle.to_tensor(inputs[1], dtype="int64")
 
         if mode == 'eval':
             label = paddle.unsqueeze(label, axis=-1)
@@ -194,11 +197,7 @@ class BaseClassifier(BaseModel):
               early_stop=False,
               early_stop_patience=5,
               use_vdl=True,
-              resume_checkpoint=None,
-              precision='fp32',
-              amp_level='O1',
-              custom_white_list=None,
-              custom_black_list=None):
+              resume_checkpoint=None):
         """
         Train the model.
 
@@ -232,23 +231,7 @@ class BaseClassifier(BaseModel):
                 training from. If None, no training checkpoint will be resumed. At most
                 Aone of `resume_checkpoint` and `pretrain_weights` can be set simultaneously.
                 Defaults to None.
-            precision (str, optional): Use AMP (auto mixed precision) training if `precision`
-                is set to 'fp16'. Defaults to 'fp32'.
-            amp_level (str, optional): Auto mixed precision level. Accepted values are 'O1' 
-                and 'O2': At O1 level, the input data type of each operator will be casted 
-                according to a white list and a black list. At O2 level, all parameters and 
-                input data will be casted to FP16, except those for the operators in the black 
-                list, those without the support for FP16 kernel, and those for the batchnorm 
-                layers. Defaults to 'O1'.
-            custom_white_list(set|list|tuple|None, optional): Custom white list to use when 
-                `amp_level` is set to 'O1'. Defaults to None.
-            custom_black_list(set|list|tuple|None, optional): Custom black list to use in AMP 
-                training. Defaults to None.
         """
-        self.precision = precision
-        self.amp_level = amp_level
-        self.custom_white_list = custom_white_list
-        self.custom_black_list = custom_black_list
 
         if self.status == 'Infer':
             logging.error(
@@ -401,7 +384,7 @@ class BaseClassifier(BaseModel):
                  "top5": acc of top5}.
         """
 
-        self._check_transforms(eval_dataset.transforms)
+        self._check_transforms(eval_dataset.transforms, 'eval')
 
         self.net.eval()
         nranks = paddle.distributed.get_world_size()
@@ -422,22 +405,15 @@ class BaseClassifier(BaseModel):
             self.eval_data_loader = self.build_data_loader(
                 eval_dataset, batch_size=batch_size, mode='eval')
             logging.info(
-                "Start to evaluate (total_samples={}, total_steps={})...".
-                format(eval_dataset.num_samples, eval_dataset.num_samples))
+                "Start to evaluate(total_samples={}, total_steps={})...".format(
+                    eval_dataset.num_samples, eval_dataset.num_samples))
 
             top1s = []
             top5s = []
             with paddle.no_grad():
                 for step, data in enumerate(self.eval_data_loader):
-                    if self.precision == 'fp16':
-                        with paddle.amp.auto_cast(
-                                level=self.amp_level,
-                                enable=True,
-                                custom_white_list=self.custom_white_list,
-                                custom_black_list=self.custom_black_list):
-                            outputs = self.run(self.net, data, 'eval')
-                    else:
-                        outputs = self.run(self.net, data, 'eval')
+                    data.append(eval_dataset.transforms.transforms)
+                    outputs = self.run(self.net, data, 'eval')
                     top1s.append(outputs["top1"])
                     top5s.append(outputs["top5"])
 
@@ -483,8 +459,10 @@ class BaseClassifier(BaseModel):
             images = [img_file]
         else:
             images = img_file
-        data, _ = self.preprocess(images, transforms, self.model_type)
+        batch_im, batch_origin_shape = self.preprocess(images, transforms,
+                                                       self.model_type)
         self.net.eval()
+        data = (batch_im, batch_origin_shape, transforms.transforms)
 
         if self.postprocess is None:
             self.build_postprocess_from_labels()
@@ -508,27 +486,80 @@ class BaseClassifier(BaseModel):
         return prediction
 
     def preprocess(self, images, transforms, to_tensor=True):
-        self._check_transforms(transforms)
+        self._check_transforms(transforms, 'test')
         batch_im = list()
+        batch_ori_shape = list()
         for im in images:
             if isinstance(im, str):
                 im = decode_image(im, read_raw=True)
-            sample = construct_sample(image=im)
-            data = transforms(sample)
-            im = data[0]['image']
+            ori_shape = im.shape[:2]
+            sample = {'image': im}
+            im = transforms(sample)
             batch_im.append(im)
+            batch_ori_shape.append(ori_shape)
         if to_tensor:
             batch_im = paddle.to_tensor(batch_im)
         else:
             batch_im = np.asarray(batch_im)
 
-        return {'image': batch_im}, None
+        return batch_im, batch_ori_shape
 
-    def build_data_loader(self,
-                          dataset,
-                          batch_size,
-                          mode='train',
-                          collate_fn=None):
+    @staticmethod
+    def get_transforms_shape_info(batch_ori_shape, transforms):
+        batch_restore_list = list()
+        for ori_shape in batch_ori_shape:
+            restore_list = list()
+            h, w = ori_shape[0], ori_shape[1]
+            for op in transforms:
+                if op.__class__.__name__ == 'Resize':
+                    restore_list.append(('resize', (h, w)))
+                    h, w = op.target_size
+                elif op.__class__.__name__ == 'ResizeByShort':
+                    restore_list.append(('resize', (h, w)))
+                    im_short_size = min(h, w)
+                    im_long_size = max(h, w)
+                    scale = float(op.short_size) / float(im_short_size)
+                    if 0 < op.max_size < np.round(scale * im_long_size):
+                        scale = float(op.max_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'ResizeByLong':
+                    restore_list.append(('resize', (h, w)))
+                    im_long_size = max(h, w)
+                    scale = float(op.long_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'Pad':
+                    if op.target_size:
+                        target_h, target_w = op.target_size
+                    else:
+                        target_h = int(
+                            (np.ceil(h / op.size_divisor) * op.size_divisor))
+                        target_w = int(
+                            (np.ceil(w / op.size_divisor) * op.size_divisor))
+
+                    if op.pad_mode == -1:
+                        offsets = op.offsets
+                    elif op.pad_mode == 0:
+                        offsets = [0, 0]
+                    elif op.pad_mode == 1:
+                        offsets = [(target_h - h) // 2, (target_w - w) // 2]
+                    else:
+                        offsets = [target_h - h, target_w - w]
+                    restore_list.append(('padding', (h, w), offsets))
+                    h, w = target_h, target_w
+
+            batch_restore_list.append(restore_list)
+        return batch_restore_list
+
+    def _check_transforms(self, transforms, mode):
+        super()._check_transforms(transforms, mode)
+        if not isinstance(transforms.arrange,
+                          paddlers.transforms.ArrangeClassifier):
+            raise TypeError(
+                "`transforms.arrange` must be an ArrangeClassifier object.")
+
+    def build_data_loader(self, dataset, batch_size, mode='train'):
         if dataset.num_samples < batch_size:
             raise ValueError(
                 'The volume of dataset({}) must be larger than batch size({}).'
@@ -540,8 +571,7 @@ class BaseClassifier(BaseModel):
                 batch_size=batch_size,
                 shuffle=dataset.shuffle,
                 drop_last=False,
-                collate_fn=dataset.collate_fn
-                if collate_fn is None else collate_fn,
+                collate_fn=dataset.batch_transforms,
                 num_workers=dataset.num_workers,
                 return_list=True,
                 use_shared_memory=False)

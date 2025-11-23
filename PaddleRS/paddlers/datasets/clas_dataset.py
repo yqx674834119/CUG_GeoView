@@ -25,16 +25,14 @@ class ClasDataset(BaseDataset):
     Args:
         data_dir (str): Root directory of the dataset.
         file_list (str): Path of the file that contains relative paths of images and labels.
-        transforms (paddlers.transforms.Compose|list): Data preprocessing and data augmentation operators to apply.
+        transforms (paddlers.transforms.Compose): Data preprocessing and data augmentation operators to apply.
         label_list (str|None, optional): Path of the file that contains the category names. Defaults to None.
         num_workers (int|str, optional): Number of processes used for data loading. If `num_workers` is 'auto',
             the number of workers will be automatically determined according to the number of CPU cores: If 
-            there are more than 16 cores, 8 workers will be used. Otherwise, the number of workers will be half 
+            there are more than 16 cores，8 workers will be used. Otherwise, the number of workers will be half 
             the number of CPU cores. Defaults: 'auto'.
         shuffle (bool, optional): Whether to shuffle the samples. Defaults to False.
     """
-
-    _KEYS_TO_KEEP = ['image', 'label']
 
     def __init__(self,
                  data_dir,
@@ -42,11 +40,11 @@ class ClasDataset(BaseDataset):
                  transforms,
                  label_list=None,
                  num_workers='auto',
-                 shuffle=False,
-                 batch_transforms=None):
+                 shuffle=False):
         super(ClasDataset, self).__init__(data_dir, label_list, transforms,
-                                          num_workers, shuffle,
-                                          batch_transforms)
+                                          num_workers, shuffle)
+        # TODO batch padding
+        self.batch_transforms = None
         self.file_list = list()
         self.labels = list()
 

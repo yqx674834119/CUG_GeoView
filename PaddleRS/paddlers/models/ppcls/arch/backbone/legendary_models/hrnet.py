@@ -1,4 +1,4 @@
-# copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# reference: https://arxiv.org/abs/1908.07919
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -25,8 +23,8 @@ from paddle import ParamAttr
 from paddle.nn.functional import upsample
 from paddle.nn.initializer import Uniform
 
-from ..base.theseus_layer import TheseusLayer, Identity
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.arch.backbone.base.theseus_layer import TheseusLayer, Identity
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "HRNet_W18_C":
@@ -248,7 +246,7 @@ class HighResolutionModule(TheseusLayer):
 
         for i in range(len(num_filters)):
             self.basic_block_list.append(
-                nn.Sequential(* [
+                nn.Sequential(*[
                     BasicBlock(
                         num_channels=num_filters[i],
                         num_filters=num_filters[i],
@@ -391,11 +389,7 @@ class HRNet(TheseusLayer):
         ]
 
         self.conv_layer1_1 = ConvBNLayer(
-            num_channels=3,
-            num_filters=64,
-            filter_size=3,
-            stride=2,
-            act="relu")
+            num_channels=3, num_filters=64, filter_size=3, stride=2, act="relu")
 
         self.conv_layer1_2 = ConvBNLayer(
             num_channels=64,
@@ -404,7 +398,7 @@ class HRNet(TheseusLayer):
             stride=2,
             act="relu")
 
-        self.layer1 = nn.Sequential(* [
+        self.layer1 = nn.Sequential(*[
             BottleneckBlock(
                 num_channels=64 if i == 0 else 256,
                 num_filters=64,
@@ -461,7 +455,6 @@ class HRNet(TheseusLayer):
         self.avg_pool = nn.AdaptiveAvgPool2D(1)
 
         stdv = 1.0 / math.sqrt(2048 * 1.0)
-        self.flatten = nn.Flatten(start_axis=1, stop_axis=-1)
 
         self.fc = nn.Linear(
             2048,
@@ -499,7 +492,7 @@ class HRNet(TheseusLayer):
 
         y = self.conv_last(y)
         y = self.avg_pool(y)
-        y = self.flatten(y)
+        y = paddle.reshape(y, shape=[-1, y.shape[1]])
         y = self.fc(y)
         return y
 

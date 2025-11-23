@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,12 @@ from . import batch_operators
 from . import keypoint_operators
 from . import mot_operators
 from . import rotated_operators
-from . import keypoints_3d_operators
 
 from .operators import *
 from .batch_operators import *
 from .keypoint_operators import *
 from .mot_operators import *
 from .rotated_operators import *
-from .keypoints_3d_operators import *
 
 __all__ = []
 __all__ += registered_ops

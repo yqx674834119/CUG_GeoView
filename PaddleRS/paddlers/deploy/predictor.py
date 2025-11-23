@@ -26,8 +26,6 @@ from paddlers.tasks import load_model
 from paddlers.utils import logging, Timer
 from paddlers.tasks.utils.slider_predict import slider_predict
 
-# TODO: Refactor
-
 
 class Predictor(object):
     def __init__(self,
@@ -150,16 +148,44 @@ class Predictor(object):
         return predictor
 
     def preprocess(self, images, transforms):
-        preprocessed_samples, batch_trans_info = self._model.preprocess(
+        preprocessed_samples = self._model.preprocess(
             images, transforms, to_tensor=False)
-        return preprocessed_samples, batch_trans_info
+        if self.model_type == 'classifier':
+            preprocessed_samples = {'image': preprocessed_samples[0]}
+        elif self.model_type == 'segmenter':
+            preprocessed_samples = {
+                'image': preprocessed_samples[0],
+                'ori_shape': preprocessed_samples[1]
+            }
+        elif self.model_type == 'detector':
+            pass
+        elif self.model_type == 'change_detector':
+            preprocessed_samples = {
+                'image': preprocessed_samples[0],
+                'image2': preprocessed_samples[1],
+                'ori_shape': preprocessed_samples[2]
+            }
+        elif self.model_type == 'restorer':
+            preprocessed_samples = {
+                'image': preprocessed_samples[0],
+                'tar_shape': preprocessed_samples[1]
+            }
+        else:
+            logging.error(
+                "Invalid model type {}".format(self.model_type), exit=True)
+        return preprocessed_samples
 
-    def postprocess(self, net_outputs, batch_restore_list, topk=1):
+    def postprocess(self,
+                    net_outputs,
+                    topk=1,
+                    ori_shape=None,
+                    tar_shape=None,
+                    transforms=None):
         if self.model_type == 'classifier':
             true_topk = min(self._model.num_classes, topk)
             if self._model.postprocess is None:
                 self._model.build_postprocess_from_labels(topk)
-            # XXX: Convert ndarray to tensor as `self._model.postprocess` requires
+            # XXX: Convert ndarray to tensor as self._model.postprocess requires
             assert len(net_outputs) == 1
             net_outputs = paddle.to_tensor(net_outputs[0])
             outputs = self._model.postprocess(net_outputs)
@@ -173,7 +199,9 @@ class Predictor(object):
             } for l, s, n in zip(class_ids, scores, label_names)]
         elif self.model_type in ('segmenter', 'change_detector'):
             label_map, score_map = self._model.postprocess(
-                net_outputs, batch_restore_list=batch_restore_list)
+                net_outputs,
+                batch_origin_shape=ori_shape,
+                transforms=transforms.transforms)
             preds = [{
                 'label_map': l,
                 'score_map': s
@@ -186,7 +214,9 @@ class Predictor(object):
             preds = self._model.postprocess(net_outputs)
         elif self.model_type == 'restorer':
             res_maps = self._model.postprocess(
-                net_outputs[0], batch_restore_list=batch_restore_list)
+                net_outputs[0],
+                batch_tar_shape=tar_shape,
+                transforms=transforms.transforms)
             preds = [{'res_map': res_map} for res_map in res_maps]
         else:
             logging.error(
@@ -218,8 +248,7 @@ class Predictor(object):
 
     def _run(self, images, topk=1, transforms=None):
         self.timer.preprocess_time_s.start()
-        preprocessed_input, batch_trans_info = self.preprocess(images,
-                                                               transforms)
+        preprocessed_input = self.preprocess(images, transforms)
         self.timer.preprocess_time_s.end(iter_num=len(images))
 
         self.timer.inference_time_s.start()
@@ -228,7 +257,11 @@ class Predictor(object):
 
         self.timer.postprocess_time_s.start()
         results = self.postprocess(
-            net_outputs, batch_restore_list=batch_trans_info, topk=topk)
+            net_outputs,
+            topk,
+            ori_shape=preprocessed_input.get('ori_shape', None),
+            tar_shape=preprocessed_input.get('tar_shape', None),
+            transforms=transforms)
         self.timer.postprocess_time_s.end(iter_num=len(images))
 
         return results
@@ -299,7 +332,6 @@ class Predictor(object):
                        invalid_value=255,
                        merge_strategy='keep_last',
                        batch_size=1,
-                       eager_load=False,
                        quiet=False):
         """
         Do inference using sliding windows. Only semantic segmentation and change detection models are supported in the 
@@ -324,7 +356,6 @@ class Predictor(object):
                 the last block in traversal order, respectively. 'accum' means determining the class of an overlapping pixel 
                 according to accumulated probabilities. Defaults to 'keep_last'.
             batch_size (int, optional): Batch size used in inference. Defaults to 1.
-            eager_load (bool, optional): Whether to load the whole image(s) eagerly. Defaults to False.
             quiet (bool, optional): If True, disable the progress bar. Defaults to False.
         """
 
@@ -344,7 +375,6 @@ class Predictor(object):
             invalid_value,
             merge_strategy,
             batch_size,
-            eager_load,
             not quiet)
 
     def batch_predict(self, image_list, **params):

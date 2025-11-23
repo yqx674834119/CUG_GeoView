@@ -49,12 +49,7 @@ class TrainingStats(object):
                 for k in stats.keys()
             }
         for k, v in self.meters.items():
-            stat = stats[k]
-            if stat.ndim == 0:
-                stat = float(stat)
-            else:
-                stat = stat.numpy()
-            v.update(stat)
+            v.update(stats[k].numpy())
 
     def get(self, extras=None):
         stats = collections.OrderedDict()

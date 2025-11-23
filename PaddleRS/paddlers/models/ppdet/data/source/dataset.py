@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -86,12 +86,6 @@ class DetDataset(Dataset):
                 copy.deepcopy(self.roidbs[np.random.randint(n)])
                 for _ in range(4)
             ]
-        elif self.pre_img_epoch == 0 or self._epoch < self.pre_img_epoch:
-            # Add previous image as input, only used in CenterTrack
-            idx_pre_img = idx - 1
-            if idx_pre_img < 0:
-                idx_pre_img = idx + 1
-            roidb = [roidb, ] + [copy.deepcopy(self.roidbs[idx_pre_img])]
         if isinstance(roidb, Sequence):
             for r in roidb:
                 r['curr_iter'] = self._curr_iter
@@ -109,7 +103,6 @@ class DetDataset(Dataset):
         self.mixup_epoch = kwargs.get('mixup_epoch', -1)
         self.cutmix_epoch = kwargs.get('cutmix_epoch', -1)
         self.mosaic_epoch = kwargs.get('mosaic_epoch', -1)
-        self.pre_img_epoch = kwargs.get('pre_img_epoch', -1)
 
     def set_transform(self, transform):
         self.transform = transform
@@ -261,8 +254,7 @@ class ImageFolder(DetDataset):
                 records.append(rec)
             ct_sub += sub_img_num
             ct += 1
-        logger.info('{} samples and slice to {} sub_samples.'.format(ct,
-                                                                     ct_sub))
+        print('{} samples and slice to {} sub_samples'.format(ct, ct_sub))
         self.roidbs = records
 
     def get_label_list(self):

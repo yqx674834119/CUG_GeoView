@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # This code is based on https://github.com/heartInsert/randaugment
-# reference: https://arxiv.org/abs/1909.13719
 
 from PIL import Image, ImageEnhance, ImageOps
 import numpy as np

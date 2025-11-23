@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -180,8 +180,7 @@ class OTAHead(GFLHead):
         num_total_pos = sum(pos_num_l)
         try:
             paddle.distributed.all_reduce(num_total_pos)
-            num_total_pos = paddle.clip(
-                num_total_pos / paddle.distributed.get_world_size(), min=1.)
+            num_total_pos = num_total_pos / paddle.distributed.get_world_size()
         except:
             num_total_pos = max(num_total_pos, 1)
 
@@ -398,8 +397,7 @@ class OTAVFLHead(OTAHead):
         num_total_pos = sum(pos_num_l)
         try:
             paddle.distributed.all_reduce(num_total_pos)
-            num_total_pos = paddle.clip(
-                num_total_pos / paddle.distributed.get_world_size(), min=1.)
+            num_total_pos = num_total_pos / paddle.distributed.get_world_size()
         except:
             num_total_pos = max(num_total_pos, 1)
 

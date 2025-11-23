@@ -1,4 +1,4 @@
-# copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# reference: https://arxiv.org/abs/1704.04861
-
 from __future__ import absolute_import, division, print_function
 
 from paddle import ParamAttr
@@ -22,8 +20,8 @@ from paddle.nn import Conv2D, BatchNorm, Linear, ReLU, Flatten
 from paddle.nn import AdaptiveAvgPool2D
 from paddle.nn.initializer import KaimingNormal
 
-from ..base.theseus_layer import TheseusLayer
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.arch.backbone.base.theseus_layer import TheseusLayer
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "MobileNetV1_x0_25":
@@ -139,7 +137,7 @@ class MobileNet(TheseusLayer):
                     [int(512 * scale), 512, 1024, 512, 2],
                     [int(1024 * scale), 1024, 1024, 1024, 1]]
 
-        self.blocks = nn.Sequential(* [
+        self.blocks = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=params[0],
                 num_filters1=params[1],
@@ -214,9 +212,7 @@ def MobileNetV1_x0_5(pretrained=False, use_ssld=False, **kwargs):
         model: nn.Layer. Specific `MobileNetV1_x0_5` model depends on args.
     """
     model = MobileNet(
-        scale=0.5,
-        stages_pattern=MODEL_STAGES_PATTERN["MobileNetV1"],
-        **kwargs)
+        scale=0.5, stages_pattern=MODEL_STAGES_PATTERN["MobileNetV1"], **kwargs)
     _load_pretrained(pretrained, model, MODEL_URLS["MobileNetV1_x0_5"],
                      use_ssld)
     return model
@@ -252,8 +248,6 @@ def MobileNetV1(pretrained=False, use_ssld=False, **kwargs):
         model: nn.Layer. Specific `MobileNetV1` model depends on args.
     """
     model = MobileNet(
-        scale=1.0,
-        stages_pattern=MODEL_STAGES_PATTERN["MobileNetV1"],
-        **kwargs)
+        scale=1.0, stages_pattern=MODEL_STAGES_PATTERN["MobileNetV1"], **kwargs)
     _load_pretrained(pretrained, model, MODEL_URLS["MobileNetV1"], use_ssld)
     return model

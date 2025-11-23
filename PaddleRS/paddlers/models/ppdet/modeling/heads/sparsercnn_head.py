@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -242,8 +242,6 @@ class SparseRCNNHead(nn.Layer):
             loss_func="SparseRCNNLoss",
             roi_input_shape=None, ):
         super().__init__()
-        assert head_num_heads > 0, \
-            f'At least one RoI Head is required, but {head_num_heads}.'
 
         # Build RoI.
         box_pooler = self._init_box_pooler(roi_input_shape)
@@ -317,15 +315,12 @@ class SparseRCNNHead(nn.Layer):
             pooler_scales = [1.0 / 4.0, 1.0 / 8.0, 1.0 / 16.0, 1.0 / 32.0]
             end_level = 3
 
-        aligned = True
-        if paddle.device.is_compiled_with_custom_device('npu'):
-            aligned = False
         box_pooler = RoIAlign(
             resolution=pooler_resolution,
             spatial_scale=pooler_scales,
             sampling_ratio=sampling_ratio,
             end_level=end_level,
-            aligned=aligned)
+            aligned=True)
         return box_pooler
 
     def forward(self, features, input_whwh):
@@ -342,11 +337,11 @@ class SparseRCNNHead(nn.Layer):
         inter_class_logits = []
         inter_pred_bboxes = []
 
-        for stage, rcnn_head in enumerate(self.head_series):
+        for rcnn_head in self.head_series:
             class_logits, pred_bboxes, proposal_features = rcnn_head(
                 features, bboxes, proposal_features, self.box_pooler)
 
-            if self.return_intermediate or stage == len(self.head_series) - 1:
+            if self.return_intermediate:
                 inter_class_logits.append(class_logits)
                 inter_pred_bboxes.append(pred_bboxes)
             bboxes = pred_bboxes.detach()

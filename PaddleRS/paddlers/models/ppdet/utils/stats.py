@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ class TrainingStats(object):
                 for k in stats.keys()
             }
         for k, v in self.meters.items():
-            v.update(float(stats[k]))
+            v.update(stats[k].numpy())
 
     def get(self, extras=None):
         stats = collections.OrderedDict()

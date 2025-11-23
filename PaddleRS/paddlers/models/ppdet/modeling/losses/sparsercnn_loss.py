@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -283,11 +283,6 @@ class HungarianMatcher(nn.Layer):
                 len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
         """
         bs, num_queries = outputs["pred_logits"].shape[:2]
-
-        if sum(len(v["labels"]) for v in targets) == 0:
-            return [(paddle.to_tensor(
-                [], dtype=paddle.int64), paddle.to_tensor(
-                    [], dtype=paddle.int64)) for _ in range(bs)]
 
         # We flatten to compute the cost matrices in a batch
         out_prob = F.sigmoid(outputs["pred_logits"].flatten(

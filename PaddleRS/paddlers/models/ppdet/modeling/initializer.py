@@ -1,4 +1,4 @@
-#   Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+#   Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -116,12 +116,6 @@ def zeros_(tensor):
         tensor
     """
     return _no_grad_fill_(tensor, 0)
-
-
-def vector_(tensor, vector):
-    with paddle.no_grad():
-        tensor.set_value(paddle.to_tensor(vector, dtype=tensor.dtype))
-    return tensor
 
 
 def _calculate_fan_in_and_fan_out(tensor, reverse=False):

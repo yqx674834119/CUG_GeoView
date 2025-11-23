@@ -36,17 +36,16 @@ class VOCDetDataset(BaseDataset):
     Args:
         data_dir (str): Root directory of the dataset.
         file_list (str): Path of the file that contains relative paths of images and annotation files.
-        transforms (paddlers.transforms.Compose|list): Data preprocessing and data augmentation operators to apply.
+        transforms (paddlers.transforms.Compose): Data preprocessing and data augmentation operators to apply.
         label_list (str|None, optional): Path of the file that contains the category names. Defaults to None.
         num_workers (int|str, optional): Number of processes used for data loading. If `num_workers` is 'auto',
             the number of workers will be automatically determined according to the number of CPU cores: If 
-            there are more than 16 cores, 8 workers will be used. Otherwise, the number of workers will be half 
+            there are more than 16 cores，8 workers will be used. Otherwise, the number of workers will be half 
             the number of CPU cores. Defaults: 'auto'.
         shuffle (bool, optional): Whether to shuffle the samples. Defaults to False.
         allow_empty (bool, optional): Whether to add negative samples. Defaults to False.
         empty_ratio (float, optional): Ratio of negative samples. If `empty_ratio` is smaller than 0 or not less 
             than 1, keep all generated negative samples. Defaults to 1.0.
-        batch_transforms (paddlers.transforms.BatchCompose|list): Batch transformation operators to apply.
     """
 
     def __init__(self,
@@ -57,16 +56,14 @@ class VOCDetDataset(BaseDataset):
                  num_workers='auto',
                  shuffle=False,
                  allow_empty=False,
-                 empty_ratio=1.,
-                 batch_transforms=None):
+                 empty_ratio=1.):
         # matplotlib.use() must be called *before* pylab, matplotlib.pyplot,
         # or matplotlib.backends is imported for the first time.
         import matplotlib
         matplotlib.use('Agg')
         from pycocotools.coco import COCO
         super(VOCDetDataset, self).__init__(data_dir, label_list, transforms,
-                                            num_workers, shuffle,
-                                            batch_transforms)
+                                            num_workers, shuffle)
 
         self.data_fields = None
         self.num_max_boxes = 50
@@ -80,6 +77,7 @@ class VOCDetDataset(BaseDataset):
                     self.num_max_boxes *= 2
                     break
 
+        self.batch_transforms = None
         self.allow_empty = allow_empty
         self.empty_ratio = empty_ratio
         self.file_list = list()
@@ -326,8 +324,8 @@ class VOCDetDataset(BaseDataset):
                 DecodeImg(to_rgb=False)(sample),
                 DecodeImg(to_rgb=False)(sample_mix)
             ])
-        sample, trans_info = self.transforms(sample)
-        return sample, trans_info
+        sample = self.transforms(sample)
+        return sample
 
     def __len__(self):
         return self.num_samples

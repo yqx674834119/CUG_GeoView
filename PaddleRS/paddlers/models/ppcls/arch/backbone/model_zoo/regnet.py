@@ -1,4 +1,4 @@
-# copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Code was based on https://github.com/facebookresearch/pycls
-# reference: https://arxiv.org/abs/1905.13214
 
 from __future__ import absolute_import
 from __future__ import division
@@ -29,7 +28,7 @@ from paddle.nn import AdaptiveAvgPool2D, MaxPool2D, AvgPool2D
 from paddle.nn.initializer import Uniform
 import math
 
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "RegNetX_200MF":

@@ -1,35 +1,35 @@
 #!/bin/bash
 
 function func_parser_key() {
-    local strs=$1
-    local IFS=':'
-    local array=(${strs})
-    local tmp=${array[0]}
+    strs=$1
+    IFS=":"
+    array=(${strs})
+    tmp=${array[0]}
     echo ${tmp}
 }
 
 function func_parser_value() {
-    local strs=$1
-    local IFS=':'
-    local array=(${strs})
-    local tmp=${array[1]}
+    strs=$1
+    IFS=":"
+    array=(${strs})
+    tmp=${array[1]}
     echo ${tmp}
 }
 
 function func_parser_value_lite() {
-    local strs=$1
-    local IFS=$2
-    local array=(${strs})
-    local tmp=${array[1]}
+    strs=$1
+    IFS=$2
+    array=(${strs})
+    tmp=${array[1]}
     echo ${tmp}
 }
 
 function func_set_params() {
-    local key=$1
-    local value=$2
-    if [ ${key}x = 'null'x ];then
+    key=$1
+    value=$2
+    if [ ${key}x = "null"x ];then
         echo " "
-    elif [[ ${value} = 'null' ]] || [[ ${value} = ' ' ]] || [ ${#value} -le 0 ];then
+    elif [[ ${value} = "null" ]] || [[ ${value} = " " ]] || [ ${#value} -le 0 ];then
         echo " "
     else 
         echo "${key}=${value}"
@@ -37,20 +37,21 @@ function func_set_params() {
 }
 
 function func_parser_params() {
-    local strs=$1
-    local IFS=':'
-    local array=(${strs})
-    local key=${array[0]}
-    local tmp=${array[1]}
-    local IFS='|'
-    local res=''
+    strs=$1
+    IFS=":"
+    array=(${strs})
+    key=${array[0]}
+    tmp=${array[1]}
+    IFS="|"
+    res=""
     for _params in ${tmp[*]}; do
-        local IFS='='
-        local array=(${_params})
-        local mode=${array[0]}
-        local value=${array[1]}
+        IFS="="
+        array=(${_params})
+        mode=${array[0]}
+        value=${array[1]}
         if [[ ${mode} = ${MODE} ]]; then
-            local IFS='|'
+            IFS="|"
+            #echo $(func_set_params "${mode}" "${value}")
             echo $value
             break
         fi
@@ -80,20 +81,19 @@ function download_and_unzip_dataset() {
 
     local ds_path="${ds_dir}/${ds_name}"
     local zip_name="${url##*/}"
-    local zip_path="${ds_dir}/${zip_name}"
 
     if [ ${clear} = 'True' ]; then
         rm -rf "${ds_path}"
     fi
 
-    wget -O "${zip_path}" "${url}" --no-check-certificate
+    wget -O "${ds_dir}/${zip_name}" "${url}" --no-check-certificate
     
-    unzip "${zip_path}" -d "${ds_dir}"
     # The extracted file/directory must have the same name as the zip file.
-    local extd_path="${ds_dir}/${zip_name%.*}"
-    if [ ! "${extd_path}" -ef "${ds_path}" ]; then
-        mv "${extd_path}" "${ds_path}"
+    cd "${ds_dir}" && unzip "${zip_name}"
+    if [ "${zip_name%.*}" != "${ds_name}" ]; then
+        mv "${zip_name%.*}" "${ds_name}"
     fi
+    cd -
 }
 
 function parse_extra_args() {
@@ -112,14 +112,14 @@ function add_suffix() {
 
 function parse_first_value() {
     local key_values=$1
-    local IFS=':'
+    local IFS=":"
     local arr=(${key_values})
     echo ${arr[1]}
 }
 
 function parse_second_value() {
     local key_values=$1
-    local IFS=':'
+    local IFS=":"
     local arr=(${key_values})
     echo ${arr[2]}
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ class ConvNormLayer(nn.Layer):
                  norm_type='bn',
                  norm_groups=32,
                  use_dcn=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=False,
                  act=None,
@@ -67,7 +66,6 @@ class ConvNormLayer(nn.Layer):
         if norm_type in ['bn', 'sync_bn']:
             self.norm = nn.BatchNorm2D(
                 ch_out,
-                momentum=norm_momentum,
                 weight_attr=param_attr,
                 bias_attr=bias_attr,
                 use_global_stats=global_stats)
@@ -95,7 +93,6 @@ class Layer1(nn.Layer):
     def __init__(self,
                  num_channels,
                  has_se=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -112,7 +109,6 @@ class Layer1(nn.Layer):
                     has_se=has_se,
                     stride=1,
                     downsample=True if i == 0 else False,
-                    norm_momentum=norm_momentum,
                     norm_decay=norm_decay,
                     freeze_norm=freeze_norm,
                     name=name + '_' + str(i + 1)))
@@ -129,7 +125,6 @@ class TransitionLayer(nn.Layer):
     def __init__(self,
                  in_channels,
                  out_channels,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -149,7 +144,6 @@ class TransitionLayer(nn.Layer):
                             ch_in=in_channels[i],
                             ch_out=out_channels[i],
                             filter_size=3,
-                            norm_momentum=norm_momentum,
                             norm_decay=norm_decay,
                             freeze_norm=freeze_norm,
                             act='relu',
@@ -162,7 +156,6 @@ class TransitionLayer(nn.Layer):
                         ch_out=out_channels[i],
                         filter_size=3,
                         stride=2,
-                        norm_momentum=norm_momentum,
                         norm_decay=norm_decay,
                         freeze_norm=freeze_norm,
                         act='relu',
@@ -188,7 +181,6 @@ class Branches(nn.Layer):
                  in_channels,
                  out_channels,
                  has_se=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -205,7 +197,6 @@ class Branches(nn.Layer):
                         num_channels=in_ch,
                         num_filters=out_channels[i],
                         has_se=has_se,
-                        norm_momentum=norm_momentum,
                         norm_decay=norm_decay,
                         freeze_norm=freeze_norm,
                         name=name + '_branch_layer_' + str(i + 1) + '_' +
@@ -230,7 +221,6 @@ class BottleneckBlock(nn.Layer):
                  has_se,
                  stride=1,
                  downsample=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -243,7 +233,6 @@ class BottleneckBlock(nn.Layer):
             ch_in=num_channels,
             ch_out=num_filters,
             filter_size=1,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             act="relu",
@@ -253,7 +242,6 @@ class BottleneckBlock(nn.Layer):
             ch_out=num_filters,
             filter_size=3,
             stride=stride,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             act="relu",
@@ -262,7 +250,6 @@ class BottleneckBlock(nn.Layer):
             ch_in=num_filters,
             ch_out=num_filters * 4,
             filter_size=1,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             act=None,
@@ -273,7 +260,6 @@ class BottleneckBlock(nn.Layer):
                 ch_in=num_channels,
                 ch_out=num_filters * 4,
                 filter_size=1,
-                norm_momentum=norm_momentum,
                 norm_decay=norm_decay,
                 freeze_norm=freeze_norm,
                 act=None,
@@ -310,7 +296,6 @@ class BasicBlock(nn.Layer):
                  stride=1,
                  has_se=False,
                  downsample=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -322,7 +307,6 @@ class BasicBlock(nn.Layer):
             ch_in=num_channels,
             ch_out=num_filters,
             filter_size=3,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             stride=stride,
@@ -332,7 +316,6 @@ class BasicBlock(nn.Layer):
             ch_in=num_filters,
             ch_out=num_filters,
             filter_size=3,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             stride=1,
@@ -344,7 +327,6 @@ class BasicBlock(nn.Layer):
                 ch_in=num_channels,
                 ch_out=num_filters * 4,
                 filter_size=1,
-                norm_momentum=norm_momentum,
                 norm_decay=norm_decay,
                 freeze_norm=freeze_norm,
                 act=None,
@@ -412,7 +394,6 @@ class Stage(nn.Layer):
                  num_modules,
                  num_filters,
                  has_se=False,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  multi_scale_output=True,
@@ -429,7 +410,6 @@ class Stage(nn.Layer):
                         num_channels=num_channels,
                         num_filters=num_filters,
                         has_se=has_se,
-                        norm_momentum=norm_momentum,
                         norm_decay=norm_decay,
                         freeze_norm=freeze_norm,
                         multi_scale_output=False,
@@ -441,7 +421,6 @@ class Stage(nn.Layer):
                         num_channels=num_channels,
                         num_filters=num_filters,
                         has_se=has_se,
-                        norm_momentum=norm_momentum,
                         norm_decay=norm_decay,
                         freeze_norm=freeze_norm,
                         name=name + '_' + str(i + 1)))
@@ -461,7 +440,6 @@ class HighResolutionModule(nn.Layer):
                  num_filters,
                  has_se=False,
                  multi_scale_output=True,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -471,7 +449,6 @@ class HighResolutionModule(nn.Layer):
             in_channels=num_channels,
             out_channels=num_filters,
             has_se=has_se,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name=name)
@@ -480,7 +457,6 @@ class HighResolutionModule(nn.Layer):
             in_channels=num_filters,
             out_channels=num_filters,
             multi_scale_output=multi_scale_output,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name=name)
@@ -496,7 +472,6 @@ class FuseLayers(nn.Layer):
                  in_channels,
                  out_channels,
                  multi_scale_output=True,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  freeze_norm=True,
                  name=None):
@@ -518,7 +493,6 @@ class FuseLayers(nn.Layer):
                             filter_size=1,
                             stride=1,
                             act=None,
-                            norm_momentum=norm_momentum,
                             norm_decay=norm_decay,
                             freeze_norm=freeze_norm,
                             name=name + '_layer_' + str(i + 1) + '_' +
@@ -536,7 +510,6 @@ class FuseLayers(nn.Layer):
                                     ch_out=out_channels[i],
                                     filter_size=3,
                                     stride=2,
-                                    norm_momentum=norm_momentum,
                                     norm_decay=norm_decay,
                                     freeze_norm=freeze_norm,
                                     act=None,
@@ -552,7 +525,6 @@ class FuseLayers(nn.Layer):
                                     ch_out=out_channels[j],
                                     filter_size=3,
                                     stride=2,
-                                    norm_momentum=norm_momentum,
                                     norm_decay=norm_decay,
                                     freeze_norm=freeze_norm,
                                     act="relu",
@@ -577,6 +549,7 @@ class FuseLayers(nn.Layer):
                     for k in range(i - j):
                         y = self.residual_func_list[residual_func_idx](y)
                         residual_func_idx += 1
+
                     residual = paddle.add(x=residual, y=y)
             residual = F.relu(residual)
             outs.append(residual)
@@ -594,7 +567,6 @@ class HRNet(nn.Layer):
         has_se (bool): whether to add SE block for each stage
         freeze_at (int): the stage to freeze
         freeze_norm (bool): whether to freeze norm in HRNet
-        norm_momentum (float): momentum of BatchNorm
         norm_decay (float): weight decay for normalization layer weights
         return_idx (List): the stage to return
         upsample (bool): whether to upsample and concat the backbone feats
@@ -605,11 +577,9 @@ class HRNet(nn.Layer):
                  has_se=False,
                  freeze_at=0,
                  freeze_norm=True,
-                 norm_momentum=0.9,
                  norm_decay=0.,
                  return_idx=[0, 1, 2, 3],
-                 upsample=False,
-                 downsample=False):
+                 upsample=False):
         super(HRNet, self).__init__()
 
         self.width = width
@@ -621,7 +591,6 @@ class HRNet(nn.Layer):
         self.freeze_at = freeze_at
         self.return_idx = return_idx
         self.upsample = upsample
-        self.downsample = downsample
 
         self.channels = {
             18: [[18, 36], [18, 36, 72], [18, 36, 72, 144]],
@@ -644,7 +613,6 @@ class HRNet(nn.Layer):
             ch_out=64,
             filter_size=3,
             stride=2,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             act='relu',
@@ -655,7 +623,6 @@ class HRNet(nn.Layer):
             ch_out=64,
             filter_size=3,
             stride=2,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             act='relu',
@@ -664,7 +631,6 @@ class HRNet(nn.Layer):
         self.la1 = Layer1(
             num_channels=64,
             has_se=has_se,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="layer2")
@@ -672,7 +638,6 @@ class HRNet(nn.Layer):
         self.tr1 = TransitionLayer(
             in_channels=[256],
             out_channels=channels_2,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="tr1")
@@ -682,7 +647,6 @@ class HRNet(nn.Layer):
             num_modules=num_modules_2,
             num_filters=channels_2,
             has_se=self.has_se,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="st2")
@@ -690,7 +654,6 @@ class HRNet(nn.Layer):
         self.tr2 = TransitionLayer(
             in_channels=channels_2,
             out_channels=channels_3,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="tr2")
@@ -700,7 +663,6 @@ class HRNet(nn.Layer):
             num_modules=num_modules_3,
             num_filters=channels_3,
             has_se=self.has_se,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="st3")
@@ -708,7 +670,6 @@ class HRNet(nn.Layer):
         self.tr3 = TransitionLayer(
             in_channels=channels_3,
             out_channels=channels_4,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             name="tr3")
@@ -717,105 +678,10 @@ class HRNet(nn.Layer):
             num_modules=num_modules_4,
             num_filters=channels_4,
             has_se=self.has_se,
-            norm_momentum=norm_momentum,
             norm_decay=norm_decay,
             freeze_norm=freeze_norm,
             multi_scale_output=len(return_idx) > 1,
             name="st4")
-
-        if self.downsample:
-            self.incre_modules, self.downsamp_modules, \
-                self.final_layer = self._make_head(channels_4, norm_momentum=norm_momentum, has_se=self.has_se)
-
-    def _make_layer(self,
-                    block,
-                    inplanes,
-                    planes,
-                    blocks,
-                    stride=1,
-                    norm_momentum=0.9,
-                    has_se=False,
-                    name=None):
-        downsample = None
-        if stride != 1 or inplanes != planes * 4:
-            downsample = True
-
-        layers = []
-        layers.append(
-            block(
-                inplanes,
-                planes,
-                has_se,
-                stride,
-                downsample,
-                norm_momentum=norm_momentum,
-                freeze_norm=False,
-                name=name + "_s0"))
-        inplanes = planes * 4
-        for i in range(1, blocks):
-            layers.append(
-                block(
-                    inplanes,
-                    planes,
-                    has_se,
-                    norm_momentum=norm_momentum,
-                    freeze_norm=False,
-                    name=name + "_s" + str(i)))
-
-        return nn.Sequential(*layers)
-
-    def _make_head(self, pre_stage_channels, norm_momentum=0.9, has_se=False):
-        head_block = BottleneckBlock
-        head_channels = [32, 64, 128, 256]
-
-        # Increasing the #channels on each resolution 
-        # from C, 2C, 4C, 8C to 128, 256, 512, 1024
-        incre_modules = []
-        for i, channels in enumerate(pre_stage_channels):
-            incre_module = self._make_layer(
-                head_block,
-                channels,
-                head_channels[i],
-                1,
-                stride=1,
-                norm_momentum=norm_momentum,
-                has_se=has_se,
-                name='incre' + str(i))
-            incre_modules.append(incre_module)
-        incre_modules = nn.LayerList(incre_modules)
-
-        # downsampling modules
-        downsamp_modules = []
-        for i in range(len(pre_stage_channels) - 1):
-            in_channels = head_channels[i] * 4
-            out_channels = head_channels[i + 1] * 4
-
-            downsamp_module = nn.Sequential(
-                nn.Conv2D(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    kernel_size=3,
-                    stride=2,
-                    padding=1),
-                nn.BatchNorm2D(
-                    out_channels, momentum=norm_momentum),
-                nn.ReLU())
-
-            downsamp_modules.append(downsamp_module)
-        downsamp_modules = nn.LayerList(downsamp_modules)
-
-        final_layer = nn.Sequential(
-            nn.Conv2D(
-                in_channels=head_channels[3] * 4,
-                out_channels=2048,
-                kernel_size=1,
-                stride=1,
-                padding=0),
-            nn.BatchNorm2D(
-                2048, momentum=norm_momentum),
-            nn.ReLU())
-
-        return incre_modules, downsamp_modules, final_layer
 
     def forward(self, inputs):
         x = inputs['image']
@@ -840,14 +706,6 @@ class HRNet(nn.Layer):
             x3 = F.upsample(st4[3], size=(x0_h, x0_w), mode='bilinear')
             x = paddle.concat([st4[0], x1, x2, x3], 1)
             return x
-
-        if self.downsample:
-            y = self.incre_modules[0](st4[0])
-            for i in range(len(self.downsamp_modules)):
-                y = self.incre_modules[i+1](st4[i+1]) + \
-                            self.downsamp_modules[i](y)
-            y = self.final_layer(y)
-            return y
 
         res = []
         for i, layer in enumerate(st4):

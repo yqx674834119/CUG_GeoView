@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -274,13 +274,11 @@ class OptimizerBuilder():
 
     def __init__(self,
                  clip_grad_by_norm=None,
-                 clip_grad_by_value=None,
                  regularizer={'type': 'L2',
                               'factor': .0001},
                  optimizer={'type': 'Momentum',
                             'momentum': .9}):
         self.clip_grad_by_norm = clip_grad_by_norm
-        self.clip_grad_by_value = clip_grad_by_value
         self.regularizer = regularizer
         self.optimizer = optimizer
 
@@ -288,9 +286,6 @@ class OptimizerBuilder():
         if self.clip_grad_by_norm is not None:
             grad_clip = nn.ClipGradByGlobalNorm(
                 clip_norm=self.clip_grad_by_norm)
-        elif self.clip_grad_by_value is not None:
-            var = abs(self.clip_grad_by_value)
-            grad_clip = nn.ClipGradByValue(min=-var, max=var)
         else:
             grad_clip = None
         if self.regularizer and self.regularizer != 'None':

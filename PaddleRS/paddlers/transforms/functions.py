@@ -37,9 +37,11 @@ def normalize(im, mean, std, min_value=[0, 0, 0], max_value=[255, 255, 255]):
     return im
 
 
-def permute(im):
+def permute(im, to_bgr=False):
     im = np.swapaxes(im, 1, 2)
     im = np.swapaxes(im, 1, 0)
+    if to_bgr:
+        im = im[[2, 1, 0], :, :]
     return im
 
 
@@ -380,38 +382,28 @@ def resize_rle(rle, im_h, im_w, im_scale_x, im_scale_y, interp):
     return rle
 
 
-def to_uint8(im, norm=True, stretch=False):
+def to_uint8(im, stretch=False):
     """
     Convert raster data to uint8 type.
     
     Args:
         im (np.ndarray): Input raster image.
-        norm (bool, optional): Use hist equalization to normalize each band or not. 
-            Default is True.
         stretch (bool, optional): Use 2% linear stretch or not. Default is False.
 
     Returns:
         np.ndarray: Image data with unit8 type.
     """
 
-    EPS = 1e-32
-
-    def _minmax_norm(image):
-        image = image.astype(np.float32)
-        min_val = image.min()
-        max_val = image.max()
-        return (image - min_val) / (max_val - min_val + EPS)
-
     # 2% linear stretch
-    def _two_percent_linear(image, max_out=1., min_out=0.):
+    def _two_percent_linear(image, max_out=255, min_out=0):
         def _gray_process(gray, maxout=max_out, minout=min_out):
             # Get the corresponding gray level at 98% in the histogram.
             high_value = np.percentile(gray, 98)
             low_value = np.percentile(gray, 2)
             truncated_gray = np.clip(gray, a_min=low_value, a_max=high_value)
-            processed_gray = ((truncated_gray - low_value) / (high_value - low_value + EPS)) * \
+            processed_gray = ((truncated_gray - low_value) / (high_value - low_value)) * \
                              (maxout - minout)
-            return processed_gray
+            return np.uint8(processed_gray)
 
         if len(image.shape) == 3:
             processes = []
@@ -420,33 +412,26 @@ def to_uint8(im, norm=True, stretch=False):
             result = np.stack(processes, axis=2)
         else:  # if len(image.shape) == 2
             result = _gray_process(image)
-        return result
+        return np.uint8(result)
 
-    def _equalize_hist(image):
+    # Simple image standardization
+    def _sample_norm(image):
         stretches = []
         if len(image.shape) == 3:
             for b in range(image.shape[-1]):
                 stretched = exposure.equalize_hist(image[:, :, b])
-                assert np.min(stretched) >= 0
-                stretched /= float(np.max(stretched)) + EPS
+                stretched /= float(np.max(stretched))
                 stretches.append(stretched)
             stretched_img = np.stack(stretches, axis=2)
         else:  # if len(image.shape) == 2
             stretched_img = exposure.equalize_hist(image)
-            assert np.min(stretched_img) >= 0
-            stretched_img /= float(np.max(stretched_img)) + EPS
-        return stretched_img
+        return np.uint8(stretched_img * 255)
 
     dtype = im.dtype.name
-    if dtype == 'uint8':
-        return im
+    if dtype != "uint8":
+        im = _sample_norm(im)
     if stretch:
         im = _two_percent_linear(im)
-    if norm:
-        im = _equalize_hist(im)
-    if not norm and not stretch:
-        im = _minmax_norm(im)
-    im = np.uint8(im * 255)
     return im
 
 

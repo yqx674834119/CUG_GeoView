@@ -29,7 +29,6 @@ from paddleslim.analysis import flops
 from paddleslim import L1NormFilterPruner, FPGMFilterPruner
 
 import paddlers
-from paddlers.transforms.operators import Compose
 import paddlers.utils.logging as logging
 from paddlers.utils import (
     seconds_to_hms, get_single_card_bs, dict2str, get_pretrain_weights,
@@ -62,8 +61,6 @@ class ModelMeta(type):
 
 
 class BaseModel(metaclass=ModelMeta):
-    find_unused_parameters = False
-
     def __init__(self, model_type):
         self.model_type = model_type
         self.in_channels = None
@@ -78,11 +75,6 @@ class BaseModel(metaclass=ModelMeta):
         self.eval_metrics = None
         self.best_accuracy = -1.
         self.best_model_epoch = -1
-        self.precision = 'fp32'
-        self.amp_level = None
-        self.custom_white_list = None
-        self.custom_black_list = None
-        self.scaler = None
         # Whether to use synchronized BN
         self.sync_bn = False
         self.status = 'Normal'
@@ -100,14 +92,12 @@ class BaseModel(metaclass=ModelMeta):
                        resume_checkpoint=None,
                        is_backbone_weights=False,
                        load_optim_state=True):
-        # FIXME: Multi-process race?
         if pretrain_weights is not None and \
                 not osp.exists(pretrain_weights):
             if not osp.isdir(save_dir):
                 if osp.exists(save_dir):
                     os.remove(save_dir)
-                os.makedirs(save_dir, exist_ok=True)
-            # XXX: Hard-coding
+                os.makedirs(save_dir)
             if self.model_type == 'classifier':
                 pretrain_weights = get_pretrain_weights(
                     pretrain_weights, self.model_name, save_dir)
@@ -115,7 +105,7 @@ class BaseModel(metaclass=ModelMeta):
                 backbone_name = getattr(self, 'backbone_name', None)
                 pretrain_weights = get_pretrain_weights(
                     pretrain_weights,
-                    self.model_name,
+                    self.__class__.__name__,
                     save_dir,
                     backbone_name=backbone_name)
         if pretrain_weights is not None:
@@ -205,11 +195,15 @@ class BaseModel(metaclass=ModelMeta):
                 info['Transforms'] = list()
                 for op in self.test_transforms.transforms:
                     name = op.__class__.__name__
-                    if hasattr(op, 'get_attrs_for_serialization'):
-                        attr = op.get_attrs_for_serialization()
-                    else:
-                        attr = op.__dict__
+                    attr = op.__dict__
                     info['Transforms'].append({name: attr})
+                arrange = self.test_transforms.arrange
+                if arrange is not None:
+                    info['Transforms'].append({
+                        arrange.__class__.__name__: {
+                            'mode': 'test'
+                        }
+                    })
         info['completed_epochs'] = self.completed_epochs
         return info
 
@@ -217,7 +211,10 @@ class BaseModel(metaclass=ModelMeta):
         info = dict()
         info['pruner'] = self.pruner.__class__.__name__
         info['pruning_ratios'] = self.pruning_ratios
-        info['pruner_inputs'] = self.pruner.inputs
+        pruner_inputs = self.pruner.inputs
+        if self.model_type == 'detector':
+            pruner_inputs = {k: v.tolist() for k, v in pruner_inputs[0].items()}
+        info['pruner_inputs'] = pruner_inputs
 
         return info
 
@@ -235,9 +232,8 @@ class BaseModel(metaclass=ModelMeta):
         model_info['status'] = self.status
 
         paddle.save(self.net.state_dict(), osp.join(save_dir, 'model.pdparams'))
-        if self.optimizer is not None:
-            paddle.save(self.optimizer.state_dict(),
-                        osp.join(save_dir, 'model.pdopt'))
+        paddle.save(self.optimizer.state_dict(),
+                    osp.join(save_dir, 'model.pdopt'))
 
         with open(
                 osp.join(save_dir, 'model.yml'), encoding='utf-8',
@@ -267,11 +263,7 @@ class BaseModel(metaclass=ModelMeta):
         open(osp.join(save_dir, '.success'), 'w').close()
         logging.info("Model saved in {}.".format(save_dir))
 
-    def build_data_loader(self,
-                          dataset,
-                          batch_size,
-                          mode='train',
-                          collate_fn=None):
+    def build_data_loader(self, dataset, batch_size, mode='train'):
         if dataset.num_samples < batch_size:
             raise ValueError(
                 'The volume of dataset({}) must be larger than batch size({}).'
@@ -296,7 +288,7 @@ class BaseModel(metaclass=ModelMeta):
         loader = DataLoader(
             dataset,
             batch_sampler=batch_sampler,
-            collate_fn=dataset.collate_fn if collate_fn is None else collate_fn,
+            collate_fn=dataset.batch_transforms,
             num_workers=dataset.num_workers,
             return_list=True,
             use_shared_memory=use_shared_memory)
@@ -315,39 +307,26 @@ class BaseModel(metaclass=ModelMeta):
                    early_stop=False,
                    early_stop_patience=5,
                    use_vdl=True):
-        self._check_transforms(train_dataset.transforms)
+        self._check_transforms(train_dataset.transforms, 'train')
 
-        net, optimizer = self.net, self.optimizer
-        # Use AMP
-        if self.precision == 'fp16':
-            logging.info("Use AMP training. AMP level = {}.".format(
-                self.amp_level))
-            # XXX: Hard-code init loss scaling
-            self.scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
-            if self.amp_level == 'O2':
-                net, optimizer = paddle.amp.decorate(
-                    models=self.net,
-                    optimizers=self.optimizer,
-                    level=self.amp_level,
-                    save_dtype='float32')
-
-        # XXX: Hard-coding
-        if self.model_type == 'detector' and 'RCNN' in self.model_name and train_dataset.pos_num < len(
+        if self.model_type == 'detector' and 'RCNN' in self.__class__.__name__ and train_dataset.pos_num < len(
                 train_dataset.file_list):
             nranks = 1
         else:
             nranks = paddle.distributed.get_world_size()
         local_rank = paddle.distributed.get_rank()
         if nranks > 1:
+            find_unused_parameters = getattr(self, 'find_unused_parameters',
+                                             False)
             # Initialize parallel environment if not done.
             if not paddle.distributed.parallel.parallel_helper._is_parallel_ctx_initialized(
             ):
                 paddle.distributed.init_parallel_env()
                 ddp_net = to_data_parallel(
-                    net, find_unused_parameters=self.find_unused_parameters)
+                    self.net, find_unused_parameters=find_unused_parameters)
             else:
                 ddp_net = to_data_parallel(
-                    net, find_unused_parameters=self.find_unused_parameters)
+                    self.net, find_unused_parameters=find_unused_parameters)
 
         if use_vdl:
             from visualdl import LogWriter
@@ -355,7 +334,7 @@ class BaseModel(metaclass=ModelMeta):
             log_writer = LogWriter(vdl_logdir)
 
         # task_id: refer to paddlers
-        task_id = getattr(paddlers, 'task_id', '')
+        task_id = getattr(paddlers, "task_id", "")
 
         thresh = .0001
         if early_stop:
@@ -378,7 +357,7 @@ class BaseModel(metaclass=ModelMeta):
 
         current_step = 0
         for i in range(start_epoch, num_epochs):
-            net.train()
+            self.net.train()
             if callable(
                     getattr(self.train_data_loader.dataset, 'set_epoch', None)):
                 self.train_data_loader.dataset.set_epoch(i)
@@ -386,19 +365,15 @@ class BaseModel(metaclass=ModelMeta):
             step_time_tic = time.time()
 
             for step, data in enumerate(self.train_data_loader()):
-                # `PicoDet` and `PPYOLOE_R` need to switch label assinger according to epoch_id
-                # TODO: refactor this
-                if self.model_name in ['PicoDet', 'PPYOLOE_R']:
-                    data['epoch_id'] = i
                 if nranks > 1:
-                    outputs = self.train_step(step, data, ddp_net, optimizer)
+                    outputs = self.train_step(step, data, ddp_net)
                 else:
-                    outputs = self.train_step(step, data, net, optimizer)
+                    outputs = self.train_step(step, data, self.net)
 
-                scheduler_step(optimizer, outputs['loss'])
+                scheduler_step(self.optimizer, outputs['loss'])
 
                 train_avg_metrics.update(outputs)
-                lr = optimizer.get_lr()
+                lr = self.optimizer.get_lr()
                 outputs['lr'] = lr
                 if ema is not None:
                     ema.update(self.net)
@@ -503,20 +478,19 @@ class BaseModel(metaclass=ModelMeta):
                 Defaults to 'output'.
         """
 
-        if self.model_name in {'FasterRCNN', 'MaskRCNN', 'PicoDet'}:
+        if self.__class__.__name__ in {'FasterRCNN', 'MaskRCNN', 'PicoDet'}:
             raise ValueError("{} does not support pruning currently!".format(
-                self.model_name))
+                self.__class__.__name__))
 
         assert criterion in {'l1_norm', 'fpgm'}, \
             "Pruning criterion {} is not supported. Please choose from {'l1_norm', 'fpgm'}."
-        self._check_transforms(dataset.transforms)
-        # XXX: Hard-coding
+        self._check_transforms(dataset.transforms, 'eval')
         if self.model_type == 'detector':
             self.net.eval()
         else:
             self.net.train()
         inputs = _pruner_template_input(
-            sample=dataset[0][0], model_type=self.model_type)
+            sample=dataset[0], model_type=self.model_type)
         if criterion == 'l1_norm':
             self.pruner = L1NormFilterPruner(self.net, inputs=inputs)
         else:
@@ -541,7 +515,7 @@ class BaseModel(metaclass=ModelMeta):
                 saved. Otherwise, the pruned model will be saved at `save_dir`. 
                 Defaults to None.
         """
-        if self.status == 'Pruned':
+        if self.status == "Pruned":
             raise ValueError(
                 "A pruned model cannot be pruned for a second time!")
         pre_pruning_flops = flops(self.net, self.pruner.inputs)
@@ -634,17 +608,14 @@ class BaseModel(metaclass=ModelMeta):
                 "type": "Sink"
             }
         }]
-        pipeline_info['pipeline_nodes'] = nodes
-        pipeline_info['version'] = '1.0.0'
+        pipeline_info["pipeline_nodes"] = nodes
+        pipeline_info["version"] = "1.0.0"
         return pipeline_info
 
     def _build_inference_net(self):
         raise NotImplementedError
 
-    def _get_test_inputs(self, image_shape):
-        raise NotImplementedError
-
-    def export_inference_model(self, save_dir, image_shape=None):
+    def _export_inference_model(self, save_dir, image_shape=None):
         self.test_inputs = self._get_test_inputs(image_shape)
         infer_net = self._build_inference_net()
 
@@ -687,34 +658,27 @@ class BaseModel(metaclass=ModelMeta):
         logging.info("The inference model for deployment is saved in {}.".
                      format(save_dir))
 
-    def train_step(self, step, data, net, optimizer):
-        if self.precision == 'fp16':
-            with paddle.amp.auto_cast(
-                    level=self.amp_level,
-                    enable=True,
-                    custom_white_list=self.custom_white_list,
-                    custom_black_list=self.custom_black_list):
-                outputs = self.run(net, data, mode='train')
-            scaled = self.scaler.scale(outputs['loss'])
-            scaled.backward()
-            if isinstance(optimizer, paddle.distributed.fleet.Fleet):
-                self.scaler.minimize(optimizer.user_defined_optimizer, scaled)
-            else:
-                self.scaler.minimize(optimizer, scaled)
-        else:
-            outputs = self.run(net, data, mode='train')
-            loss = outputs['loss']
-            loss.backward()
-            optimizer.step()
-            optimizer.clear_grad()
+    def train_step(self, step, data, net):
+        outputs = self.run(net, data, mode='train')
+
+        loss = outputs['loss']
+        loss.backward()
+        self.optimizer.step()
+        self.optimizer.clear_grad()
 
         return outputs
 
-    def _check_transforms(self, transforms):
-        # NOTE: Check transforms
-        if not isinstance(transforms, Compose):
-            raise TypeError(
-                "`transforms` must be `paddlers.transforms.Compose`.")
+    def _check_transforms(self, transforms, mode):
+        # NOTE: Check transforms and transforms.arrange and give user-friendly error messages.
+        if not isinstance(transforms, paddlers.transforms.Compose):
+            raise TypeError("`transforms` must be paddlers.transforms.Compose.")
+        arrange_obj = transforms.arrange
+        if not isinstance(arrange_obj, paddlers.transforms.operators.Arrange):
+            raise TypeError("`transforms.arrange` must be an Arrange object.")
+        if arrange_obj.mode != mode:
+            raise ValueError(
+                f"Incorrect arrange mode! Expected {mode} but got {arrange_obj.mode}."
+            )
 
     def run(self, net, inputs, mode):
         raise NotImplementedError

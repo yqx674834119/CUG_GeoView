@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,4 +55,4 @@ def colormap(rgb=False):
     color_list = color_list.reshape((-1, 3)) * 255
     if not rgb:
         color_list = color_list[:, ::-1]
-    return color_list.astype('int32')
+    return color_list

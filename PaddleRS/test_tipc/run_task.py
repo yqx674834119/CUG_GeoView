@@ -55,7 +55,7 @@ if __name__ == '__main__':
             cfg['download_url'], path=cfg['download_path'])
 
     if not isinstance(cfg['datasets']['eval'].args, dict):
-        raise TypeError("args of eval dataset must be a dict!")
+        raise ValueError("args of eval dataset must be a dict!")
     if cfg['datasets']['eval'].args.get('transforms', None) is not None:
         raise ValueError(
             "Found key 'transforms' in args of eval dataset and the value is not None."
@@ -63,21 +63,11 @@ if __name__ == '__main__':
     eval_transforms = T.Compose(build_objects(cfg['transforms']['eval'], mod=T))
     # Inplace modification
     cfg['datasets']['eval'].args['transforms'] = eval_transforms
-    if cfg['transforms'].get('eval_batch', None) is not None:
-        if cfg['datasets']['eval'].args.get('batch_transforms',
-                                            None) is not None:
-            raise ValueError(
-                "Found key 'batch_transforms' in args of eval dataset and the value is not None."
-            )
-        eval_batch_transforms = T.BatchCompose(
-            build_objects(
-                cfg['transforms']['eval_batch'], mod=T))
-        cfg['datasets']['eval'].args['batch_transforms'] = eval_batch_transforms
     eval_dataset = build_objects(cfg['datasets']['eval'], mod=paddlers.datasets)
 
     if cfg['cmd'] == 'train':
         if not isinstance(cfg['datasets']['train'].args, dict):
-            raise TypeError("args of train dataset must be a dict!")
+            raise ValueError("args of train dataset must be a dict!")
         if cfg['datasets']['train'].args.get('transforms', None) is not None:
             raise ValueError(
                 "Found key 'transforms' in args of train dataset and the value is not None."
@@ -87,17 +77,6 @@ if __name__ == '__main__':
                 cfg['transforms']['train'], mod=T))
         # Inplace modification
         cfg['datasets']['train'].args['transforms'] = train_transforms
-        if cfg['transforms'].get('train_batch', None) is not None:
-            if cfg['datasets']['train'].args.get('batch_transforms',
-                                                 None) is not None:
-                raise ValueError(
-                    "Found key 'batch_transforms' in args of train dataset and the value is not None."
-                )
-            train_batch_transforms = T.BatchCompose(
-                build_objects(
-                    cfg['transforms']['train_batch'], mod=T))
-            cfg['datasets']['train'].args[
-                'batch_transforms'] = train_batch_transforms
         train_dataset = build_objects(
             cfg['datasets']['train'], mod=paddlers.datasets)
         model = build_objects(

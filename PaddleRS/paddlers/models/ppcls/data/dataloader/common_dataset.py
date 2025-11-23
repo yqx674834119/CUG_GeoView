@@ -19,9 +19,9 @@ import numpy as np
 from paddle.io import Dataset
 import cv2
 
-from paddlers.models.ppcls.data import preprocess
-from paddlers.models.ppcls.data.preprocess import transform
-from paddlers.models.ppcls.utils import logger
+from ppcls.data import preprocess
+from ppcls.data.preprocess import transform
+from ppcls.utils import logger
 
 
 def create_operators(params):
@@ -44,11 +44,11 @@ def create_operators(params):
 
 
 class CommonDataset(Dataset):
-    def __init__(self,
-                 image_root,
-                 cls_label_path,
-                 transform_ops=None,
-                 label_ratio=False):
+    def __init__(
+            self,
+            image_root,
+            cls_label_path,
+            transform_ops=None, ):
         self._img_root = image_root
         self._cls_path = cls_label_path
         if transform_ops:
@@ -56,10 +56,7 @@ class CommonDataset(Dataset):
 
         self.images = []
         self.labels = []
-        if label_ratio:
-            self.label_ratio = self._load_anno(label_ratio=label_ratio)
-        else:
-            self._load_anno()
+        self._load_anno()
 
     def _load_anno(self):
         pass

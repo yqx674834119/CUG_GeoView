@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ def _strip_postfix(path):
     return path
 
 
-def load_weight(model, weight, optimizer=None, ema=None, exchange=True):
+def load_weight(model, weight, optimizer=None, ema=None):
     if is_url(weight):
         weight = get_weights_path(weight)
 
@@ -73,21 +73,9 @@ def load_weight(model, weight, optimizer=None, ema=None, exchange=True):
                          "exists.".format(pdparam_path))
 
     if ema is not None and os.path.exists(path + '.pdema'):
-        if exchange:
-            # Exchange model and ema_model to load
-            logger.info('Exchange model and ema_model to load:')
-            ema_state_dict = paddle.load(pdparam_path)
-            logger.info('Loading ema_model weights from {}'.format(path +
-                                                                   '.pdparams'))
-            param_state_dict = paddle.load(path + '.pdema')
-            logger.info('Loading model weights from {}'.format(path + '.pdema'))
-        else:
-            ema_state_dict = paddle.load(path + '.pdema')
-            logger.info('Loading ema_model weights from {}'.format(path +
-                                                                   '.pdema'))
-            param_state_dict = paddle.load(pdparam_path)
-            logger.info('Loading model weights from {}'.format(path +
-                                                               '.pdparams'))
+        # Exchange model and ema_model to load
+        ema_state_dict = paddle.load(pdparam_path)
+        param_state_dict = paddle.load(path + '.pdema')
     else:
         ema_state_dict = None
         param_state_dict = paddle.load(pdparam_path)

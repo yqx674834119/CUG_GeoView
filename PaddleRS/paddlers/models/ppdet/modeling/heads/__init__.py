@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,12 +33,6 @@ from . import sparsercnn_head
 from . import tood_head
 from . import retina_head
 from . import ppyoloe_head
-from . import fcosr_head
-from . import ppyoloe_r_head
-from . import yolof_head
-from . import ppyoloe_contrast_head
-from . import centertrack_head
-from . import sparse_roi_head
 
 from .bbox_head import *
 from .mask_head import *
@@ -61,10 +55,3 @@ from .sparsercnn_head import *
 from .tood_head import *
 from .retina_head import *
 from .ppyoloe_head import *
-from .fcosr_head import *
-from .ppyoloe_r_head import *
-from .yolof_head import *
-from .ppyoloe_contrast_head import *
-from .centertrack_head import *
-from .sparse_roi_head import *
-from .petr_head import *

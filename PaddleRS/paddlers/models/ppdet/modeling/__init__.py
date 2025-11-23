@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -30,7 +30,6 @@ from . import mot
 from . import transformers
 from . import assigners
 from . import rbox_utils
-from . import ssod
 
 from .ops import *
 from .backbones import *
@@ -46,4 +45,3 @@ from .mot import *
 from .transformers import *
 from .assigners import *
 from .rbox_utils import *
-from .ssod import *

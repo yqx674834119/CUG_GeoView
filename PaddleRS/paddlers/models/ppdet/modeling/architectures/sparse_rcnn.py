@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,10 +60,10 @@ class SparseRCNN(BaseArch):
         head_outs = self.head(fpn_feats, self.inputs["img_whwh"])
 
         if not self.training:
-            bbox_pred, bbox_num = self.postprocess(
+            bboxes = self.postprocess(
                 head_outs["pred_logits"], head_outs["pred_boxes"],
-                self.inputs["scale_factor_whwh"], self.inputs["ori_shape"])
-            return bbox_pred, bbox_num
+                self.inputs["scale_factor_wh"], self.inputs["img_whwh"])
+            return bboxes
         else:
             return head_outs
 

@@ -141,9 +141,6 @@ class OverlapProcessor(metaclass=ABCMeta):
         self.sh = sh
         self.sw = sw
 
-    def update_batch_offsets(self, xoff, yoff):
-        return xoff, yoff
-
     @abstractmethod
     def process_pred(self, out, xoff, yoff):
         pass
@@ -203,21 +200,6 @@ class AccumProcessor(OverlapProcessor):
         return pred
 
 
-class SwellProcessor(OverlapProcessor):
-    def __init__(self, h, w, ch, cw, sh, sw, oh, ow):
-        super(SwellProcessor, self).__init__(h, w, ch, cw, sh, sw)
-        self.oh = oh
-        self.ow = ow
-
-    def update_batch_offsets(self, xoff, yoff):
-        return xoff + self.oh, yoff + self.ow
-
-    def process_pred(self, out, xoff, yoff):
-        pred = out['label_map']
-        pred = pred[self.oh:self.ch - self.oh, self.ow:self.cw - self.ow]
-        return pred
-
-
 def assign_border_weights(array, weight=0.5, border_ratio=0.25, inplace=True):
     if not inplace:
         array = array.copy()
@@ -230,80 +212,34 @@ def assign_border_weights(array, weight=0.5, border_ratio=0.25, inplace=True):
     return array
 
 
-class BlockReader(metaclass=ABCMeta):
-    def __init__(self, ds):
-        super().__init__()
-        self.ds = ds
-        self.ww = self.ds.RasterXSize
-        self.wh = self.ds.RasterYSize
-
-    @abstractmethod
-    def read_block(self, xoff, yoff, xsize, ysize):
-        pass
-
-    def get_block(self,
-                  xoff,
-                  yoff,
-                  xsize,
-                  ysize,
-                  tar_xsize=None,
-                  tar_ysize=None,
-                  pad_val=0):
-        if tar_xsize is None:
-            tar_xsize = xsize
-        if tar_ysize is None:
-            tar_ysize = ysize
-        # Negative index correction
-        lxpad = 0
-        lypad = 0
-        if xoff < 0:
-            lxpad = -xoff
-            xsize -= lxpad
-            xoff = 0
-        if yoff < 0:
-            lypad = -yoff
-            ysize -= lypad
-            yoff = 0
-        # Out of index correction
-        if xoff + xsize > self.ww:
-            xsize = self.ww - xoff
-        if yoff + ysize > self.wh:
-            ysize = self.wh - yoff
-        block = self.read_block(xoff, yoff, xsize, ysize)
-        c, real_ysize, real_xsize = block.shape
-        assert real_ysize == ysize and real_xsize == xsize
-        # [c, h, w] -> [h, w, c]
-        block = block.transpose((1, 2, 0))
-        if (real_ysize, real_xsize) != (tar_ysize, tar_xsize):
-            if real_ysize >= tar_ysize or real_xsize >= tar_xsize:
-                raise ValueError
-            padded_block = np.full(
-                (tar_ysize, tar_xsize, c),
-                fill_value=pad_val,
-                dtype=block.dtype)
-            # Fill
-            padded_block[lypad:real_ysize + lypad, lxpad:real_xsize +
-                         lxpad] = block
-            return padded_block
-        else:
-            return block
-
-
-class GDALLazyBlockReader(BlockReader):
-    def read_block(self, xoff, yoff, xsize, ysize):
-        block = self.ds.ReadAsArray(xoff, yoff, xsize, ysize)
+def read_block(ds,
+               xoff,
+               yoff,
+               xsize,
+               ysize,
+               tar_xsize=None,
+               tar_ysize=None,
+               pad_val=0):
+    if tar_xsize is None:
+        tar_xsize = xsize
+    if tar_ysize is None:
+        tar_ysize = ysize
+    # Read data from dataset
+    block = ds.ReadAsArray(xoff, yoff, xsize, ysize)
+    c, real_ysize, real_xsize = block.shape
+    assert real_ysize == ysize and real_xsize == xsize
+    # [c, h, w] -> [h, w, c]
+    block = block.transpose((1, 2, 0))
+    if (real_ysize, real_xsize) != (tar_ysize, tar_xsize):
+        if real_ysize >= tar_ysize or real_xsize >= tar_xsize:
+            raise ValueError
+        padded_block = np.full(
+            (tar_ysize, tar_xsize, c), fill_value=pad_val, dtype=block.dtype)
+        # Fill
+        padded_block[:real_ysize, :real_xsize] = block
+        return padded_block
+    else:
         return block
-
-
-class EagerBlockReader(BlockReader):
-    def __init__(self, ds):
-        super().__init__(ds)
-        # Read the whole image eagerly
-        self._whole_image = self.ds.ReadAsArray()
-
-    def read_block(self, xoff, yoff, xsize, ysize):
-        # First dim is channel
-        return self._whole_image[:, yoff:yoff + ysize, xoff:xoff + xsize]
 
 
 def slider_predict(predict_func,
@@ -315,7 +251,6 @@ def slider_predict(predict_func,
                    invalid_value,
                    merge_strategy,
                    batch_size,
-                   eager_load=False,
                    show_progress=False):
     """
     Do inference using sliding windows.
@@ -330,29 +265,19 @@ def slider_predict(predict_func,
         overlap (list[int] | tuple[int] | int):
             Overlap between two blocks. If `overlap` is list or tuple, it should
             be in (W, H) format.
-        transforms (paddlers.transforms.Compose|list|None): Transforms for inputs. If 
+        transforms (paddlers.transforms.Compose|None): Transforms for inputs. If 
             None, the transforms for evaluation process will be used. 
         invalid_value (int): Value that marks invalid pixels in output image. 
             Defaults to 255.
         merge_strategy (str): Strategy to merge overlapping blocks. Choices are 
-            {'keep_first', 'keep_last', 'accum', 'swell'}. 'keep_first' and 'keep_last' 
+            {'keep_first', 'keep_last', 'accum'}. 'keep_first' and 'keep_last' 
             means keeping the values of the first and the last block in 
             traversal order, respectively. 'accum' means determining the class 
             of an overlapping pixel according to accumulated probabilities.
-            'swell' means keeping only the center part of each block prediction.
         batch_size (int): Batch size used in inference.
-        eager_load (bool, optional): Whether to load the whole image(s) eagerly.
-            Defaults to False.
         show_progress (bool, optional): Whether to show prediction progress with a 
             progress bar. Defaults to True.
     """
-
-    def _construct_reader(eager_load, *args, **kwargs):
-        if eager_load:
-            reader = EagerBlockReader(*args, **kwargs)
-        else:
-            reader = GDALLazyBlockReader(*args, **kwargs)
-        return reader
 
     try:
         from osgeo import gdal
@@ -386,23 +311,17 @@ def slider_predict(predict_func,
             raise ValueError("Tuple `img_file` must have the length of two.")
         # Assume that two input images have the same size
         src_data = gdal.Open(img_file[0])
-        reader = _construct_reader(eager_load=eager_load, ds=src_data)
         src2_data = gdal.Open(img_file[1])
-        reader2 = _construct_reader(eager_load=eager_load, ds=src2_data)
         # Output name is the same as the name of the first image
         file_name = osp.basename(osp.normpath(img_file[0]))
     else:
         src_data = gdal.Open(img_file)
-        reader = _construct_reader(eager_load=eager_load, ds=src_data)
         file_name = osp.basename(osp.normpath(img_file))
 
     # Get size of original raster
     width = src_data.RasterXSize
     height = src_data.RasterYSize
     bands = src_data.RasterCount
-
-    start = (0, 0)
-    end = (width, height)
 
     # XXX: GDAL read behavior conforms to paddlers.transforms.decode_image(read_raw=True)
     # except for SAR images.
@@ -451,13 +370,6 @@ def slider_predict(predict_func,
     elif merge_strategy == 'accum':
         overlap_processor = AccumProcessor(height, width, *block_size[::-1],
                                            *step[::-1])
-    elif merge_strategy == 'swell':
-        start = tuple([-o for o in overlap])
-        end = tuple([o + e for o, e in zip(overlap, end)])
-        step = np.array(block_size, dtype=np.int32)
-        block_size = tuple([b + 2 * o for b, o in zip(block_size, overlap)])
-        overlap_processor = SwellProcessor(height, width, *block_size[::-1],
-                                           *step[::-1], *overlap[::-1])
     else:
         raise ValueError("{} is not a supported stragegy for block merging.".
                          format(merge_strategy))
@@ -469,35 +381,29 @@ def slider_predict(predict_func,
         pb = tqdm(total=num_blocks)
     batch_data = []
     batch_offsets = []
-    start_h, start_w = start[::-1]
-    end_h, end_w = end[::-1]
-    for yoff in range(start_h, height, step[1]):
-        for xoff in range(start_w, width, step[0]):
+    for yoff in range(0, height, step[1]):
+        for xoff in range(0, width, step[0]):
             if xoff + xsize > width:
-                xoff = end_w - xsize
+                xoff = width - xsize
                 is_end_of_row = True
             else:
                 is_end_of_row = False
             if yoff + ysize > height:
-                yoff = end_h - ysize
+                yoff = height - ysize
                 is_end_of_col = True
             else:
                 is_end_of_col = False
 
             # Read
-            tar_xsize, tar_ysize = block_size
-            im = reader.get_block(xoff, yoff, xsize, ysize, tar_xsize,
-                                  tar_ysize)
+            im = read_block(src_data, xoff, yoff, xsize, ysize)
 
             if isinstance(img_file, tuple):
-                im2 = reader2.get_block(xoff, yoff, xsize, ysize, tar_xsize,
-                                        tar_ysize)
+                im2 = read_block(src2_data, xoff, yoff, xsize, ysize)
                 batch_data.append((im, im2))
             else:
                 batch_data.append(im)
 
-            batch_offsets.append(
-                overlap_processor.update_batch_offsets(xoff, yoff))
+            batch_offsets.append((xoff, yoff))
 
             len_batch = len(batch_data)
 
@@ -517,6 +423,7 @@ def slider_predict(predict_func,
                     # Write to file
                     band.WriteArray(pred, xoff_, yoff_)
 
+                dst_data.FlushCache()
                 batch_data.clear()
                 batch_offsets.clear()
 
@@ -526,9 +433,6 @@ def slider_predict(predict_func,
                 pb.update(1)
                 pb.set_description("{} out of {} blocks processed.".format(
                     cnt, num_blocks))
-        # Flush cache when finishing each row
-        dst_data.FlushCache()
 
-    dst_data.FlushCache()
     dst_data = None
     logging.info("GeoTiff file saved in {}.".format(save_file))

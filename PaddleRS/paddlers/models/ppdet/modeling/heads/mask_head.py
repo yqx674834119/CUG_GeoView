@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -80,7 +80,7 @@ class MaskFeat(nn.Layer):
         mask_conv.add_sublayer(
             'conv5_mask',
             nn.Conv2DTranspose(
-                in_channels=self.out_channel if num_convs > 0 else self.in_channel,
+                in_channels=self.in_channel,
                 out_channels=self.out_channel,
                 kernel_size=2,
                 stride=2,

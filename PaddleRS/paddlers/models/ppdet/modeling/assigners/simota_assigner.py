@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -236,7 +236,7 @@ class SimOTAAssigner(object):
         )] = match_fg_mask_inmatrix
 
         assigned_gt_inds[match_fg_mask_inall.astype(
-            np.bool_)] = match_gt_inds_to_fg + 1
+            np.bool)] = match_gt_inds_to_fg + 1
 
         pos_inds, neg_inds, pos_gt_bboxes, pos_assigned_gt_inds \
             = self.get_sample(assigned_gt_inds, gt_bboxes.numpy())

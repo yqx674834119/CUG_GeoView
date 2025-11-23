@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import distill_loss
-from . import distill_model
-from . import ofa
 from . import prune
 from . import quant
+from . import distill
 from . import unstructured_prune
 
-from .distill_loss import *
-from .distill_model import *
-from .ofa import *
 from .prune import *
 from .quant import *
+from .distill import *
 from .unstructured_prune import *
+from .ofa import *
 
 import yaml
 from paddlers.models.ppdet.core.workspace import load_config
@@ -34,7 +31,6 @@ from paddlers.models.ppdet.utils.checkpoint import load_pretrain_weight
 def build_slim_model(cfg, slim_cfg, mode='train'):
     with open(slim_cfg) as f:
         slim_load_cfg = yaml.load(f, Loader=yaml.Loader)
-
     if mode != 'train' and slim_load_cfg['slim'] == 'Distill':
         return cfg
 
@@ -42,17 +38,7 @@ def build_slim_model(cfg, slim_cfg, mode='train'):
         if "slim_method" in slim_load_cfg and slim_load_cfg[
                 'slim_method'] == "FGD":
             model = FGDDistillModel(cfg, slim_cfg)
-        elif "slim_method" in slim_load_cfg and slim_load_cfg[
-                'slim_method'] == "LD":
-            model = LDDistillModel(cfg, slim_cfg)
-        elif "slim_method" in slim_load_cfg and slim_load_cfg[
-                'slim_method'] == "CWD":
-            model = CWDDistillModel(cfg, slim_cfg)
-        elif "slim_method" in slim_load_cfg and slim_load_cfg[
-                'slim_method'] == "PPYOLOEDistill":
-            model = PPYOLOEDistillModel(cfg, slim_cfg)
         else:
-            # common distillation model
             model = DistillModel(cfg, slim_cfg)
         cfg['model'] = model
         cfg['slim_type'] = cfg.slim
@@ -83,9 +69,9 @@ def build_slim_model(cfg, slim_cfg, mode='train'):
         load_config(slim_cfg)
         load_pretrain_weight(model, cfg.weights)
         slim = create(cfg.slim)
-        cfg['slim_type'] = cfg.slim
         cfg['slim'] = slim
         cfg['model'] = slim(model)
+        cfg['slim_type'] = cfg.slim
     elif slim_load_cfg['slim'] == 'UnstructuredPruner':
         load_config(slim_cfg)
         slim = create(cfg.slim)

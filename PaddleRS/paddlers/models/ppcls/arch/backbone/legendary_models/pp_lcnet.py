@@ -1,4 +1,4 @@
-# copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@ from __future__ import absolute_import, division, print_function
 import paddle
 import paddle.nn as nn
 from paddle import ParamAttr
-from paddle.nn import AdaptiveAvgPool2D, BatchNorm2D, Conv2D, Dropout, Linear
+from paddle.nn import AdaptiveAvgPool2D, BatchNorm, Conv2D, Dropout, Linear
 from paddle.regularizer import L2Decay
 from paddle.nn.initializer import KaimingNormal
-
-from ..base.theseus_layer import TheseusLayer
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.arch.backbone.base.theseus_layer import TheseusLayer
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "PPLCNet_x0_25":
@@ -62,9 +61,9 @@ NET_CONFIG = {
     [[3, 16, 32, 1, False]],
     "blocks3": [[3, 32, 64, 2, False], [3, 64, 64, 1, False]],
     "blocks4": [[3, 64, 128, 2, False], [3, 128, 128, 1, False]],
-    "blocks5": [[3, 128, 256, 2, False], [5, 256, 256, 1, False],
-                [5, 256, 256, 1, False], [5, 256, 256, 1, False],
-                [5, 256, 256, 1, False], [5, 256, 256, 1, False]],
+    "blocks5":
+    [[3, 128, 256, 2, False], [5, 256, 256, 1, False], [5, 256, 256, 1, False],
+     [5, 256, 256, 1, False], [5, 256, 256, 1, False], [5, 256, 256, 1, False]],
     "blocks6": [[5, 256, 512, 2, True], [5, 512, 512, 1, True]]
 }
 
@@ -84,8 +83,7 @@ class ConvBNLayer(TheseusLayer):
                  filter_size,
                  num_filters,
                  stride,
-                 num_groups=1,
-                 lr_mult=1.0):
+                 num_groups=1):
         super().__init__()
 
         self.conv = Conv2D(
@@ -95,16 +93,13 @@ class ConvBNLayer(TheseusLayer):
             stride=stride,
             padding=(filter_size - 1) // 2,
             groups=num_groups,
-            weight_attr=ParamAttr(
-                initializer=KaimingNormal(), learning_rate=lr_mult),
+            weight_attr=ParamAttr(initializer=KaimingNormal()),
             bias_attr=False)
 
-        self.bn = BatchNorm2D(
+        self.bn = BatchNorm(
             num_filters,
-            weight_attr=ParamAttr(
-                regularizer=L2Decay(0.0), learning_rate=lr_mult),
-            bias_attr=ParamAttr(
-                regularizer=L2Decay(0.0), learning_rate=lr_mult))
+            param_attr=ParamAttr(regularizer=L2Decay(0.0)),
+            bias_attr=ParamAttr(regularizer=L2Decay(0.0)))
         self.hardswish = nn.Hardswish()
 
     def forward(self, x):
@@ -120,8 +115,7 @@ class DepthwiseSeparable(TheseusLayer):
                  num_filters,
                  stride,
                  dw_size=3,
-                 use_se=False,
-                 lr_mult=1.0):
+                 use_se=False):
         super().__init__()
         self.use_se = use_se
         self.dw_conv = ConvBNLayer(
@@ -129,16 +123,14 @@ class DepthwiseSeparable(TheseusLayer):
             num_filters=num_channels,
             filter_size=dw_size,
             stride=stride,
-            num_groups=num_channels,
-            lr_mult=lr_mult)
+            num_groups=num_channels)
         if use_se:
-            self.se = SEModule(num_channels, lr_mult=lr_mult)
+            self.se = SEModule(num_channels)
         self.pw_conv = ConvBNLayer(
             num_channels=num_channels,
             filter_size=1,
             num_filters=num_filters,
-            stride=1,
-            lr_mult=lr_mult)
+            stride=1)
 
     def forward(self, x):
         x = self.dw_conv(x)
@@ -149,7 +141,7 @@ class DepthwiseSeparable(TheseusLayer):
 
 
 class SEModule(TheseusLayer):
-    def __init__(self, channel, reduction=4, lr_mult=1.0):
+    def __init__(self, channel, reduction=4):
         super().__init__()
         self.avg_pool = AdaptiveAvgPool2D(1)
         self.conv1 = Conv2D(
@@ -157,18 +149,14 @@ class SEModule(TheseusLayer):
             out_channels=channel // reduction,
             kernel_size=1,
             stride=1,
-            padding=0,
-            weight_attr=ParamAttr(learning_rate=lr_mult),
-            bias_attr=ParamAttr(learning_rate=lr_mult))
+            padding=0)
         self.relu = nn.ReLU()
         self.conv2 = Conv2D(
             in_channels=channel // reduction,
             out_channels=channel,
             kernel_size=1,
             stride=1,
-            padding=0,
-            weight_attr=ParamAttr(learning_rate=lr_mult),
-            bias_attr=ParamAttr(learning_rate=lr_mult))
+            padding=0)
         self.hardsigmoid = nn.Hardsigmoid()
 
     def forward(self, x):
@@ -189,121 +177,83 @@ class PPLCNet(TheseusLayer):
                  class_num=1000,
                  dropout_prob=0.2,
                  class_expand=1280,
-                 lr_mult_list=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-                 stride_list=[2, 2, 2, 2, 2],
-                 use_last_conv=True,
                  return_patterns=None,
-                 return_stages=None,
-                 **kwargs):
+                 return_stages=None):
         super().__init__()
         self.scale = scale
         self.class_expand = class_expand
-        self.lr_mult_list = lr_mult_list
-        self.use_last_conv = use_last_conv
-        self.stride_list = stride_list
-        self.net_config = NET_CONFIG
-        if isinstance(self.lr_mult_list, str):
-            self.lr_mult_list = eval(self.lr_mult_list)
 
-        assert isinstance(self.lr_mult_list, (
-            list, tuple
-        )), "lr_mult_list should be in (list, tuple) but got {}".format(
-            type(self.lr_mult_list))
-        assert len(self.lr_mult_list
-                   ) == 6, "lr_mult_list length should be 6 but got {}".format(
-                       len(self.lr_mult_list))
-
-        assert isinstance(self.stride_list, (
-            list, tuple
-        )), "stride_list should be in (list, tuple) but got {}".format(
-            type(self.stride_list))
-        assert len(self.stride_list
-                   ) == 5, "stride_list length should be 5 but got {}".format(
-                       len(self.stride_list))
-
-        for i, stride in enumerate(stride_list[1:]):
-            self.net_config["blocks{}".format(i + 3)][0][3] = stride
         self.conv1 = ConvBNLayer(
             num_channels=3,
             filter_size=3,
             num_filters=make_divisible(16 * scale),
-            stride=stride_list[0],
-            lr_mult=self.lr_mult_list[0])
+            stride=2)
 
-        self.blocks2 = nn.Sequential(* [
+        self.blocks2 = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=make_divisible(in_c * scale),
                 num_filters=make_divisible(out_c * scale),
                 dw_size=k,
                 stride=s,
-                use_se=se,
-                lr_mult=self.lr_mult_list[1]) for i, (k, in_c, out_c, s, se) in
-            enumerate(self.net_config["blocks2"])
+                use_se=se)
+            for i, (k, in_c, out_c, s, se) in enumerate(NET_CONFIG["blocks2"])
         ])
 
-        self.blocks3 = nn.Sequential(* [
+        self.blocks3 = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=make_divisible(in_c * scale),
                 num_filters=make_divisible(out_c * scale),
                 dw_size=k,
                 stride=s,
-                use_se=se,
-                lr_mult=self.lr_mult_list[2]) for i, (k, in_c, out_c, s, se) in
-            enumerate(self.net_config["blocks3"])
+                use_se=se)
+            for i, (k, in_c, out_c, s, se) in enumerate(NET_CONFIG["blocks3"])
         ])
 
-        self.blocks4 = nn.Sequential(* [
+        self.blocks4 = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=make_divisible(in_c * scale),
                 num_filters=make_divisible(out_c * scale),
                 dw_size=k,
                 stride=s,
-                use_se=se,
-                lr_mult=self.lr_mult_list[3]) for i, (k, in_c, out_c, s, se) in
-            enumerate(self.net_config["blocks4"])
+                use_se=se)
+            for i, (k, in_c, out_c, s, se) in enumerate(NET_CONFIG["blocks4"])
         ])
 
-        self.blocks5 = nn.Sequential(* [
+        self.blocks5 = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=make_divisible(in_c * scale),
                 num_filters=make_divisible(out_c * scale),
                 dw_size=k,
                 stride=s,
-                use_se=se,
-                lr_mult=self.lr_mult_list[4]) for i, (k, in_c, out_c, s, se) in
-            enumerate(self.net_config["blocks5"])
+                use_se=se)
+            for i, (k, in_c, out_c, s, se) in enumerate(NET_CONFIG["blocks5"])
         ])
 
-        self.blocks6 = nn.Sequential(* [
+        self.blocks6 = nn.Sequential(*[
             DepthwiseSeparable(
                 num_channels=make_divisible(in_c * scale),
                 num_filters=make_divisible(out_c * scale),
                 dw_size=k,
                 stride=s,
-                use_se=se,
-                lr_mult=self.lr_mult_list[5]) for i, (k, in_c, out_c, s, se) in
-            enumerate(self.net_config["blocks6"])
+                use_se=se)
+            for i, (k, in_c, out_c, s, se) in enumerate(NET_CONFIG["blocks6"])
         ])
 
         self.avg_pool = AdaptiveAvgPool2D(1)
-        if self.use_last_conv:
-            self.last_conv = Conv2D(
-                in_channels=make_divisible(self.net_config["blocks6"][-1][2] *
-                                           scale),
-                out_channels=self.class_expand,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias_attr=False)
-            self.hardswish = nn.Hardswish()
-            self.dropout = Dropout(p=dropout_prob, mode="downscale_in_infer")
-        else:
-            self.last_conv = None
+
+        self.last_conv = Conv2D(
+            in_channels=make_divisible(NET_CONFIG["blocks6"][-1][2] * scale),
+            out_channels=self.class_expand,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias_attr=False)
+
+        self.hardswish = nn.Hardswish()
+        self.dropout = Dropout(p=dropout_prob, mode="downscale_in_infer")
         self.flatten = nn.Flatten(start_axis=1, stop_axis=-1)
-        self.fc = Linear(
-            self.class_expand if self.use_last_conv else
-            make_divisible(self.net_config["blocks6"][-1][2] * scale),
-            class_num)
+
+        self.fc = Linear(self.class_expand, class_num)
 
         super().init_res(
             stages_pattern,
@@ -320,10 +270,9 @@ class PPLCNet(TheseusLayer):
         x = self.blocks6(x)
 
         x = self.avg_pool(x)
-        if self.last_conv is not None:
-            x = self.last_conv(x)
-            x = self.hardswish(x)
-            x = self.dropout(x)
+        x = self.last_conv(x)
+        x = self.hardswish(x)
+        x = self.dropout(x)
         x = self.flatten(x)
         x = self.fc(x)
         return x

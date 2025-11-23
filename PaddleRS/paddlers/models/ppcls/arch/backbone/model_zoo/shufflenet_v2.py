@@ -1,4 +1,4 @@
-# copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
+# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserve.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# reference: https://arxiv.org/abs/1807.11164
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -24,7 +22,7 @@ from paddle.nn import Layer, Conv2D, MaxPool2D, AdaptiveAvgPool2D, BatchNorm, Li
 from paddle.nn.initializer import KaimingNormal
 from paddle.nn.functional import swish
 
-from ....utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
+from ppcls.utils.save_load import load_dygraph_pretrain, load_dygraph_pretrain_from_url
 
 MODEL_URLS = {
     "ShuffleNetV2_x0_25":
@@ -100,11 +98,7 @@ class ConvBNLayer(Layer):
 
 
 class InvertedResidual(Layer):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 stride,
-                 act="relu",
+    def __init__(self, in_channels, out_channels, stride, act="relu",
                  name=None):
         super(InvertedResidual, self).__init__()
         self._conv_pw = ConvBNLayer(
@@ -148,11 +142,7 @@ class InvertedResidual(Layer):
 
 
 class InvertedResidualDS(Layer):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 stride,
-                 act="relu",
+    def __init__(self, in_channels, out_channels, stride, act="relu",
                  name=None):
         super(InvertedResidualDS, self).__init__()
 
@@ -233,7 +223,7 @@ class ShuffleNet(Layer):
         elif scale == 1.5:
             stage_out_channels = [-1, 24, 176, 352, 704, 1024]
         elif scale == 2.0:
-            stage_out_channels = [-1, 24, 244, 488, 976, 2048]
+            stage_out_channels = [-1, 24, 224, 488, 976, 2048]
         else:
             raise NotImplementedError("This scale size:[" + str(scale) +
                                       "] is not implemented!")

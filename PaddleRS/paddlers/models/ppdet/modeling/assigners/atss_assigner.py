@@ -41,14 +41,12 @@ class ATSSAssigner(nn.Layer):
                  topk=9,
                  num_classes=80,
                  force_gt_matching=False,
-                 eps=1e-9,
-                 sm_use=False):
+                 eps=1e-9):
         super(ATSSAssigner, self).__init__()
         self.topk = topk
         self.num_classes = num_classes
         self.force_gt_matching = force_gt_matching
         self.eps = eps
-        self.sm_use = sm_use
 
     def _gather_topk_pyramid(self, gt2anchor_distances, num_anchors_list,
                              pad_gt_mask):
@@ -126,8 +124,7 @@ class ATSSAssigner(nn.Layer):
             assigned_bboxes = paddle.zeros([batch_size, num_anchors, 4])
             assigned_scores = paddle.zeros(
                 [batch_size, num_anchors, self.num_classes])
-            mask_positive = paddle.zeros([batch_size, 1, num_anchors])
-            return assigned_labels, assigned_bboxes, assigned_scores, mask_positive
+            return assigned_labels, assigned_bboxes, assigned_scores
 
         # 1. compute iou between gt and anchor bbox, [B, n, L]
         ious = iou_similarity(gt_bboxes.reshape([-1, 4]), anchor_bboxes)
@@ -157,11 +154,7 @@ class ATSSAssigner(nn.Layer):
                                   paddle.zeros_like(is_in_topk))
 
         # 6. check the positive sample's center in gt, [B, n, L]
-        if self.sm_use:
-            is_in_gts = check_points_inside_bboxes(
-                anchor_centers, gt_bboxes, sm_use=True)
-        else:
-            is_in_gts = check_points_inside_bboxes(anchor_centers, gt_bboxes)
+        is_in_gts = check_points_inside_bboxes(anchor_centers, gt_bboxes)
 
         # select positive sample, [B, n, L]
         mask_positive = is_in_topk * is_in_gts * pad_gt_mask
@@ -172,10 +165,7 @@ class ATSSAssigner(nn.Layer):
         if mask_positive_sum.max() > 1:
             mask_multiple_gts = (mask_positive_sum.unsqueeze(1) > 1).tile(
                 [1, num_max_boxes, 1])
-            if self.sm_use:
-                is_max_iou = compute_max_iou_anchor(ious * mask_positive)
-            else:
-                is_max_iou = compute_max_iou_anchor(ious)
+            is_max_iou = compute_max_iou_anchor(ious)
             mask_positive = paddle.where(mask_multiple_gts, is_max_iou,
                                          mask_positive)
             mask_positive_sum = mask_positive.sum(axis=-2)

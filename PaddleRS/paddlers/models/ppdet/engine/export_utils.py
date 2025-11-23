@@ -1,4 +1,4 @@
-# Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved. 
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved. 
 #   
 # Licensed under the Apache License, Version 2.0 (the "License");   
 # you may not use this file except in compliance with the License.  
@@ -29,7 +29,6 @@ logger = setup_logger('ppdet.engine')
 # Global dictionary
 TRT_MIN_SUBGRAPH = {
     'YOLO': 3,
-    'PPYOLOE': 3,
     'SSD': 60,
     'RCNN': 40,
     'RetinaNet': 40,
@@ -43,7 +42,6 @@ TRT_MIN_SUBGRAPH = {
     'HRNet': 3,
     'DeepSORT': 3,
     'ByteTrack': 10,
-    'CenterTrack': 5,
     'JDE': 10,
     'FairMOT': 5,
     'GFL': 16,
@@ -51,46 +49,10 @@ TRT_MIN_SUBGRAPH = {
     'CenterNet': 5,
     'TOOD': 5,
     'YOLOX': 8,
-    'YOLOF': 40,
-    'METRO_Body': 3,
-    'DETR': 3,
 }
 
 KEYPOINT_ARCH = ['HigherHRNet', 'TopDownHRNet']
-MOT_ARCH = ['JDE', 'FairMOT', 'DeepSORT', 'ByteTrack', 'CenterTrack']
-
-TO_STATIC_SPEC = {
-    'yolov3_darknet53_270e_coco': [{
-        'im_id': paddle.static.InputSpec(
-            name='im_id', shape=[-1, 1], dtype='float32'),
-        'is_crowd': paddle.static.InputSpec(
-            name='is_crowd', shape=[-1, 50], dtype='float32'),
-        'gt_bbox': paddle.static.InputSpec(
-            name='gt_bbox', shape=[-1, 50, 4], dtype='float32'),
-        'curr_iter': paddle.static.InputSpec(
-            name='curr_iter', shape=[-1], dtype='float32'),
-        'image': paddle.static.InputSpec(
-            name='image', shape=[-1, 3, -1, -1], dtype='float32'),
-        'im_shape': paddle.static.InputSpec(
-            name='im_shape', shape=[-1, 2], dtype='float32'),
-        'scale_factor': paddle.static.InputSpec(
-            name='scale_factor', shape=[-1, 2], dtype='float32'),
-        'target0': paddle.static.InputSpec(
-            name='target0', shape=[-1, 3, 86, -1, -1], dtype='float32'),
-        'target1': paddle.static.InputSpec(
-            name='target1', shape=[-1, 3, 86, -1, -1], dtype='float32'),
-        'target2': paddle.static.InputSpec(
-            name='target2', shape=[-1, 3, 86, -1, -1], dtype='float32'),
-    }],
-}
-
-
-def apply_to_static(config, model):
-    filename = config.get('filename', None)
-    spec = TO_STATIC_SPEC.get(filename, None)
-    model = paddle.jit.to_static(model, input_spec=spec)
-    logger.info("Successfully to apply @to_static with specs: {}".format(spec))
-    return model
+MOT_ARCH = ['DeepSORT', 'JDE', 'FairMOT', 'ByteTrack']
 
 
 def _prune_input_spec(input_spec, program, targets):
@@ -181,8 +143,6 @@ def _dump_infer_config(config, path, image_shape, model):
     if infer_arch in MOT_ARCH:
         if infer_arch == 'DeepSORT':
             tracker_cfg = config['DeepSORTTracker']
-        elif infer_arch == 'CenterTrack':
-            tracker_cfg = config['CenterTracker']
         else:
             tracker_cfg = config['JDETracker']
         infer_cfg['tracker'] = _parse_tracker(tracker_cfg)
@@ -194,10 +154,7 @@ def _dump_infer_config(config, path, image_shape, model):
             arch_state = True
             break
 
-    if infer_arch == 'PPYOLOEWithAuxHead':
-        infer_arch = 'PPYOLOE'
-
-    if infer_arch in ['PPYOLOE', 'YOLOX', 'YOLOF']:
+    if infer_arch == 'YOLOX':
         infer_cfg['arch'] = infer_arch
         infer_cfg['min_subgraph_size'] = TRT_MIN_SUBGRAPH[infer_arch]
         arch_state = True
@@ -216,15 +173,9 @@ def _dump_infer_config(config, path, image_shape, model):
         label_arch = 'keypoint_arch'
 
     if infer_arch in MOT_ARCH:
-        if config['metric'] in ['COCO', 'VOC']:
-            # MOT model run as Detector
-            reader_cfg = config['TestReader']
-            dataset_cfg = config['TestDataset']
-        else:
-            # 'metric' in ['MOT', 'MCMOT', 'KITTI']
-            label_arch = 'mot_arch'
-            reader_cfg = config['TestMOTReader']
-            dataset_cfg = config['TestMOTDataset']
+        label_arch = 'mot_arch'
+        reader_cfg = config['TestMOTReader']
+        dataset_cfg = config['TestMOTDataset']
     else:
         reader_cfg = config['TestReader']
         dataset_cfg = config['TestDataset']

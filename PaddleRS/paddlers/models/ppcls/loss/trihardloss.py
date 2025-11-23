@@ -22,12 +22,10 @@ from .comfunc import rerange_index
 
 class TriHardLoss(paddle.nn.Layer):
     """
-    paper: In Defense of the Triplet Loss for Person Re-Identification
-    code reference: https://github.com/VisualComputingInstitute/triplet-reid/blob/master/loss.py
     TriHard Loss, based on triplet loss. USE P * K samples.
     the batch size is fixed. Batch_size = P * K;  but the K may vary between batches.
     same label gather together
-
+    
             supported_metrics = [
             'euclidean',
             'sqeuclidean',
@@ -47,7 +45,7 @@ class TriHardLoss(paddle.nn.Layer):
         features = input["features"]
         assert (self.batch_size == features.shape[0])
 
-        #normalization
+        #normalization 
         features = self._nomalize(features)
         samples_each_class = self.samples_each_class
         rerange_index = paddle.to_tensor(self.rerange_index)
@@ -58,7 +56,7 @@ class TriHardLoss(paddle.nn.Layer):
                 features, axis=0)
         similary_matrix = paddle.sum(paddle.square(diffs), axis=-1)
 
-        #rerange
+        #rerange 
         tmp = paddle.reshape(similary_matrix, shape=[-1, 1])
         tmp = paddle.gather(tmp, index=rerange_index)
         similary_matrix = paddle.reshape(tmp, shape=[-1, self.batch_size])

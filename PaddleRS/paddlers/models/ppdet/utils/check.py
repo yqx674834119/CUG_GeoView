@@ -1,4 +1,4 @@
-# Copyright (c) 2019 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,44 +26,23 @@ from .logger import setup_logger
 logger = setup_logger(__name__)
 
 __all__ = [
-    'check_gpu', 'check_npu', 'check_xpu', 'check_mlu', 'check_version',
-    'check_config'
+    'check_gpu', 'check_npu', 'check_xpu', 'check_version', 'check_config'
 ]
-
-
-def check_mlu(use_mlu):
-    """
-    Log error and exit when set use_mlu=true in paddlepaddle
-    cpu/gpu/xpu/npu version.
-    """
-    err = "Config use_mlu cannot be set as true while you are " \
-          "using paddlepaddle cpu/gpu/xpu/npu version ! \nPlease try: \n" \
-          "\t1. Install paddlepaddle-mlu to run model on MLU \n" \
-          "\t2. Set use_mlu as false in config file to run " \
-          "model on CPU/GPU/XPU/NPU"
-
-    try:
-        if use_mlu and not paddle.is_compiled_with_mlu():
-            logger.error(err)
-            sys.exit(1)
-    except Exception as e:
-        pass
 
 
 def check_npu(use_npu):
     """
     Log error and exit when set use_npu=true in paddlepaddle
-    version without paddle-custom-npu installed.
+    cpu/gpu/xpu version.
     """
     err = "Config use_npu cannot be set as true while you are " \
-          "using paddlepaddle version without paddle-custom-npu " \
-          "installed! \nPlease try: \n" \
-          "\t1. Install paddle-custom-npu to run model on NPU \n" \
+          "using paddlepaddle cpu/gpu/xpu version ! \nPlease try: \n" \
+          "\t1. Install paddlepaddle-npu to run model on NPU \n" \
           "\t2. Set use_npu as false in config file to run " \
-          "model on other devices supported."
+          "model on CPU/GPU/XPU"
 
     try:
-        if use_npu and not 'npu' in paddle.device.get_all_custom_device_type():
+        if use_npu and not paddle.is_compiled_with_npu():
             logger.error(err)
             sys.exit(1)
     except Exception as e:
@@ -114,7 +93,7 @@ def check_version(version='2.2'):
     not satisfied.
     """
     err = "PaddlePaddle version {} or higher is required, " \
-          "or a suitable develop version is satisfied as well. \n" \
+          "or a suitable release/2.5 version is satisfied as well. \n" \
           "Please make sure the version is good with your code.".format(version)
 
     version_installed = [

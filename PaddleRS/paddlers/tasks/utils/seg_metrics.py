@@ -15,7 +15,7 @@
 import numpy as np
 import paddle
 
-import paddlers.models.paddleseg as paddleseg
+import paddlers.models.ppseg as paddleseg
 
 
 def loss_computation(logits_list, labels, losses):

@@ -2,7 +2,7 @@ import copy
 
 import paddle
 import paddle.nn as nn
-from paddlers.models.ppcls.utils import logger
+from ppcls.utils import logger
 
 from .celoss import CELoss, MixCELoss
 from .googlenetloss import GoogLeNetLoss
@@ -12,30 +12,19 @@ from .msmloss import MSMLoss
 from .npairsloss import NpairsLoss
 from .trihardloss import TriHardLoss
 from .triplet import TripletLoss, TripletLossV2
-from .tripletangularmarginloss import TripletAngularMarginLoss
 from .supconloss import SupConLoss
 from .pairwisecosface import PairwiseCosface
 from .dmlloss import DMLLoss
 from .distanceloss import DistanceLoss
-from .softtargetceloss import SoftTargetCrossEntropy
 
 from .distillationloss import DistillationCELoss
 from .distillationloss import DistillationGTCELoss
 from .distillationloss import DistillationDMLLoss
 from .distillationloss import DistillationDistanceLoss
 from .distillationloss import DistillationRKDLoss
-from .distillationloss import DistillationKLDivLoss
-from .distillationloss import DistillationDKDLoss
-from .distillationloss import DistillationMultiLabelLoss
-from .distillationloss import DistillationDISTLoss
-from .distillationloss import DistillationPairLoss
-
 from .multilabelloss import MultiLabelLoss
-from .afdloss import AFDLoss
 
-from .deephashloss import DSHSDLoss
-from .deephashloss import LCDSHLoss
-from .deephashloss import DCHLoss
+from .deephashloss import DSHSDLoss, LCDSHLoss
 
 
 class CombinedLoss(nn.Layer):
@@ -54,7 +43,6 @@ class CombinedLoss(nn.Layer):
                 param.keys())
             self.loss_weight.append(param.pop("weight"))
             self.loss_func.append(eval(name)(**param))
-            self.loss_func = nn.LayerList(self.loss_func)
 
     def __call__(self, input, batch):
         loss_dict = {}
@@ -75,5 +63,5 @@ class CombinedLoss(nn.Layer):
 
 def build_loss(config):
     module_class = CombinedLoss(copy.deepcopy(config))
-    logger.debug("build loss {} success.".format(module_class))
+    # logger.debug("build loss {} success.".format(module_class))
     return module_class

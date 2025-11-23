@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import math
+import os
 import os.path as osp
 from collections import OrderedDict
 from operator import attrgetter
@@ -24,11 +25,11 @@ import paddle.nn.functional as F
 from paddle.static import InputSpec
 
 import paddlers
-import paddlers.models.paddleseg as ppseg
+import paddlers.models.ppseg as ppseg
 import paddlers.rs_models.cd as cmcd
 import paddlers.utils.logging as logging
 from paddlers.models import seg_losses
-from paddlers.transforms import Resize, decode_image, construct_sample
+from paddlers.transforms import Resize, decode_image
 from paddlers.utils import get_single_card_bs
 from paddlers.utils.checkpoint import cd_pretrain_weights_dict
 from .base import BaseModel
@@ -38,7 +39,7 @@ from .utils.slider_predict import slider_predict
 
 __all__ = [
     "CDNet", "FCEarlyFusion", "FCSiamConc", "FCSiamDiff", "STANet", "BIT",
-    "SNUNet", "DSIFN", "DSAMNet", "ChangeStar", "ChangeFormer", "FCCDN", "P2V"
+    "SNUNet", "DSIFN", "DSAMNet", "ChangeStar", "ChangeFormer", "FCCDN"
 ]
 
 
@@ -62,6 +63,7 @@ class BaseChangeDetector(BaseModel):
         if params.get('with_net', True):
             params.pop('with_net', None)
             self.net = self.build_net(**params)
+        self.find_unused_parameters = True
 
     def build_net(self, **params):
         # TODO: add other model
@@ -110,16 +112,17 @@ class BaseChangeDetector(BaseModel):
         ]
 
     def run(self, net, inputs, mode):
-        inputs, batch_restore_list = inputs
-        net_out = net(inputs['image'], inputs['image2'])
+        net_out = net(inputs[0], inputs[1])
         logit = net_out[0]
         outputs = OrderedDict()
         if mode == 'test':
+            origin_shape = inputs[2]
             if self.status == 'Infer':
                 label_map_list, score_map_list = self.postprocess(
-                    net_out, batch_restore_list)
+                    net_out, origin_shape, transforms=inputs[3])
             else:
-                logit_list = self.postprocess(logit, batch_restore_list)
+                logit_list = self.postprocess(
+                    logit, origin_shape, transforms=inputs[3])
                 label_map_list = []
                 score_map_list = []
                 for logit in logit_list:
@@ -139,13 +142,15 @@ class BaseChangeDetector(BaseModel):
                 pred = paddle.unsqueeze(net_out[0], axis=1)  # NCHW
             else:
                 pred = paddle.argmax(logit, axis=1, keepdim=True, dtype='int32')
-            label = inputs['mask'].astype('int64')
+            label = inputs[2]
             if label.ndim == 3:
                 paddle.unsqueeze_(label, axis=1)
             if label.ndim != 4:
-                raise ValueError(
-                    "Expected `label.ndim` == 4 but got {}.".format(label.ndim))
-            pred = self.postprocess(pred, batch_restore_list)[0]  # NCHW
+                raise ValueError("Expected label.ndim == 4 but got {}".format(
+                    label.ndim))
+            origin_shape = [label.shape[-2:]]
+            pred = self.postprocess(
+                pred, origin_shape, transforms=inputs[3])[0]  # NCHW
             intersect_area, pred_area, label_area = ppseg.utils.metrics.calculate_area(
                 pred, label, self.num_classes)
             outputs['intersect_area'] = intersect_area
@@ -157,10 +162,12 @@ class BaseChangeDetector(BaseModel):
             if hasattr(net, 'USE_MULTITASK_DECODER') and \
                 net.USE_MULTITASK_DECODER is True:
                 # CD+Seg
-                if 'aux_masks' not in inputs:
-                    raise ValueError("Auxiliary masks not found.")
+                if len(inputs) != 5:
+                    raise ValueError(
+                        "Cannot perform loss computation with {} inputs.".
+                        format(len(inputs)))
                 labels_list = [
-                    inputs['aux_masks'][idx].astype('int64')
+                    inputs[2 + idx]
                     for idx in map(attrgetter('value'), net.OUT_TYPES)
                 ]
                 loss_list = metrics.multitask_loss_computation(
@@ -169,9 +176,7 @@ class BaseChangeDetector(BaseModel):
                     losses=self.losses)
             else:
                 loss_list = metrics.loss_computation(
-                    logits_list=net_out,
-                    labels=inputs['mask'].astype('int64'),
-                    losses=self.losses)
+                    logits_list=net_out, labels=inputs[2], losses=self.losses)
             loss = sum(loss_list)
             outputs['loss'] = loss
         return outputs
@@ -231,11 +236,7 @@ class BaseChangeDetector(BaseModel):
               early_stop=False,
               early_stop_patience=5,
               use_vdl=True,
-              resume_checkpoint=None,
-              precision='fp32',
-              amp_level='O1',
-              custom_white_list=None,
-              custom_black_list=None):
+              resume_checkpoint=None):
         """
         Train the model.
 
@@ -267,23 +268,7 @@ class BaseChangeDetector(BaseModel):
                 training from. If None, no training checkpoint will be resumed. At most
                 Aone of `resume_checkpoint` and `pretrain_weights` can be set simultaneously.
                 Defaults to None.
-            precision (str, optional): Use AMP (auto mixed precision) training if `precision`
-                is set to 'fp16'. Defaults to 'fp32'.
-            amp_level (str, optional): Auto mixed precision level. Accepted values are 'O1' 
-                and 'O2': At O1 level, the input data type of each operator will be casted 
-                according to a white list and a black list. At O2 level, all parameters and 
-                input data will be casted to FP16, except those for the operators in the black 
-                list, those without the support for FP16 kernel, and those for the batchnorm 
-                layers. Defaults to 'O1'.
-            custom_white_list(set|list|tuple|None, optional): Custom white list to use when 
-                `amp_level` is set to 'O1'. Defaults to None.
-            custom_black_list(set|list|tuple|None, optional): Custom black list to use in AMP 
-                training. Defaults to None.
         """
-        self.precision = precision
-        self.amp_level = amp_level
-        self.custom_white_list = custom_white_list
-        self.custom_black_list = custom_black_list
 
         if self.status == 'Infer':
             logging.error(
@@ -446,7 +431,7 @@ class BaseChangeDetector(BaseModel):
                     "category_F1-score": F1 score}.
         """
 
-        self._check_transforms(eval_dataset.transforms)
+        self._check_transforms(eval_dataset.transforms, 'eval')
 
         self.net.eval()
         nranks = paddle.distributed.get_world_size()
@@ -474,20 +459,13 @@ class BaseChangeDetector(BaseModel):
         label_area_all = 0
         conf_mat_all = []
         logging.info(
-            "Start to evaluate (total_samples={}, total_steps={})...".format(
+            "Start to evaluate(total_samples={}, total_steps={})...".format(
                 eval_dataset.num_samples,
                 math.ceil(eval_dataset.num_samples * 1.0 / batch_size)))
         with paddle.no_grad():
             for step, data in enumerate(self.eval_data_loader):
-                if self.precision == 'fp16':
-                    with paddle.amp.auto_cast(
-                            level=self.amp_level,
-                            enable=True,
-                            custom_white_list=self.custom_white_list,
-                            custom_black_list=self.custom_black_list):
-                        outputs = self.run(self.net, data, 'eval')
-                else:
-                    outputs = self.run(self.net, data, 'eval')
+                data.append(eval_dataset.transforms.transforms)
+                outputs = self.run(self.net, data, 'eval')
                 pred_area = outputs['pred_area']
                 label_area = outputs['label_area']
                 intersect_area = outputs['intersect_area']
@@ -585,8 +563,10 @@ class BaseChangeDetector(BaseModel):
             images = [img_file]
         else:
             images = img_file
-        data = self.preprocess(images, transforms, self.model_type)
+        batch_im1, batch_im2, batch_origin_shape = self.preprocess(
+            images, transforms, self.model_type)
         self.net.eval()
+        data = (batch_im1, batch_im2, batch_origin_shape, transforms.transforms)
         outputs = self.run(self.net, data, 'test')
         label_map_list = outputs['label_map']
         score_map_list = outputs['score_map']
@@ -611,7 +591,6 @@ class BaseChangeDetector(BaseModel):
                        invalid_value=255,
                        merge_strategy='keep_last',
                        batch_size=1,
-                       eager_load=False,
                        quiet=False):
         """
         Do inference using sliding windows.
@@ -625,7 +604,7 @@ class BaseChangeDetector(BaseModel):
             overlap (list[int] | tuple[int] | int, optional):
                 Overlap between two blocks. If `overlap` is a list or tuple, it should
                 be in (W, H) format. Defaults to 36.
-            transforms (paddlers.transforms.Compose|list|None, optional): Transforms for 
+            transforms (paddlers.transforms.Compose|None, optional): Transforms for 
                 inputs. If None, the transforms for evaluation process will be used. 
                 Defaults to None.
             invalid_value (int, optional): Value that marks invalid pixels in output 
@@ -636,31 +615,28 @@ class BaseChangeDetector(BaseModel):
                 order, respectively. 'accum' means determining the class of an overlapping 
                 pixel according to accumulated probabilities. Defaults to 'keep_last'.
             batch_size (int, optional): Batch size used in inference. Defaults to 1.
-            eager_load (bool, optional): Whether to load the whole image(s) eagerly.
-                Defaults to False.
             quiet (bool, optional): If True, disable the progress bar. Defaults to False.
         """
 
         slider_predict(self.predict, img_files, save_dir, block_size, overlap,
                        transforms, invalid_value, merge_strategy, batch_size,
-                       eager_load, not quiet)
+                       not quiet)
 
     def preprocess(self, images, transforms, to_tensor=True):
-        self._check_transforms(transforms)
+        self._check_transforms(transforms, 'test')
         batch_im1, batch_im2 = list(), list()
-        batch_trans_info = list()
+        batch_ori_shape = list()
         for im1, im2 in images:
             if isinstance(im1, str) or isinstance(im2, str):
                 im1 = decode_image(im1, read_raw=True)
                 im2 = decode_image(im2, read_raw=True)
+            ori_shape = im1.shape[:2]
             # XXX: sample do not contain 'image_t1' and 'image_t2'.
-            sample = construct_sample(image=im1, image2=im2)
-            data = transforms(sample)
-            im1, im2 = data[0]['image'], data[0]['image2']
-            trans_info = data[1]
+            sample = {'image': im1, 'image2': im2}
+            im1, im2 = transforms(sample)[:2]
             batch_im1.append(im1)
             batch_im2.append(im2)
-            batch_trans_info.append(trans_info)
+            batch_ori_shape.append(ori_shape)
         if to_tensor:
             batch_im1 = paddle.to_tensor(batch_im1)
             batch_im2 = paddle.to_tensor(batch_im2)
@@ -668,9 +644,59 @@ class BaseChangeDetector(BaseModel):
             batch_im1 = np.asarray(batch_im1)
             batch_im2 = np.asarray(batch_im2)
 
-        return {'image': batch_im1, 'image2': batch_im2}, batch_trans_info
+        return batch_im1, batch_im2, batch_ori_shape
 
-    def postprocess(self, batch_pred, batch_restore_list):
+    @staticmethod
+    def get_transforms_shape_info(batch_ori_shape, transforms):
+        batch_restore_list = list()
+        for ori_shape in batch_ori_shape:
+            restore_list = list()
+            h, w = ori_shape[0], ori_shape[1]
+            for op in transforms:
+                if op.__class__.__name__ == 'Resize':
+                    restore_list.append(('resize', (h, w)))
+                    h, w = op.target_size
+                elif op.__class__.__name__ == 'ResizeByShort':
+                    restore_list.append(('resize', (h, w)))
+                    im_short_size = min(h, w)
+                    im_long_size = max(h, w)
+                    scale = float(op.short_size) / float(im_short_size)
+                    if 0 < op.max_size < np.round(scale * im_long_size):
+                        scale = float(op.max_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'ResizeByLong':
+                    restore_list.append(('resize', (h, w)))
+                    im_long_size = max(h, w)
+                    scale = float(op.long_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'Pad':
+                    if op.target_size:
+                        target_h, target_w = op.target_size
+                    else:
+                        target_h = int(
+                            (np.ceil(h / op.size_divisor) * op.size_divisor))
+                        target_w = int(
+                            (np.ceil(w / op.size_divisor) * op.size_divisor))
+
+                    if op.pad_mode == -1:
+                        offsets = op.offsets
+                    elif op.pad_mode == 0:
+                        offsets = [0, 0]
+                    elif op.pad_mode == 1:
+                        offsets = [(target_h - h) // 2, (target_w - w) // 2]
+                    else:
+                        offsets = [target_h - h, target_w - w]
+                    restore_list.append(('padding', (h, w), offsets))
+                    h, w = target_h, target_w
+
+            batch_restore_list.append(restore_list)
+        return batch_restore_list
+
+    def postprocess(self, batch_pred, batch_origin_shape, transforms):
+        batch_restore_list = BaseChangeDetector.get_transforms_shape_info(
+            batch_origin_shape, transforms)
         if isinstance(batch_pred, (tuple, list)) and self.status == 'Infer':
             return self._infer_postprocess(
                 batch_label_map=batch_pred[0],
@@ -692,7 +718,7 @@ class BaseChangeDetector(BaseModel):
                     x, y = item[2]
                     pred = pred[:, :, y:y + h, x:x + w]
                 else:
-                    raise RuntimeError
+                    pass
             results.append(pred)
         return results
 
@@ -731,7 +757,7 @@ class BaseChangeDetector(BaseModel):
                         label_map = label_map[:, y:y + h, x:x + w, :]
                         score_map = score_map[:, y:y + h, x:x + w, :]
                 else:
-                    raise RuntimeError
+                    pass
             label_map = label_map.squeeze()
             score_map = score_map.squeeze()
             if not isinstance(label_map, np.ndarray):
@@ -740,6 +766,13 @@ class BaseChangeDetector(BaseModel):
             label_maps.append(label_map.squeeze())
             score_maps.append(score_map.squeeze())
         return label_maps, score_maps
+
+    def _check_transforms(self, transforms, mode):
+        super()._check_transforms(transforms, mode)
+        if not isinstance(transforms.arrange,
+                          paddlers.transforms.ArrangeChangeDetector):
+            raise TypeError(
+                "`transforms.arrange` must be an ArrangeChangeDetector object.")
 
     def set_losses(self, losses, weights=None):
         if weights is None:
@@ -917,7 +950,7 @@ class DSIFN(BaseChangeDetector):
             }
         else:
             raise ValueError(
-                f"Currently `use_mixed_loss` must be set to False for {self.__class__}."
+                f"Currently `use_mixed_loss` must be set to False for {self.__class__}"
             )
 
 
@@ -953,7 +986,7 @@ class DSAMNet(BaseChangeDetector):
             }
         else:
             raise ValueError(
-                f"Currently `use_mixed_loss` must be set to False for {self.__class__}."
+                f"Currently `use_mixed_loss` must be set to False for {self.__class__}"
             )
 
 
@@ -989,7 +1022,7 @@ class ChangeStar(BaseChangeDetector):
             }
         else:
             raise ValueError(
-                f"Currently `use_mixed_loss` must be set to False for {self.__class__}."
+                f"Currently `use_mixed_loss` must be set to False for {self.__class__}"
             )
 
 
@@ -1039,34 +1072,5 @@ class FCCDN(BaseChangeDetector):
             }
         else:
             raise ValueError(
-                f"Currently `use_mixed_loss` must be set to False for {self.__class__}."
-            )
-
-
-class P2V(BaseChangeDetector):
-    def __init__(self,
-                 num_classes=2,
-                 use_mixed_loss=False,
-                 losses=None,
-                 in_channels=3,
-                 video_len=8,
-                 **params):
-        params.update({'in_channels': in_channels, 'video_len': video_len})
-        super(P2V, self).__init__(
-            model_name='P2V',
-            num_classes=num_classes,
-            use_mixed_loss=use_mixed_loss,
-            losses=losses,
-            **params)
-
-    def default_loss(self):
-        if self.use_mixed_loss is False:
-            return {
-                'types':
-                [seg_losses.CrossEntropyLoss(), seg_losses.CrossEntropyLoss()],
-                'coef': [1.0, 0.4]
-            }
-        else:
-            raise ValueError(
-                f"Currently `use_mixed_loss` must be set to False for {self.__class__}."
+                f"Currently `use_mixed_loss` must be set to False for {self.__class__}"
             )

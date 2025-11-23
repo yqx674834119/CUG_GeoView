@@ -4,7 +4,7 @@
 
 ## 1 环境配置
 
-根据[教程](https://github.com/PaddlePaddle/PaddleRS/tree/develop/tutorials/train#环境准备)安装PaddleRS **1.0**及相关依赖。在本案例中，GDAL库并不是必需的。
+根据[教程](https://github.com/PaddlePaddle/PaddleRS/tree/develop/tutorials/train#环境准备)安装PaddleRS及相关依赖。在本案例中，GDAL库并不是必需的。
 
 配置好环境后，在PaddleRS仓库根目录中执行如下指令切换到本案例所在目录：
 
@@ -27,7 +27,7 @@ python ../../tools/prepare_dataset/prepare_levircd.py \
     --crop_stride 256
 ```
 
-以上指令利用PaddleRS提供的数据集准备工具完成数据集切分、file list创建等操作。具体而言，使用LEVIR-CD数据集官方的训练/验证/测试集划分，并将原始的`1024x1024`大小的影像切分为无重叠的`256x256`的小块（参考[2]中的做法）。
+以上指令利用PaddleRS提供的数据集准备工具完成数据集切分、file list创建等操作。具体而言，使用LEVIR-CD数据集官方的训练/验证/测试集划分，并将原始的`1024x1024`大小的影像切分为无重叠的`256x256`的小块（参考[2]中的做法）.
 
 ## 3 模型设计
 
@@ -154,7 +154,7 @@ class MixedAttention(nn.Layer):
         return 't' in self.att_types
 ```
 
-在编写组网相关代码时请注意以下几点：
+在编写组网相关代码时请注意以下两点：
 
 1. 所有模型必须为`paddle.nn.Layer`的子类；
 2. 包含模型整体逻辑结构的最外层模块（如本例中的`CustomModel`类）须用`@attach`装饰；
@@ -219,7 +219,7 @@ class CustomTrainer(BaseChangeDetector):
             **params)
 ```
 
-在编写训练器定义相关代码时请注意以下几点：
+在编写训练器定义相关代码时请注意以下两点：
 
 1. 对于变化检测任务，训练器必须为`paddlers.tasks.cd.BaseChangeDetector`的子类；
 2. 与模型一样，训练器也须用`@attach`装饰；

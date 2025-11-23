@@ -23,8 +23,8 @@ import tarfile
 import tqdm
 import zipfile
 
-from ..arch.utils import similar_architectures
-from . import logger
+from ppcls.arch import similar_architectures
+from ppcls.utils import logger
 
 __all__ = ['get']
 

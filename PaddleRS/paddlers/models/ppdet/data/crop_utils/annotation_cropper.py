@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -287,7 +287,7 @@ class AnnoCropper(object):
             if item[2] - item[0] > chip_size * 1.1 or item[3] - item[
                     1] > chip_size * 1.1:
                 raise ValueError(item)
-        chips = np.array(chips, dtype=np.float32)
+        chips = np.array(chips, dtype=np.float)
 
         raw_size_chips = chips / scale
         return raw_size_chips
@@ -321,7 +321,7 @@ class AnnoCropper(object):
 
         low = valid_ratio_range[0] if valid_ratio_range[0] > 0 else 0
         high = valid_ratio_range[1] if valid_ratio_range[1] > 0 else np.finfo(
-            np.float32).max
+            np.float).max
 
         valid_boxes_idx = np.nonzero((low <= box_ratio) & (box_ratio < high) & (
             target_mins >= 2))[0]

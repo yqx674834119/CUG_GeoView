@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import os.path as osp
 from collections import OrderedDict
 
@@ -27,15 +28,15 @@ import paddlers.rs_models.res as cmres
 import paddlers.models.ppgan.metrics as metrics
 import paddlers.utils.logging as logging
 from paddlers.models import res_losses
-from paddlers.models.ppgan.modules.init import init_weights
-from paddlers.transforms import Resize, decode_image, construct_sample
+from paddlers.transforms import Resize, decode_image
 from paddlers.transforms.functions import calc_hr_shape
+from paddlers.utils import get_single_card_bs
 from paddlers.utils.checkpoint import res_pretrain_weights_dict
 from .base import BaseModel
 from .utils.res_adapters import GANAdapter, OptimizerAdapter
 from .utils.infer_nets import InferResNet
 
-__all__ = ["DRN", "LESRCNN", "ESRGAN", "NAFNet", "SwinIR"]
+__all__ = ["DRN", "LESRCNN", "ESRGAN"]
 
 
 class BaseRestorer(BaseModel):
@@ -58,6 +59,7 @@ class BaseRestorer(BaseModel):
         if params.get('with_net', True):
             params.pop('with_net', None)
             self.net = self.build_net(**params)
+        self.find_unused_parameters = True
         if min_max is None:
             self.min_max = self.MIN_MAX
 
@@ -65,7 +67,7 @@ class BaseRestorer(BaseModel):
         # Currently, only use models from cmres.
         if not hasattr(cmres, self.model_name):
             raise ValueError("ERROR: There is no model named {}.".format(
-                self.model_name))
+                model_name))
         net = dict(**cmres.__dict__)[self.model_name](**params)
         return net
 
@@ -115,21 +117,23 @@ class BaseRestorer(BaseModel):
         return input_spec
 
     def run(self, net, inputs, mode):
-        inputs, batch_restore_list = inputs
         outputs = OrderedDict()
 
         if mode == 'test':
+            tar_shape = inputs[1]
             if self.status == 'Infer':
-                net_out = net(inputs['image'])
-                res_map_list = self.postprocess(net_out, batch_restore_list)
+                net_out = net(inputs[0])
+                res_map_list = self.postprocess(
+                    net_out, tar_shape, transforms=inputs[2])
             else:
                 if isinstance(net, GANAdapter):
-                    net_out = net.generator(inputs['image'])
+                    net_out = net.generator(inputs[0])
                 else:
-                    net_out = net(inputs['image'])
+                    net_out = net(inputs[0])
                 if self.TEST_OUT_KEY is not None:
                     net_out = net_out[self.TEST_OUT_KEY]
-                pred = self.postprocess(net_out, batch_restore_list)
+                pred = self.postprocess(
+                    net_out, tar_shape, transforms=inputs[2])
                 res_map_list = []
                 for res_map in pred:
                     res_map = self._tensor_to_images(res_map)
@@ -138,13 +142,15 @@ class BaseRestorer(BaseModel):
 
         if mode == 'eval':
             if isinstance(net, GANAdapter):
-                net_out = net.generator(inputs['image'])
+                net_out = net.generator(inputs[0])
             else:
-                net_out = net(inputs['image'])
+                net_out = net(inputs[0])
             if self.TEST_OUT_KEY is not None:
                 net_out = net_out[self.TEST_OUT_KEY]
-            tar = inputs['target']
-            pred = self.postprocess(net_out, batch_restore_list)[0]  # NCHW
+            tar = inputs[1]
+            tar_shape = [tar.shape[-2:]]
+            pred = self.postprocess(
+                net_out, tar_shape, transforms=inputs[2])[0]  # NCHW
             pred = self._tensor_to_images(pred)
             outputs['pred'] = pred
             tar = self._tensor_to_images(tar)
@@ -153,8 +159,8 @@ class BaseRestorer(BaseModel):
         if mode == 'train':
             # This is used by non-GAN models.
             # For GAN models, self.run_gan() should be used.
-            net_out = net(inputs['image'])
-            loss = self.losses(net_out, inputs['target'])
+            net_out = net(inputs[0])
+            loss = self.losses(net_out, inputs[1])
             outputs['loss'] = loss
         return outputs
 
@@ -195,11 +201,7 @@ class BaseRestorer(BaseModel):
               early_stop=False,
               early_stop_patience=5,
               use_vdl=True,
-              resume_checkpoint=None,
-              precision='fp32',
-              amp_level='O1',
-              custom_white_list=None,
-              custom_black_list=None):
+              resume_checkpoint=None):
         """
         Train the model.
 
@@ -232,26 +234,7 @@ class BaseRestorer(BaseModel):
                 training from. If None, no training checkpoint will be resumed. At most
                 Aone of `resume_checkpoint` and `pretrain_weights` can be set simultaneously.
                 Defaults to None.
-            precision (str, optional): Use AMP (auto mixed precision) training if `precision`
-                is set to 'fp16'. Defaults to 'fp32'.
-            amp_level (str, optional): Auto mixed precision level. Accepted values are 'O1' 
-                and 'O2': At O1 level, the input data type of each operator will be casted 
-                according to a white list and a black list. At O2 level, all parameters and 
-                input data will be casted to FP16, except those for the operators in the black 
-                list, those without the support for FP16 kernel, and those for the batchnorm 
-                layers. Defaults to 'O1'.
-            custom_white_list(set|list|tuple|None, optional): Custom white list to use when 
-                `amp_level` is set to 'O1'. Defaults to None.
-            custom_black_list(set|list|tuple|None, optional): Custom black list to use in AMP 
-                training. Defaults to None.
         """
-        if precision != 'fp32':
-            raise ValueError("Currently, {} does not support AMP training.".
-                             format(self.__class__.__name__))
-        self.precision = precision
-        self.amp_level = amp_level
-        self.custom_white_list = custom_white_list
-        self.custom_black_list = custom_black_list
 
         if self.status == 'Infer':
             logging.error(
@@ -413,7 +396,7 @@ class BaseRestorer(BaseModel):
 
         """
 
-        self._check_transforms(eval_dataset.transforms)
+        self._check_transforms(eval_dataset.transforms, 'eval')
 
         self.net.eval()
         nranks = paddle.distributed.get_world_size()
@@ -438,19 +421,12 @@ class BaseRestorer(BaseModel):
             psnr = metrics.PSNR(crop_border=4, test_y_channel=True)
             ssim = metrics.SSIM(crop_border=4, test_y_channel=True)
             logging.info(
-                "Start to evaluate (total_samples={}, total_steps={})...".
-                format(eval_dataset.num_samples, eval_dataset.num_samples))
+                "Start to evaluate(total_samples={}, total_steps={})...".format(
+                    eval_dataset.num_samples, eval_dataset.num_samples))
             with paddle.no_grad():
                 for step, data in enumerate(self.eval_data_loader):
-                    if self.precision == 'fp16':
-                        with paddle.amp.auto_cast(
-                                level=self.amp_level,
-                                enable=True,
-                                custom_white_list=self.custom_white_list,
-                                custom_black_list=self.custom_black_list):
-                            outputs = self.run(self.net, data, 'eval')
-                    else:
-                        outputs = self.run(self.net, data, 'eval')
+                    data.append(eval_dataset.transforms.transforms)
+                    outputs = self.run(self.net, data, 'eval')
                     psnr.update(outputs['pred'], outputs['tar'])
                     ssim.update(outputs['pred'], outputs['tar'])
 
@@ -497,8 +473,10 @@ class BaseRestorer(BaseModel):
             images = [img_file]
         else:
             images = img_file
-        data = self.preprocess(images, transforms, self.model_type)
+        batch_im, batch_tar_shape = self.preprocess(images, transforms,
+                                                    self.model_type)
         self.net.eval()
+        data = (batch_im, batch_tar_shape, transforms.transforms)
         outputs = self.run(self.net, data, 'test')
         res_map_list = outputs['res_map']
         if isinstance(img_file, list):
@@ -508,26 +486,81 @@ class BaseRestorer(BaseModel):
         return prediction
 
     def preprocess(self, images, transforms, to_tensor=True):
-        self._check_transforms(transforms)
+        self._check_transforms(transforms, 'test')
         batch_im = list()
-        batch_trans_info = list()
+        batch_tar_shape = list()
         for im in images:
             if isinstance(im, str):
                 im = decode_image(im, read_raw=True)
-            sample = construct_sample(image=im)
-            data = transforms(sample)
-            im = data[0]['image']
-            trans_info = data[1]
+            ori_shape = im.shape[:2]
+            sample = {'image': im}
+            im = transforms(sample)[0]
             batch_im.append(im)
-            batch_trans_info.append(trans_info)
+            batch_tar_shape.append(self._get_target_shape(ori_shape))
         if to_tensor:
             batch_im = paddle.to_tensor(batch_im)
         else:
             batch_im = np.asarray(batch_im)
 
-        return {'image': batch_im}, batch_trans_info
+        return batch_im, batch_tar_shape
 
-    def postprocess(self, batch_pred, batch_restore_list):
+    def _get_target_shape(self, ori_shape):
+        if self.sr_factor is None:
+            return ori_shape
+        else:
+            return calc_hr_shape(ori_shape, self.sr_factor)
+
+    @staticmethod
+    def get_transforms_shape_info(batch_tar_shape, transforms):
+        batch_restore_list = list()
+        for tar_shape in batch_tar_shape:
+            restore_list = list()
+            h, w = tar_shape[0], tar_shape[1]
+            for op in transforms:
+                if op.__class__.__name__ == 'Resize':
+                    restore_list.append(('resize', (h, w)))
+                    h, w = op.target_size
+                elif op.__class__.__name__ == 'ResizeByShort':
+                    restore_list.append(('resize', (h, w)))
+                    im_short_size = min(h, w)
+                    im_long_size = max(h, w)
+                    scale = float(op.short_size) / float(im_short_size)
+                    if 0 < op.max_size < np.round(scale * im_long_size):
+                        scale = float(op.max_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'ResizeByLong':
+                    restore_list.append(('resize', (h, w)))
+                    im_long_size = max(h, w)
+                    scale = float(op.long_size) / float(im_long_size)
+                    h = int(round(h * scale))
+                    w = int(round(w * scale))
+                elif op.__class__.__name__ == 'Pad':
+                    if op.target_size:
+                        target_h, target_w = op.target_size
+                    else:
+                        target_h = int(
+                            (np.ceil(h / op.size_divisor) * op.size_divisor))
+                        target_w = int(
+                            (np.ceil(w / op.size_divisor) * op.size_divisor))
+
+                    if op.pad_mode == -1:
+                        offsets = op.offsets
+                    elif op.pad_mode == 0:
+                        offsets = [0, 0]
+                    elif op.pad_mode == 1:
+                        offsets = [(target_h - h) // 2, (target_w - w) // 2]
+                    else:
+                        offsets = [target_h - h, target_w - w]
+                    restore_list.append(('padding', (h, w), offsets))
+                    h, w = target_h, target_w
+
+            batch_restore_list.append(restore_list)
+        return batch_restore_list
+
+    def postprocess(self, batch_pred, batch_tar_shape, transforms):
+        batch_restore_list = BaseRestorer.get_transforms_shape_info(
+            batch_tar_shape, transforms)
         if self.status == 'Infer':
             return self._infer_postprocess(
                 batch_res_map=batch_pred, batch_restore_list=batch_restore_list)
@@ -540,15 +573,11 @@ class BaseRestorer(BaseModel):
             pred = paddle.unsqueeze(pred, axis=0)
             for item in restore_list[::-1]:
                 h, w = item[1][0], item[1][1]
-                if self.sr_factor:
-                    h, w = calc_hr_shape((h, w), self.sr_factor)
                 if item[0] == 'resize':
                     pred = F.interpolate(
                         pred, (h, w), mode=mode, data_format='NCHW')
                 elif item[0] == 'padding':
                     x, y = item[2]
-                    if self.sr_factor:
-                        x, y = calc_hr_shape((x, y), self.sr_factor)
                     pred = pred[:, :, y:y + h, x:x + w]
                 else:
                     pass
@@ -562,8 +591,6 @@ class BaseRestorer(BaseModel):
                 res_map = paddle.unsqueeze(res_map, axis=0)
             for item in restore_list[::-1]:
                 h, w = item[1][0], item[1][1]
-                if self.sr_factor:
-                    h, w = calc_hr_shape((h, w), self.sr_factor)
                 if item[0] == 'resize':
                     if isinstance(res_map, np.ndarray):
                         res_map = cv2.resize(
@@ -575,8 +602,6 @@ class BaseRestorer(BaseModel):
                             data_format='NHWC')
                 elif item[0] == 'padding':
                     x, y = item[2]
-                    if self.sr_factor:
-                        x, y = calc_hr_shape((x, y), self.sr_factor)
                     if isinstance(res_map, np.ndarray):
                         res_map = res_map[y:y + h, x:x + w]
                     else:
@@ -590,11 +615,14 @@ class BaseRestorer(BaseModel):
             res_maps.append(res_map.squeeze())
         return res_maps
 
-    def build_data_loader(self,
-                          dataset,
-                          batch_size,
-                          mode='train',
-                          collate_fn=None):
+    def _check_transforms(self, transforms, mode):
+        super()._check_transforms(transforms, mode)
+        if not isinstance(transforms.arrange,
+                          paddlers.transforms.ArrangeRestorer):
+            raise TypeError(
+                "`transforms.arrange` must be an ArrangeRestorer object.")
+
+    def build_data_loader(self, dataset, batch_size, mode='train'):
         if dataset.num_samples < batch_size:
             raise ValueError(
                 'The volume of dataset({}) must be larger than batch size({}).'
@@ -606,8 +634,7 @@ class BaseRestorer(BaseModel):
                 batch_size=batch_size,
                 shuffle=dataset.shuffle,
                 drop_last=False,
-                collate_fn=dataset.collate_fn
-                if collate_fn is None else collate_fn,
+                collate_fn=dataset.batch_transforms,
                 num_workers=dataset.num_workers,
                 return_list=True,
                 use_shared_memory=False)
@@ -678,6 +705,7 @@ class DRN(BaseRestorer):
             **params)
 
     def build_net(self, **params):
+        from ppgan.modules.init import init_weights
         generators = [ppgan.models.generators.DRNGenerator(**params)]
         init_weights(generators[-1])
         for scale in params['scale']:
@@ -730,19 +758,17 @@ class DRN(BaseRestorer):
             raise ValueError("Invalid `gan_mode`!")
         return outputs
 
-    def train_step(self, step, data, net, optimizer):
+    def train_step(self, step, data, net):
         outputs = self.run_gan(
-            net, (data[0]['image'], data[0]['target']),
-            mode='train',
-            gan_mode='forward_primary')
+            net, data, mode='train', gan_mode='forward_primary')
         outputs.update(
             self.run_gan(
                 net, (outputs['sr'], outputs['lr']),
                 mode='train',
                 gan_mode='forward_dual'))
-        optimizer.clear_grad()
+        self.optimizer.clear_grad()
         (outputs['loss_prim'] + outputs['loss_dual']).backward()
-        optimizer.step()
+        self.optimizer.step()
         return {
             'loss': outputs['loss_prim'] + outputs['loss_dual'],
             'loss_prim': outputs['loss_prim'],
@@ -776,9 +802,6 @@ class LESRCNN(BaseRestorer):
 
 
 class ESRGAN(BaseRestorer):
-
-    find_unused_parameters = True
-
     def __init__(self,
                  losses=None,
                  sr_factor=4,
@@ -806,6 +829,7 @@ class ESRGAN(BaseRestorer):
             **params)
 
     def build_net(self, **params):
+        from ppgan.modules.init import init_weights
         generator = ppgan.models.generators.RRDBNet(**params)
         init_weights(generator)
         if self.use_gan:
@@ -889,21 +913,19 @@ class ESRGAN(BaseRestorer):
             raise ValueError("Invalid `gan_mode`!")
         return outputs
 
-    def train_step(self, step, data, net, optimizer):
+    def train_step(self, step, data, net):
         if self.use_gan:
-            optim_g, optim_d = optimizer
+            optim_g, optim_d = self.optimizer
 
             outputs = self.run_gan(
-                net, (data[0]['image'], data[0]['target']),
-                mode='train',
-                gan_mode='forward_g')
+                net, data, mode='train', gan_mode='forward_g')
             optim_g.clear_grad()
             (outputs['loss_g_pps'] + outputs['loss_g_gan']).backward()
             optim_g.step()
 
             outputs.update(
                 self.run_gan(
-                    net, (outputs['g_pred'], data[0]['target']),
+                    net, (outputs['g_pred'], data[1]),
                     mode='train',
                     gan_mode='forward_d'))
             optim_d.clear_grad()
@@ -920,7 +942,7 @@ class ESRGAN(BaseRestorer):
                 'loss_d': outputs['loss_d']
             }
         else:
-            return super(ESRGAN, self).train_step(step, data, net, optimizer)
+            return super(ESRGAN, self).train_step(step, data, net)
 
     def _set_requires_grad(self, net, requires_grad):
         for p in net.parameters():
@@ -955,84 +977,3 @@ class RCAN(BaseRestorer):
             sr_factor=sr_factor,
             min_max=min_max,
             **params)
-
-
-class NAFNet(BaseRestorer):
-    def __init__(self,
-                 losses=None,
-                 sr_factor=None,
-                 min_max=None,
-                 use_tlsc=False,
-                 in_channels=3,
-                 width=32,
-                 middle_blk_num=1,
-                 enc_blk_nums=None,
-                 dec_blk_nums=None,
-                 **params):
-        if sr_factor is not None:
-            raise ValueError(f"`sr_factor` must be set to None.")
-
-        params.update({
-            'img_channel': in_channels,
-            'width': width,
-            'middle_blk_num': middle_blk_num,
-            'enc_blk_nums': enc_blk_nums,
-            'dec_blk_nums': dec_blk_nums
-        })
-        self.use_tlsc = use_tlsc
-
-        super(NAFNet, self).__init__(
-            model_name='NAFNet',
-            losses=losses,
-            sr_factor=sr_factor,
-            min_max=min_max,
-            **params)
-
-    def build_net(self, **params):
-        if not self.use_tlsc:
-            net = ppgan.models.generators.NAFNet(**params)
-        else:
-            net = ppgan.models.generators.NAFNetLocal(**params)
-        return net
-
-    def default_loss(self):
-        return res_losses.PSNRLoss()
-
-
-class SwinIR(BaseRestorer):
-    def __init__(self,
-                 losses=None,
-                 sr_factor=1,
-                 min_max=None,
-                 in_channels=3,
-                 img_size=128,
-                 window_size=8,
-                 depths=[6, 6, 6, 6, 6, 6],
-                 embed_dim=180,
-                 num_heads=[6, 6, 6, 6, 6, 6],
-                 mlp_ratio=2,
-                 **params):
-
-        params.update({
-            'in_chans': in_channels,
-            'upscale': sr_factor,
-            'img_size': img_size,
-            'window_size': window_size,
-            'depths': depths,
-            'embed_dim': embed_dim,
-            'num_heads': num_heads,
-            'mlp_ratio': mlp_ratio
-        })
-        super(SwinIR, self).__init__(
-            model_name='SwinIR',
-            losses=losses,
-            sr_factor=sr_factor,
-            min_max=min_max,
-            **params)
-
-    def build_net(self, **params):
-        net = ppgan.models.generators.SwinIR(**params)
-        return net
-
-    def default_loss(self):
-        return res_losses.CharbonnierLoss(eps=0.000000001, reduction='mean')

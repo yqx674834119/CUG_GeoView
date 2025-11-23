@@ -1,4 +1,4 @@
-#   Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+#   Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -156,20 +156,4 @@ def get_keypoint_res(results, im_id):
             ann['area'] = (x1 - x0) * (y1 - y0)
             ann['bbox'] = [x0, y0, x1 - x0, y1 - y0]
             anns.append(ann)
-    return anns
-
-
-def get_pose3d_res(results, im_id):
-    anns = []
-    preds = results['pose3d']
-    for idx in range(im_id.shape[0]):
-        image_id = im_id[idx].item()
-        pose3d = preds[idx]
-        ann = {
-            'image_id': image_id,
-            'category_id': 1,  # XXX hard code
-            'pose3d': pose3d.tolist(),
-            'score': float(1.)
-        }
-        anns.append(ann)
     return anns

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import tempfile
 
 from testing_utils import run_script
@@ -20,5 +19,5 @@ from testing_utils import run_script
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as td:
         run_script(
-            f"{sys.executable} pca.py --image_path ../tests/data/ssst/multispectral.tif --save_dir {td} --dim 5",
+            f"python pca.py --im_path ../tests/data/ssst/multispectral.tif --save_dir {td} --dim 5",
             wd="../tools")

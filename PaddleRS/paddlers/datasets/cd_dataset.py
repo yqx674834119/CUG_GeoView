@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 from enum import IntEnum
 import os.path as osp
 
 from .base import BaseDataset
 from paddlers.utils import logging, get_encoding, norm_path, is_pic
-from paddlers.transforms import construct_sample_from_dict
 
 
 class CDDataset(BaseDataset):
@@ -31,11 +31,11 @@ class CDDataset(BaseDataset):
             the change mask. When `with_seg_labels` is True, each line in the file contains the paths of the
             bi-temporal images, the path of the change mask, and the paths of the segmentation masks in both
             temporal phases.
-        transforms (paddlers.transforms.Compose|list): Data preprocessing and data augmentation operators to apply.
+        transforms (paddlers.transforms.Compose): Data preprocessing and data augmentation operators to apply.
         label_list (str|None, optional): Path of the file that contains the category names. Defaults to None.
         num_workers (int|str, optional): Number of processes used for data loading. If `num_workers` is 'auto',
             the number of workers will be automatically determined according to the number of CPU cores: If 
-            there are more than 16 cores, 8 workers will be used. Otherwise, the number of workers will be half 
+            there are more than 16 cores，8 workers will be used. Otherwise, the number of workers will be half 
             the number of CPU cores. Defaults: 'auto'.
         shuffle (bool, optional): Whether to shuffle the samples. Defaults to False.
         with_seg_labels (bool, optional): Set `with_seg_labels` to True if the datasets provides segmentation 
@@ -43,9 +43,6 @@ class CDDataset(BaseDataset):
         binarize_labels (bool, optional): Whether to binarize change masks and segmentation masks. 
             Defaults to False.
     """
-
-    _KEYS_TO_KEEP = ['image', 'image2', 'mask', 'aux_masks']
-    _collate_trans_info = True
 
     def __init__(self,
                  data_dir,
@@ -55,13 +52,14 @@ class CDDataset(BaseDataset):
                  num_workers='auto',
                  shuffle=False,
                  with_seg_labels=False,
-                 binarize_labels=False,
-                 batch_transforms=None):
+                 binarize_labels=False):
         super(CDDataset, self).__init__(data_dir, label_list, transforms,
-                                        num_workers, shuffle, batch_transforms)
+                                        num_workers, shuffle)
 
         DELIMETER = ' '
 
+        # TODO: batch padding
+        self.batch_transforms = None
         self.file_list = list()
         self.labels = list()
         self.with_seg_labels = with_seg_labels
@@ -132,9 +130,8 @@ class CDDataset(BaseDataset):
             len(self.file_list), file_list))
 
     def __getitem__(self, idx):
-        sample = construct_sample_from_dict(self.file_list[idx])
-        sample['trans_info'] = []
-        sample, trans_info = self.transforms(sample)
+        sample = copy.deepcopy(self.file_list[idx])
+        sample = self.transforms.apply_transforms(sample)
 
         if self.binarize_labels:
             # Requires 'mask' to exist
@@ -143,7 +140,9 @@ class CDDataset(BaseDataset):
                 sample['aux_masks'] = list(
                     map(self._binarize, sample['aux_masks']))
 
-        return sample, trans_info
+        outputs = self.transforms.arrange_outputs(sample)
+
+        return outputs
 
     def __len__(self):
         return len(self.file_list)

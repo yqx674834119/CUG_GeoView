@@ -32,9 +32,7 @@ def save(state_dicts, file_name):
         model_dict = {}
 
         for k, v in state_dict.items():
-            if isinstance(
-                    v,
-                (paddle.static.Variable, paddle.Tensor)):
+            if isinstance(v, (paddle.static.Variable, paddle.Tensor)):
                 model_dict[k] = v.numpy()
             else:
                 model_dict[k] = v
@@ -43,9 +41,7 @@ def save(state_dicts, file_name):
 
     final_dict = {}
     for k, v in state_dicts.items():
-        if isinstance(
-                v,
-            (paddle.static.Variable, paddle.Tensor)):
+        if isinstance(v, (paddle.static.Variable, paddle.Tensor)):
             final_dict = convert(state_dicts)
             break
         elif isinstance(v, dict):
@@ -53,7 +49,8 @@ def save(state_dicts, file_name):
         else:
             final_dict[k] = v
 
-    paddle.save(final_dict, file_name)
+    with open(file_name, 'wb') as f:
+        pickle.dump(final_dict, f, protocol=2)
 
 
 def load(file_name):

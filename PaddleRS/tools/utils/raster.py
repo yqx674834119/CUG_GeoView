@@ -81,13 +81,13 @@ class Raster:
                         raise TypeError("Unsupported data format: {}".format(
                             self.ext_type))
             else:
-                raise ValueError("The path {0} does not exist.".format(path))
+                raise ValueError("The path {0} not exists.".format(path))
         else:
             if gdal_obj is not None:
                 self._src_data = gdal_obj
             else:
                 raise ValueError(
-                    "At least one of `path` and `gdal_obj` should not be None.")
+                    "At least one of `path` and `gdal_obj` is not None.")
         self.to_uint8 = to_uint8
         self._getInfo()
         self.setBands(band_list)

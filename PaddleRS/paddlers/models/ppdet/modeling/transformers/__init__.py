@@ -1,4 +1,4 @@
-# Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,12 +17,9 @@ from . import utils
 from . import matchers
 from . import position_encoding
 from . import deformable_transformer
-from . import dino_transformer
 
 from .detr_transformer import *
 from .utils import *
 from .matchers import *
 from .position_encoding import *
 from .deformable_transformer import *
-from .dino_transformer import *
-from .petr_transformer import *
