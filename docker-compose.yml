@@ -19,11 +19,7 @@ services:
     depends_on:
       - mysql
     volumes:
-      - ./backend:/app/backend
-      - ./frontend:/app/frontend
-      - ./PaddleRS:/app/PaddleRS
-      - ./config.yaml:/app/config.yaml
-      - /app/frontend/node_modules
+      - ./:/app
     restart: unless-stopped
     deploy:
       resources:
