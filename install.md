@@ -216,3 +216,29 @@ tar czf cugrs-project.tar.gz .
    - 如果需要，执行 `docker compose ps`、`docker compose logs -f app` 查看状态与日志。
 
 如需停机或更新，执行 `docker compose down`，并重复上述步骤加载新的镜像与代码。
+
+
+1. `git clone https://github.com/yqx674834119/CUG_GeoView.git`
+2. `cd CUG_GeoView`
+3. 下载模型并解压到 backend 目录  `https://hkustgz-my.sharepoint.com/:u:/g/personal/qyao951_connect_hkust-gz_edu_cn/IQBeAzzP_XEYTojzwRH1pr2aAYkevLWWiDuh6sTVNyQzeak?e=wr9Yvc`
+4. 登录阿里云 `docker login --username=13997543646yqx crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com`
+5. Password: Yqx123123123
+6. 拉取镜像 `docker pull crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest `
+7. docker compose up -d
+
+
+### 8. 安装 NVIDIA Container Toolkit（可选）
+如果需要在 Docker 容器中使用 NVIDIA GPU，需安装 NVIDIA Container Toolkit。以下是在 Ubuntu 22.04 上安装的步骤（其他系统请参考官方文档）：
+
+步骤 1：添加 USTC 镜像的 GPG key（国内可访问）
+curl -fsSL https://mirrors.ustc.edu.cn/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+步骤 2：添加源（使用 USTC 镜像，不访问 github.io）
+curl -s -L https://mirrors.ustc.edu.cn/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://nvidia.github.io#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://mirrors.ustc.edu.cn#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+步骤 3：更新 & 安装
+sudo apt update
+sudo apt install nvidia-container-toolkit

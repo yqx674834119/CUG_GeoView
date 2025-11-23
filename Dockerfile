@@ -56,11 +56,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-COPY backend ./backend
-COPY frontend ./frontend
-COPY PaddleRS ./PaddleRS
-COPY config.yaml .
+VOLUME ["/app/backend"]
+VOLUME ["/app/frontend"]
+VOLUME ["/app/PaddleRS"]
 
 # 1️⃣ 设置 pip 清华镜像源 升级 pip / setuptools
 RUN mkdir -p /root/.pip && \

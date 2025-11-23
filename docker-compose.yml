@@ -2,8 +2,6 @@ version: "3.9"
 
 services:
   app:
-    build:
-      context: .
     image: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
     container_name: cugrs-app
     ports:
@@ -21,7 +19,11 @@ services:
     depends_on:
       - mysql
     volumes:
-      - ./backend/static:/app/backend/static
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./PaddleRS:/app/PaddleRS
+      - ./config.yaml:/app/config.yaml
+      - /app/frontend/node_modules
     restart: unless-stopped
     deploy:
       resources:
@@ -32,7 +34,7 @@ services:
               capabilities: [gpu]
 
   mysql:
-    image:  registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
+    image: registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
     container_name: cugrs-mysql
     command: --default-authentication-plugin=mysql_native_password
     environment:

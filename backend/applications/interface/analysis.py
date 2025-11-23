@@ -178,7 +178,9 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
     :param out_dir:
     :return:
     """
-    print("目标检测----------------->start")
+    print("目标检测----------------->start", flush=True)
+    print("[OD-DEBUG] 参数: model_path=", model_path, " data_path=", data_path, " out_dir=", out_dir, flush=True)
+    print("[OD-DEBUG] 原始输入数量:", len(names), flush=True)
     imgs = list()
     temp_names = copy.deepcopy(names)
     for j, pair in enumerate(names):
@@ -197,8 +199,11 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
     if step2 != 0:
         imgs = handle(step2, imgs, data_path, data_path)
 
+    print("[OD-DEBUG] 预处理后图片数量:", len(imgs), flush=True)
+    print("[OD-DEBUG] step1=", step1, " step2=", step2, flush=True)
     # 4. 目标检测
     retPics = OD.execute(model_path, data_path, out_dir, imgs)
+    print("[OD-DEBUG] 目标检测返回数量:", len(retPics), flush=True)
     # 5.入库
     for i, pair in enumerate(resizes):
         first_ = up_url + pair
@@ -210,7 +215,7 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
             pic2="",
             data="",
             checked=str(step1) + "," + str(step2))
-    print("目标检测----------------->end")
+    print("目标检测----------------->end", flush=True)
 
 
 def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
