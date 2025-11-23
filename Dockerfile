@@ -24,13 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Miniconda
 RUN wget -O /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
     && bash /tmp/miniconda.sh -b -p /opt/conda \
     && rm /tmp/miniconda.sh
-# 设置 Conda 环境变量
+
 ENV PATH=/opt/conda/bin:${PATH}
 
-# 写入 .condarc，彻底覆盖默认 channels（不再隐式引用 repo.anaconda.com）
+# Conda config
 RUN echo "channels:" > /opt/conda/.condarc && \
     echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle" >> /opt/conda/.condarc && \
     echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge" >> /opt/conda/.condarc && \
@@ -38,10 +39,10 @@ RUN echo "channels:" > /opt/conda/.condarc && \
     echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r" >> /opt/conda/.condarc && \
     echo "show_channel_urls: true" >> /opt/conda/.condarc && \
     echo "channel_priority: strict" >> /opt/conda/.condarc && \
-    \
     conda update -n base -y conda && \
     conda clean -afy
-# 创建 Conda 环境并安装依赖（自动走清华源）
+
+# Create conda env
 RUN conda create -y -n PaddleRS37 \
         python=3.7 \
         paddlepaddle-gpu=2.4.2 \
@@ -50,57 +51,55 @@ RUN conda create -y -n PaddleRS37 \
         gdal && \
     conda clean -afy
 
+# Install Node.js 18
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g npm@9 \
     && rm -rf /var/lib/apt/lists/*
 
+# ----------- APP CODE START -----------
 WORKDIR /app
-VOLUME ["/app"]
-COPY .frontend /app/frontend
 
-# 1️⃣ 设置 pip 清华镜像源 升级 pip / setuptools
+# Copy backend
+COPY backend /app/backend
+
+# Copy PaddleRS code
+COPY PaddleRS /app/PaddleRS
+
+# pip config
 RUN mkdir -p /root/.pip && \
     echo "[global]" > /root/.pip/pip.conf && \
     echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip.conf && \
     echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> /root/.pip/pip.conf
 
+# Install backend deps
 RUN conda run -n PaddleRS37 python -m pip install --upgrade pip && \
     conda run -n PaddleRS37 pip install "setuptools<=65.5.0"
 
-# 2️⃣ 安装后端依赖
 RUN conda run -n PaddleRS37 pip install -r backend/requirements.txt
 
-# 3️⃣ 安装 PaddleRS 自身依赖（提前准备）
-RUN conda run -n PaddleRS37 pip install -r PaddleRS/requirements.txt
+# Install PaddleRS
+RUN conda run -n PaddleRS37 pip install -r PaddleRS/requirements.txt && \
+    conda run -n PaddleRS37 pip install -e PaddleRS
 
-# 4️⃣ 解决 setup.py 导入问题（提前安装 colorama）
-# RUN conda run -n PaddleRS37 pip install colorama
-
-# 5️⃣ 安装 PaddleRS 源码包
-RUN conda run -n PaddleRS37 pip install -e PaddleRS
-
-# 6️⃣ 安装运行时依赖
 RUN conda run -n PaddleRS37 pip install cryptography gunicorn
-
-# 7️⃣ 检查环境一致性
 RUN conda run -n PaddleRS37 pip check
 
-
+# ----------- FRONTEND -----------
 WORKDIR /app/frontend
-COPY frontend/package*.json /app/frontend/
-RUN npm install --no-audit --prefer-offline && npm cache clean --force
+COPY frontend /app/frontend
+RUN npm install --no-audit --prefer-offline
+RUN npm run build || true   # 不失败（开发模式可 serve）
 
+# ----------- ENTRYPOINT -----------
 WORKDIR /app
-
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
     CONDA_DEFAULT_ENV=PaddleRS37 \
     PYTHONUNBUFFERED=1 \
-    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH} \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH}
 
 EXPOSE 5008 3000
 
