@@ -99,6 +99,7 @@ python app.py &
 BACKEND_PID=$!
 
 cd /app/frontend
+npm install --no-audit --prefer-offline
 npm run serve -- --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" &
 FRONTEND_PID=$!
 

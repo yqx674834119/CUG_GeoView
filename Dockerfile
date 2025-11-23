@@ -87,9 +87,8 @@ RUN conda run -n PaddleRS37 pip check
 
 
 WORKDIR /app/frontend
-
-RUN npm ci --no-audit --prefer-offline \
-    && npm cache clean --force
+COPY frontend/package*.json /app/frontend/
+RUN npm install --no-audit --prefer-offline && npm cache clean --force
 
 WORKDIR /app
 
