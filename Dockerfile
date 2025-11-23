@@ -57,6 +57,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
 
 WORKDIR /app
 VOLUME ["/app"]
+COPY .frontend /app/frontend
 
 # 1️⃣ 设置 pip 清华镜像源 升级 pip / setuptools
 RUN mkdir -p /root/.pip && \
