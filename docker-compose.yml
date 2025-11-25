@@ -20,6 +20,10 @@ services:
       - mysql
     volumes:      
       - ./backend/static:/app/backend/static
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+      
     restart: unless-stopped
     deploy:
       resources:

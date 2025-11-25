@@ -5,8 +5,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
     MAMBA_DOCKERFILE_ACTIVATE=1
 
+# 替换 Ubuntu 源 + 删除自带的 NVIDIA CUDA 源
 RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
-    && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list
+ && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
+ && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -52,10 +54,18 @@ RUN conda create -y -n PaddleRS37 \
     conda clean -afy
 
 # Install Node.js 18
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g npm@9 \
-    && rm -rf /var/lib/apt/lists/*
+# Install Node.js 18 (from Tsinghua University mirror)
+RUN set -eux; \
+    ARCH="linux-x64"; \
+    NODE_VERSION="v18.20.3"; \
+    curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o node.tar.xz; \
+    tar -xJf node.tar.xz -C /usr/local --strip-components=1; \
+    rm node.tar.xz; \
+    ln -sf /usr/local/bin/node /usr/bin/node; \
+    ln -sf /usr/local/bin/npm /usr/bin/npm; \
+    ln -sf /usr/local/bin/npx /usr/bin/npx
+
+
 
 # ----------- APP CODE START -----------
 WORKDIR /app
