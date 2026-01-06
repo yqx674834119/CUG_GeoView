@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   app:
-    image: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
+    image: cugrs:tiff-support-optimized
     container_name: cugrs-app
     ports:
       - "5008:5008"
@@ -18,12 +18,15 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     depends_on:
       - mysql
-    volumes:      
+    volumes:
+      - ./config.yaml:/app/config.yaml
       - ./backend/static:/app/backend/static
       - ./backend:/app/backend
       - ./frontend:/app/frontend
       - /app/frontend/node_modules
-      
+      # HuggingFace model cache (persists across container restarts)
+      - hf_cache:/root/.cache/huggingface
+
     restart: unless-stopped
     deploy:
       resources:
@@ -31,7 +34,7 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
   mysql:
     image: registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
@@ -50,3 +53,4 @@ services:
 
 volumes:
   mysql-data:
+  hf_cache:

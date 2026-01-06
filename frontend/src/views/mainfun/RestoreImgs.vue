@@ -52,7 +52,7 @@
             <div
               class="el-upload__tip"
             >
-              只能上传一张或多张图片，请在下方上传文件夹
+              支持上传 PNG/JPG/TIFF 格式遥感影像，请在下方上传文件夹
             </div>
           </el-upload>
           <el-row justify="center">
@@ -374,9 +374,10 @@ export default {
     beforeUpload(file) {
       this.cutVisible = this.$refs.cut.checked;
       const fileSuffix = file.name.substring(file.name.lastIndexOf(".") + 1)
-      const whiteList = ['jpg','jpeg','png','JPG','JPEG']
+      // 支持 TIFF 格式用于遥感影像
+      const whiteList = ['jpg','jpeg','png','JPG','JPEG','tif','tiff','TIF','TIFF']
       if (whiteList.indexOf(fileSuffix) === -1) {
-        this.$message.error("只允许上传jpg, jpeg, png, JPG, 或JPEG格式,请重新上传");
+        this.$message.error("只允许上传jpg, jpeg, png, tif, tiff格式,请重新上传");
         this.fileList= []
         this.canUpload = false
         this.cutVisible = false;

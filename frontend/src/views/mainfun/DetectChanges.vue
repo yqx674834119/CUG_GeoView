@@ -1388,10 +1388,11 @@ export default {
       document.querySelector("#upload-fileB").click();
     },
     checkFile1(file) {
-      const whiteList = ["jpg", "jpeg", "png", "JPG", "JPEG"];
+      // 支持 TIFF 格式用于遥感影像
+      const whiteList = ["jpg", "jpeg", "png", "JPG", "JPEG", "tif", "tiff", "TIF", "TIFF"];
       const fileSuffix = file.name.substring(file.name.lastIndexOf(".") + 1);
       if (whiteList.indexOf(fileSuffix) === -1) {
-        this.$message.error("只允许上传jpg, jpeg, png, JPG, 或JPEG格式,请重新上传");
+        this.$message.error("只允许上传jpg, jpeg, png, tif, tiff格式,请重新上传");
         this.fileList1 = [];
         this.canUpload = false;
       } else {
@@ -1399,10 +1400,11 @@ export default {
       }
     },
     checkFile2(file) {
-      const whiteList = ["jpg", "jpeg", "png", "JPG", "JPEG"];
+      // 支持 TIFF 格式用于遥感影像
+      const whiteList = ["jpg", "jpeg", "png", "JPG", "JPEG", "tif", "tiff", "TIF", "TIFF"];
       const fileSuffix = file.name.substring(file.name.lastIndexOf(".") + 1);
       if (whiteList.indexOf(fileSuffix) === -1) {
-        this.$message.error("只允许上传jpg, jpeg, png, JPG, 或JPEG格式,请重新上传");
+        this.$message.error("只允许上传jpg, jpeg, png, tif, tiff格式,请重新上传");
         this.fileList2 = [];
         this.canUpload = false;
       } else {

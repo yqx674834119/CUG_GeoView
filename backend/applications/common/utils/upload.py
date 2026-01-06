@@ -21,11 +21,36 @@ def get_photo(page, limit):
 
 
 def upload_one(photo, mime, type_=0):
+    """
+    上传单个文件
+    
+    如果是 TIFF 文件，会自动转换为 PNG 格式
+    """
+    from applications.common.utils.tiff_processor import is_tiff_file, process_uploaded_tiff
+    
     filename = photos.save(photo, name=str(uuid.uuid4()) + ".")
-    file_url = '/_uploads/photos/' + filename
-    # file_url = photos.url(filename)
     upload_url = current_app.config.get("UPLOADED_PHOTOS_DEST")
-    size = os.path.getsize(upload_url + '/' + filename)
+    full_path = os.path.join(upload_url, filename)
+    
+    # 如果是 TIFF 文件，进行预处理转换为 PNG
+    if is_tiff_file(filename):
+        try:
+            print(f"[Upload] 检测到 TIFF 文件: {filename}, 开始转换...")
+            png_filename = process_uploaded_tiff(full_path, upload_url)
+            # 删除原始 TIFF 文件以节省空间
+            os.remove(full_path)
+            filename = png_filename
+            full_path = os.path.join(upload_url, filename)
+            mime = 'image/png'  # 更新 MIME 类型
+            print(f"[Upload] TIFF 转换完成: {filename}")
+        except Exception as e:
+            # 转换失败，删除文件并抛出异常
+            if os.path.exists(full_path):
+                os.remove(full_path)
+            raise ValueError(f"TIFF 文件处理失败: {str(e)}")
+    
+    file_url = '/_uploads/photos/' + filename
+    size = os.path.getsize(full_path)
     photo = Photo(
         name=filename, href=file_url, mime=mime, size=size, type=type_)
     db.session.add(photo)

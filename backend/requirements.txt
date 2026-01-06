@@ -17,3 +17,5 @@ SQLAlchemy==1.4.46
 sqlparse>=0.4.2
 tqdm>=4.64.1
 Werkzeug==2.2.3
+# GeoTIFF 处理 (需要 GDAL，Docker 镜像已有)
+rasterio==1.2.10

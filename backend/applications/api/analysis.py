@@ -123,27 +123,47 @@ def object_detection_api():
 
 @analysis_api.post('/semantic_segmentation')
 def semantic_segmentation_api():
+    """
+    地物分类/语义分割推理接口
+    
+    支持两种模型:
+    - Paddle 模型: model_path 为本地目录路径
+    - MMSegmentation 模型: model_path 以 "mmseg:" 开头 (如 "mmseg:cc-ln/CUGRS")
+    """
     req_json = request.json
-    model_path = req_json["model_path"]
-    try:
-        model_info = get_model_info(model_path)
-        if model_info["_Attributes"]["model_type"] != "segmenter":
-            return fail_api("模型类型不正确，请检查")
-    except:
-        return fail_api("模型不存在，请检查")
-    list_ = req_json["list"]
-    step1_ = req_json["prehandle"]
-    step2_ = req_json["denoise"]
-    if step1_ is None or step1_ is None or step1_ not in (
-            0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3,
-                                                         fun_type_5):
+    model_path = req_json.get("model_path")
+    
+    if not model_path:
+        return fail_api("请指定模型路径")
+    
+    # 判断是否为 MMSegmentation 模型
+    is_mmseg_model = model_path.startswith("mmseg:")
+    
+    if not is_mmseg_model:
+        # Paddle 模型 - 验证模型信息
+        try:
+            model_info = get_model_info(model_path)
+            if model_info["_Attributes"]["model_type"] != "segmenter":
+                return fail_api("模型类型不正确，请检查")
+        except:
+            return fail_api("模型不存在，请检查")
+    
+    list_ = req_json.get("list")
+    step1_ = req_json.get("prehandle", 0)
+    step2_ = req_json.get("denoise", 0)
+    
+    if step1_ not in (0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
-    if list_ is None:
+    if not list_:
         return fail_api("请上传图片")
+    
     type_ = 3
-    terrain_classification(model_path, up_dir, generate_dir, list_, step1_,
-                           step2_, type_)
-    return success_api()
+    try:
+        terrain_classification(model_path, up_dir, generate_dir, list_, step1_,
+                               step2_, type_)
+        return success_api()
+    except Exception as e:
+        return fail_api(f"推理失败: {str(e)}")
 
 
 """
@@ -176,20 +196,42 @@ def classification_api():
 
 @analysis_api.post('/image_restoration')
 def image_restoration_api():
+    """
+    图像还原/超分辨率推理接口
+    
+    支持两种模型:
+    - Paddle 模型: model_path 为本地目录路径 (如 "model/image_restoration/DRNet")
+    - HuggingFace 模型: model_path 以 "hf:" 开头 (如 "hf:caidas/swin2SR-classical-sr-x2-64")
+    """
     req_json = request.json
-    model_path = req_json["model_path"]
-    try:
-        model_info = get_model_info(model_path)
-        if model_info["_Attributes"]["model_type"] != "restorer":
-            return fail_api("模型类型不正确，请检查")
-    except:
-        return fail_api("模型不存在，请检查")
-    img_list = req_json["list"]
-    if img_list is None:
+    model_path = req_json.get("model_path")
+    
+    if not model_path:
+        return fail_api("请指定模型路径")
+    
+    img_list = req_json.get("list")
+    if not img_list:
         return fail_api("请上传图片")
+    
+    # 判断是否为 HuggingFace 模型
+    is_hf_model = model_path.startswith("hf:")
+    
+    if not is_hf_model:
+        # Paddle 模型 - 验证模型信息
+        try:
+            model_info = get_model_info(model_path)
+            if model_info["_Attributes"]["model_type"] != "restorer":
+                return fail_api("模型类型不正确，请检查")
+        except:
+            return fail_api("模型不存在，请检查")
+    
     type_ = 5
-    image_restoration(model_path, up_dir, generate_dir, img_list, type_)
-    return success_api()
+    try:
+        # image_restoration 函数现在会自动路由到 Paddle 或 HuggingFace
+        image_restoration(model_path, up_dir, generate_dir, img_list, type_)
+        return success_api()
+    except Exception as e:
+        return fail_api(f"推理失败: {str(e)}")
 
 
 """

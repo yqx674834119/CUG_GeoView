@@ -7,8 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # 替换 Ubuntu 源 + 删除自带的 NVIDIA CUDA 源
 RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
- && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
- && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
+    && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -46,12 +46,56 @@ RUN echo "channels:" > /opt/conda/.condarc && \
 
 # Create conda env
 RUN conda create -y -n PaddleRS37 \
-        python=3.7 \
-        paddlepaddle-gpu=2.4.2 \
-        cudatoolkit=11.7 \
-        cudnn=8.4 \
-        gdal && \
+    python=3.7 \
+    paddlepaddle-gpu=2.4.2 \
+    cudatoolkit=11.7 \
+    cudnn=8.4 \
+    gdal && \
     conda clean -afy
+
+# Create HuggingFace/PyTorch conda env (Python 3.10)
+# This environment is used for HuggingFace transformers models (e.g., Swin2SR)
+RUN conda create -y -n HFPyTorch310 python=3.10 && \
+    conda clean -afy
+
+# Install PyTorch 2.1+ with CUDA 11.8 support in HFPyTorch310
+# Using cu118 for better compatibility with transformers
+RUN conda run -n HFPyTorch310 pip install \
+    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118 && \
+    conda run -n HFPyTorch310 pip install \
+    numpy==1.26.4 pillow>=9.0.0 && \
+    conda run -n HFPyTorch310 pip install \
+    transformers==4.36.2 huggingface_hub && \
+    conda run -n HFPyTorch310 pip cache purge
+
+# Set HuggingFace mirror for China (optional, helps with network issues)
+ENV HF_ENDPOINT=https://hf-mirror.com
+
+# Create MMSegmentation conda env (Python 3.10)
+# This environment is used for MMSegmentation models (e.g., CUGRS DinoV3+Swin)
+RUN conda create -y -n MMSeg310 python=3.10 gdal && \
+    conda clean -afy
+
+# Install PyTorch 2.4 with CUDA 11.8 support in MMSeg310
+RUN conda run -n MMSeg310 pip install \
+    torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu118
+
+# Install OpenMMLab dependencies in MMSeg310
+RUN conda run -n MMSeg310 pip install \
+    openmim==0.3.9 && \
+    conda run -n MMSeg310 mim install mmengine==0.10.4 && \
+    conda run -n MMSeg310 mim install "mmcv>=2.0.0,<2.3.0"
+
+# Install MMSegmentation and other dependencies
+RUN conda run -n MMSeg310 pip install \
+    mmsegmentation==1.2.2 \
+    transformers==4.36.2 \
+    huggingface_hub \
+    numpy==1.26.4 \
+    opencv-python-headless \
+    pillow>=9.0.0 && \
+    conda run -n MMSeg310 pip cache purge
+
 
 # Install Node.js 18
 # Install Node.js 18 (from Tsinghua University mirror)
@@ -71,12 +115,10 @@ RUN set -eux; \
 WORKDIR /app
 
 # Copy backend
-COPY backend /app/backend
+# Copy backend requirements first for caching
+COPY backend/requirements.txt /app/backend/requirements.txt
 
-# Copy PaddleRS code
-COPY PaddleRS /app/PaddleRS
-
-# pip config
+# pip config (Restore missing config)
 RUN mkdir -p /root/.pip && \
     echo "[global]" > /root/.pip/pip.conf && \
     echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip.conf && \
@@ -88,10 +130,20 @@ RUN conda run -n PaddleRS37 python -m pip install --upgrade pip && \
 
 RUN conda run -n PaddleRS37 pip install -r backend/requirements.txt
 
-# Install PaddleRS
-RUN conda run -n PaddleRS37 pip install -r PaddleRS/requirements.txt && \
-    conda run -n PaddleRS37 pip install -e PaddleRS
+# Copy backend source code (frequently changing)
+COPY backend /app/backend
 
+# Copy PaddleRS requirements first
+COPY PaddleRS/requirements.txt /app/PaddleRS/requirements.txt
+
+# Install PaddleRS deps
+RUN conda run -n PaddleRS37 pip install -r PaddleRS/requirements.txt
+
+# Copy PaddleRS source
+COPY PaddleRS /app/PaddleRS
+
+# Install PaddleRS package
+RUN conda run -n PaddleRS37 pip install -e PaddleRS
 RUN conda run -n PaddleRS37 pip install cryptography gunicorn
 RUN conda run -n PaddleRS37 pip check
 

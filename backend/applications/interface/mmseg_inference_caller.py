@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+MMSegmentation Inference Caller
+
+此模块在 PaddleRS37 环境中运行，通过 subprocess 调用 MMSeg310 环境中的
+MMSegmentation 推理脚本，实现环境隔离。
+"""
+
+import json
+import os
+import os.path as osp
+import subprocess
+import sys
+from typing import List
+
+from applications.common.path_global import generate_url
+
+# MMSegmentation conda 环境名称
+MMSEG_CONDA_ENV = "MMSeg310"
+
+# MMSegmentation 推理脚本路径
+_curr_dir = os.path.dirname(os.path.abspath(__file__))
+MMSEG_SCRIPT = os.path.join(_curr_dir, "mmseg_segmentation.py")
+
+# 模型配置 - CUGRS 模型
+CUGRS_CONFIG = {
+    "model_id": "cc-ln/CUGRS",
+    "config_path": os.path.join(_curr_dir, "..", "..", "model", "mmseg_config", "dinov3_swinV1.py"),
+    "checkpoint_path": os.path.join(_curr_dir, "..", "..", "model", "mmseg_config", "model.pth"),
+}
+
+
+def get_model_paths(model_id: str) -> tuple:
+    """
+    根据模型 ID 获取配置文件和权重文件路径
+    
+    Args:
+        model_id: 模型 ID，如 "cc-ln/CUGRS"
+    
+    Returns:
+        (config_path, checkpoint_path)
+    """
+    if model_id == "cc-ln/CUGRS":
+        config = os.path.abspath(CUGRS_CONFIG["config_path"])
+        checkpoint = os.path.abspath(CUGRS_CONFIG["checkpoint_path"])
+        return config, checkpoint
+    else:
+        raise ValueError(f"Unknown MMSeg model: {model_id}")
+
+
+def call_mmseg_inference(
+    model_id: str,
+    data_path: str,
+    out_dir: str,
+    names: List[str],
+    device: str = "cuda:0",
+    timeout: int = 1200
+) -> List[str]:
+    """
+    调用 MMSegmentation 模型进行语义分割推理
+    
+    :param model_id: 模型 ID, 如 "cc-ln/CUGRS"
+    :param data_path: 输入图片文件夹路径
+    :param out_dir: 结果保存路径
+    :param names: 待处理文件名列表
+    :param device: 设备选择
+    :param timeout: 超时时间（秒）
+    :return: 生成的图片 URL 列表
+    """
+    if not names:
+        return []
+    
+    # 获取模型路径
+    config_path, checkpoint_path = get_model_paths(model_id)
+    
+    # 检查模型文件是否存在
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+    
+    # 构建命令
+    file_names_str = ",".join(names)
+    cmd = [
+        "conda", "run", "-n", MMSEG_CONDA_ENV,
+        "python", MMSEG_SCRIPT,
+        "--config", config_path,
+        "--checkpoint", checkpoint_path,
+        "--input_dir", data_path,
+        "--output_dir", out_dir,
+        "--file_names", file_names_str,
+        "--device", device
+    ]
+    
+    print(f"[MMSeg-Caller] Executing: {' '.join(cmd)}", flush=True)
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir
+        )
+        
+        if result.returncode != 0:
+            print(f"[MMSeg-Caller] Error output: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"MMSegmentation inference failed: {result.stderr}")
+        
+        # 解析 JSON 输出
+        output_data = json.loads(result.stdout.strip())
+        
+        if output_data.get("status") != "completed":
+            raise RuntimeError(f"Inference incomplete: {output_data}")
+        
+        # 生成结果 URL 列表
+        temps = []
+        for res in output_data.get("results", []):
+            if res.get("status") == "success":
+                temps.append(generate_url + res["name"])
+            else:
+                print(f"[MMSeg-Caller] Warning: {res}", file=sys.stderr)
+        
+        return temps
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"MMSegmentation inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[MMSeg-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse inference output: {e}")
+
+
+def execute(
+    model_id: str,
+    data_path: str,
+    out_dir: str,
+    names: List[str],
+    device: str = "cuda:0"
+) -> List[str]:
+    """
+    统一的执行接口，与 Paddle 推理模块保持一致
+    
+    :param model_id: MMSegmentation 模型 ID
+    :param data_path: 数据文件夹路径
+    :param out_dir: 结果保存路径
+    :param names: 待处理文件名列表
+    :return: 生成的图片 URL 列表
+    """
+    return call_mmseg_inference(
+        model_id=model_id,
+        data_path=data_path,
+        out_dir=out_dir,
+        names=names,
+        device=device
+    )
+
+
+# 支持的 MMSegmentation 模型列表
+SUPPORTED_MODELS = {
+    "cugrs": {
+        "model_id": "cc-ln/CUGRS",
+        "description": "CUGRS DinoV3+SwinTransformer 6类地物分类"
+    }
+}
+
+
+def get_supported_models():
+    """返回支持的模型列表"""
+    return SUPPORTED_MODELS
