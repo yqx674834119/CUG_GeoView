@@ -72,7 +72,8 @@ export default {
   top: 420px;
   left: -60px;
   width: 300px;
-  height: 200px;
+  height: auto;
+  min-height: 200px;
   padding: 10px;
   z-index: 200;
   background-color: white;

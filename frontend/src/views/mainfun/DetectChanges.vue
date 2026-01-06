@@ -133,6 +133,9 @@
           />
         </div>
       </div>
+      <div style="text-align: center; margin-bottom: 20px;">
+        <el-checkbox v-model="isSlice" label="开启大图切分" border />
+      </div>
       <el-row
         justify="center"
         align="middle"
@@ -751,10 +754,53 @@
               <template #left-2>
                 两时期变化百分比：<span v-show="!holeShow">{{ resultArr[currentIndex]?.data.fractional_variation.toFixed(2) }}%</span><span v-show="holeShow">{{ resultArr[currentIndex]?.data.fractional_variation_hole.toFixed(2) }}%</span>
               </template>
+              <div style="text-align: center; margin-top: 10px;">
+                <el-button size="small" type="primary" @click="showDetailedAnalysis">详细分析</el-button>
+              </div>
             </DraggableItem>
           </div>
         </div>
       </div>
+
+      <!-- Detailed Analysis Dialog -->
+      <el-dialog
+        v-model="detailedAnalysisVisible"
+        title="变化检测详细分析"
+        width="60%"
+        center
+      >
+        <div v-if="resultArr[currentIndex]">
+          <el-descriptions title="基础统计" :column="2" border>
+            <el-descriptions-item label="变化区域个数">
+              {{ holeShow ? resultArr[currentIndex].data.count_hole : resultArr[currentIndex].data.count }}
+            </el-descriptions-item>
+            <el-descriptions-item label="总变化面积 (像素)">
+              {{ holeShow ? resultArr[currentIndex].data.total_area_hole : resultArr[currentIndex].data.total_area }}
+            </el-descriptions-item>
+            <el-descriptions-item label="平均变化面积 (像素)">
+               {{ (holeShow ? resultArr[currentIndex].data.avg_area_hole : resultArr[currentIndex].data.avg_area).toFixed(2) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="变化百分比">
+              {{ (holeShow ? resultArr[currentIndex].data.fractional_variation_hole : resultArr[currentIndex].data.fractional_variation).toFixed(2) }}%
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider>区域大小分布</el-divider>
+          <div style="height: 300px; width: 100%;">
+            <v-chart class="chart" :option="sizeDistributionOption" autoresize />
+          </div>
+
+          <el-divider>Top 10 最大变化区域 (像素)</el-divider>
+          <div style="height: 300px; width: 100%;">
+            <v-chart class="chart" :option="topChangesOption" autoresize />
+          </div>
+
+          <div style="text-align: center; margin-top: 20px;">
+            <el-button type="primary" @click="downloadStats">导出统计数据 (JSON)</el-button>
+          </div>
+
+        </div>
+      </el-dialog>
 
       <div class="swiper-img">
         <div
@@ -803,12 +849,34 @@ import Tabinfor from "@/components/Tabinfor";
 import Bottominfor from "@/components/Bottominfor";
 import DraggableItem from "@/components/DraggableItem";
 import global from "@/global";
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { PieChart, BarChart } from "echarts/charts";
+import {
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+} from "echarts/components";
+import VChart, { THEME_KEY } from "vue-echarts";
+
+use([
+  CanvasRenderer,
+  PieChart,
+  BarChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+]);
+
 export default {
   name: "Detectchanges",
   components: {
     Tabinfor,
     Bottominfor,
-    DraggableItem
+    DraggableItem,
+    VChart
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -818,6 +886,8 @@ export default {
   data() {
     return {
       holeShow:true,
+      holeShow:true,
+      isSlice: false,
       isSliderLocked: false,
       preMode: 1,
       pairs: [],
@@ -918,7 +988,12 @@ export default {
       onRenderExample:require('@/assets/image/example/normal.png'),
       isHiddenMask:false,
       dragShow:true,
-      sizeValue:[0,200]
+      isHiddenMask:false,
+      dragShow:true,
+      sizeValue:[0,200],
+      detailedAnalysisVisible: false,
+      sizeDistributionOption: {},
+      topChangesOption: {},
     };
   },
   created() {
@@ -1003,11 +1078,13 @@ export default {
           formData1.append("files", item) ||
           formData1.append("files", item.raw);
           formData1.append("type", "变化检测");
+          formData1.append("isSlice", this.isSlice);
         }
         for (const item of this.fileList2) {
           formData2.append("files", item) ||
           formData2.append("files", item.raw);
           formData2.append("type", "变化检测");
+          formData2.append("isSlice", this.isSlice);
         }
         let upload1 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
@@ -1470,6 +1547,122 @@ export default {
     },
     hideMask(){
       this.isHiddenMask = !this.isHiddenMask
+    },
+    showDetailedAnalysis() {
+      if (!this.resultArr[this.currentIndex]) return;
+      
+      const data = this.holeShow 
+          ? this.resultArr[this.currentIndex].data.size_distribution_hole 
+          : this.resultArr[this.currentIndex].data.size_distribution;
+
+      if (!data) {
+          this.$message.warning("增强的统计数据尚不可用，请确保后端已更新。");
+          return;
+      }
+
+      this.sizeDistributionOption = {
+        title: {
+          text: '变化区域大小分布',
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b} : {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          data: ['小型 (<100px)', '中型 (100-500px)', '大型 (>500px)']
+        },
+        series: [
+          {
+            name: '区域大小',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+              borderRadius: 10,
+              borderColor: '#fff',
+              borderWidth: 2
+            },
+            label: {
+              show: false,
+              position: 'center'
+            },
+            emphasis: {
+              label: {
+                show: true,
+                fontSize: 20,
+                fontWeight: 'bold'
+              }
+            },
+            labelLine: {
+              show: false
+            },
+            data: [
+              { value: data.small, name: '小型 (<100px)' },
+              { value: data.medium, name: '中型 (100-500px)' },
+              { value: data.large, name: '大型 (>500px)' }
+            ]
+          }
+        ]
+      };
+      
+      
+      // Top 10 Changes Chart
+      const topChanges = this.holeShow 
+          ? this.resultArr[this.currentIndex].data.top_changes_hole 
+          : this.resultArr[this.currentIndex].data.top_changes;
+
+      if (topChanges && topChanges.length > 0) {
+        this.topChangesOption = {
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' }
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: topChanges.map((_, i) => `Rank ${i + 1}`),
+            axisTick: { alignWithLabel: true }
+          },
+          yAxis: {
+            type: 'value',
+            name: '像素面积'
+          },
+          series: [
+            {
+              name: '面积',
+              type: 'bar',
+              barWidth: '60%',
+              data: topChanges,
+              itemStyle: {
+                 color: '#3398DB'
+              }
+            }
+          ]
+        };
+      } else {
+        this.topChangesOption = {};
+      }
+
+      this.detailedAnalysisVisible = true;
+    },
+    downloadStats() {
+       if (!this.resultArr[this.currentIndex]) return;
+       const data = this.resultArr[this.currentIndex].data;
+       const content = JSON.stringify(data, null, 2);
+       const blob = new Blob([content], { type: "application/json" });
+       const link = document.createElement("a");
+       link.href = URL.createObjectURL(blob);
+       link.download = `analysis_stats_${this.resultArr[this.currentIndex].id}.json`;
+       link.click();
+       URL.revokeObjectURL(link.href);
     }
   },
 };
@@ -1549,6 +1742,9 @@ export default {
   .render-style {
     height: auto;
   }
+}
+.chart {
+  height: 300px;
 }
 .cl-checkbox {
   display: block;

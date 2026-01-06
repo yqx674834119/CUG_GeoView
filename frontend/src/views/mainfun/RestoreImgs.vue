@@ -86,6 +86,9 @@
               </label>
             </p>
           </el-row>
+          <div style="text-align: center; margin-bottom: 20px;">
+            <el-checkbox v-model="isSlice" label="开启大图切分" border />
+          </div>
           <el-row justify="center">
             <div class="custom-model">
               可选训练模型：
@@ -310,7 +313,8 @@ export default {
       currentIndex:0,
       currentQroup:0,
       imgArr:[],
-      isUpload:false
+      isUpload:false,
+      isSlice: false
     };
   },
   watch:{

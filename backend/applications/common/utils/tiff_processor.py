@@ -8,17 +8,20 @@ Sentinel-2 / GeoTIFF 文件处理模块
 2. 多波段 RGB 提取 (Sentinel-2: B4, B3, B2)
 3. 数值归一化 (uint16 -> uint8)
 4. 导出为 PNG 格式
+5. 大尺寸图像切片
 
 配置：
 - 最大文件大小: 500MB
 - RGB 波段: Sentinel-2 标准 (B4→R, B3→G, B2→B) 或自动检测
 - 地理元数据: 丢弃
+- 大图切片: 超过 1024x1024 进行切片
 """
 
 import os
 import os.path as osp
 import uuid
-from typing import Tuple, Optional, List
+import math
+from typing import Tuple, Optional, List, Dict
 
 import numpy as np
 from PIL import Image
@@ -26,6 +29,8 @@ from PIL import Image
 # 配置常量
 MAX_TIFF_SIZE_MB = 500  # 最大文件大小 (MB)
 MAX_TIFF_SIZE_BYTES = MAX_TIFF_SIZE_MB * 1024 * 1024
+LARGE_IMAGE_THRESHOLD = (1024, 1024) # 大图阈值 (width, height)
+SLICE_SIZE = 1024 # 切片大小
 
 # Sentinel-2 10m 分辨率波段
 # 在 TIFF 中的顺序通常是 B2, B3, B4, B8 (需要根据实际数据调整)
@@ -99,6 +104,13 @@ def validate_tiff_file(file_path: str) -> dict:
     
     result['valid'] = True
     return result
+
+
+def is_large_image(width: int, height: int) -> bool:
+    """
+    判断是否为大尺寸图像
+    """
+    return width > LARGE_IMAGE_THRESHOLD[0] or height > LARGE_IMAGE_THRESHOLD[1]
 
 
 def normalize_array(array: np.ndarray, percentile: Tuple[int, int] = NORMALIZE_PERCENTILE) -> np.ndarray:
@@ -251,18 +263,71 @@ def tiff_to_png(tiff_path: str, output_path: str = None) -> str:
     return output_path
 
 
-def process_uploaded_tiff(tiff_path: str, output_dir: str) -> str:
+def slice_image(image_data: np.ndarray, output_dir: str, base_filename: str, 
+               slice_size: int = SLICE_SIZE) -> List[Dict[str, str]]:
     """
-    处理上传的 TIFF 文件
+    将大图切分为多个小图
+    
+    :param image_data: 图像数据 (H, W, C)
+    :param output_dir: 输出目录
+    :param base_filename: 基础文件名
+    :param slice_size: 切片大小
+    :return: 切片文件信息列表
+    """
+    height, width = image_data.shape[:2]
+    rows = math.ceil(height / slice_size)
+    cols = math.ceil(width / slice_size)
+    
+    slices = []
+    
+    print(f"[Slice] 开始切片: {base_filename}, 尺寸: {width}x{height} -> {rows}x{cols} 块")
+    
+    for r in range(rows):
+        for c in range(cols):
+            # 计算切片范围
+            r_start = r * slice_size
+            r_end = min((r + 1) * slice_size, height)
+            c_start = c * slice_size
+            c_end = min((c + 1) * slice_size, width)
+            
+            # 提取切片
+            slice_img = image_data[r_start:r_end, c_start:c_end]
+            
+            # 检查是否需要填充 (如果不是完整块且需要正方形输入)
+            # 这里我们保持原样，如果非正方形，后端算法通常也能处理，或者resize
+            # 为了更好的配对，我们保留原始大小
+            
+            # 生成文件名: name_row_col.png
+            # 注意: 使用 png 以确保兼容性
+            slice_filename = f"{base_filename}_{r}_{c}.png"
+            slice_path = osp.join(output_dir, slice_filename)
+            
+            # 保存
+            img = Image.fromarray(slice_img)
+            img.save(slice_path, 'PNG')
+            
+            slices.append({
+                'path': slice_path,
+                'filename': slice_filename
+            })
+            
+    return slices
+
+
+def process_uploaded_tiff(tiff_path: str, output_dir: str, original_filename: str = None) -> List[Dict[str, str]]:
+    """
+    处理上传的 TIFF 文件 (支持切片)
     
     1. 验证文件
     2. 读取并提取 RGB
-    3. 导出为 PNG
-    4. 返回新文件名
+    3. 检查尺寸，如果过大则切片
+    4. 导出为 PNG (单个或多个)
+    5. 返回生成的文件列表
     
     :param tiff_path: 上传的 TIFF 文件路径
     :param output_dir: 输出目录
-    :return: PNG 文件名 (不含路径)
+    :param original_filename: 原始文件名 (用于生成切片名)
+    :return: 文件信息列表 [{'path': ..., 'filename': ...}]
     """
     # 验证
     validation = validate_tiff_file(tiff_path)
@@ -271,14 +336,44 @@ def process_uploaded_tiff(tiff_path: str, output_dir: str) -> str:
     
     print(f"[TIFF] 验证通过: {validation['info']}")
     
-    # 生成输出文件名
-    png_filename = str(uuid.uuid4()) + '.png'
-    output_path = osp.join(output_dir, png_filename)
+    width = validation['info'].get('width', 0)
+    height = validation['info'].get('height', 0)
     
-    # 转换
-    tiff_to_png(tiff_path, output_path)
+    # 读取并转换 RGB
+    rgb_data = read_tiff_as_rgb(tiff_path)
     
-    return png_filename
+    results = []
+    
+    # 确定基础文件名
+    if original_filename:
+        # 去除扩展名
+        base_name = osp.splitext(original_filename)[0]
+    else:
+        base_name = str(uuid.uuid4())
+        
+    # 判断是否需要切片
+    if is_large_image(width, height):
+        print(f"[TIFF] 检测到大图 ({width}x{height})，执行切片处理...")
+        results = slice_image(rgb_data, output_dir, base_name)
+    else:
+        # 不切片，直接保存为单张 PNG
+        png_filename = base_name + '.png'
+        # 如果不是 UUID 生成的，可能发生冲突，但通常 output_dir 是唯一的或文件名有 UUID 前缀
+        # 为了安全，如果 original_filename 没提供，用 UUID
+        if not original_filename:
+            png_filename = str(uuid.uuid4()) + '.png'
+            
+        output_path = osp.join(output_dir, png_filename)
+        
+        img = Image.fromarray(rgb_data)
+        img.save(output_path, 'PNG')
+        
+        results.append({
+            'path': output_path,
+            'filename': png_filename
+        })
+    
+    return results
 
 
 def get_tiff_info(tiff_path: str) -> dict:

@@ -11,6 +11,8 @@
     "animate.css": "^4.1.1",
     "axios": "^0.26.1",
     "core-js": "^3.8.3",
+    "echarts": "^5.4.1",
+    "vue-echarts": "^6.5.5",
     "element-plus": "2.1.10",
     "eslint": "^8.23.1",
     "eslint-plugin-vue": "^9.5.1",

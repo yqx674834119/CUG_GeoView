@@ -112,13 +112,32 @@ def change_detection(model_path,
         first_ = up_url + resizes[i]
         second_ = pair['second']
         retPic = retPics[i]
-        mask, count = draw_masks(os.path.join(out_dir, filenames[i]))
+        mask, count, areas = draw_masks(os.path.join(out_dir, filenames[i]))
         cv2.imwrite(
             os.path.join(out_dir,
                          os.path.splitext(filenames[i])[0] + "_mask.png"), mask)
         res[i]["mask"] = out_dir + os.path.splitext(filenames[i])[
             0] + "_mask.png"
         res[i]["count"] = count
+        
+        # Calculate statistics
+        total_area = sum(areas) if areas else 0
+        avg_area = total_area / count if count > 0 else 0
+        
+        # Categorize changes
+        small_changes = len([a for a in areas if a < 100])
+        medium_changes = len([a for a in areas if 100 <= a <= 500])
+        large_changes = len([a for a in areas if a > 500])
+        
+        res[i]["total_area"] = total_area
+        res[i]["avg_area"] = avg_area
+        res[i]["size_distribution"] = {
+            "small": small_changes,
+            "medium": medium_changes,
+            "large": large_changes
+        }
+        res[i]["top_changes"] = sorted(areas, reverse=True)[:10] if areas else []
+        
         res[i]["fractional_variation"] = compute_variation(
             os.path.join(out_dir, filenames[i]))
         after_img, data = hole_handle(out_dir, out_dir + "hole/", [retPic])
@@ -128,7 +147,7 @@ def change_detection(model_path,
             out_dir + "hole/",
             out_dir + "hole/",
             prefix="hole")[0]
-        mask, count = draw_masks(
+        mask, count, areas_hole = draw_masks(
             os.path.join(out_dir + "hole/", os.path.basename(after_img)))
         cv2.imwrite(
             os.path.join(
@@ -138,6 +157,24 @@ def change_detection(model_path,
         res[i]["mask_hole"] = out_dir + "hole/" + os.path.splitext(
             os.path.basename(after_img))[0] + "_mask.png"
         res[i]["count_hole"] = count
+        
+        # Calculate statistics for hole-filled result
+        total_area_hole = sum(areas_hole) if areas_hole else 0
+        avg_area_hole = total_area_hole / count if count > 0 else 0
+        
+        small_changes_hole = len([a for a in areas_hole if a < 100])
+        medium_changes_hole = len([a for a in areas_hole if 100 <= a <= 500])
+        large_changes_hole = len([a for a in areas_hole if a > 500])
+        
+        res[i]["total_area_hole"] = total_area_hole
+        res[i]["avg_area_hole"] = avg_area_hole
+        res[i]["size_distribution_hole"] = {
+            "small": small_changes_hole,
+            "medium": medium_changes_hole,
+            "large": large_changes_hole
+        }
+        res[i]["top_changes_hole"] = sorted(areas_hole, reverse=True)[:10] if areas_hole else []
+
         res[i]["fractional_variation_hole"] = compute_variation(
             os.path.join(generate_dir + "hole/", os.path.basename(after_img)))
         data = json.dumps(res[i])

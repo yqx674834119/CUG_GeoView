@@ -28,16 +28,22 @@ def upload_api():
                     return fail_api(f"TIFF 文件 '{photo.filename}' 大小 ({size_mb:.1f}MB) 超过限制 ({MAX_TIFF_SIZE_MB}MB)")
         
         data = list()
+        is_slice_str = request.form.get('isSlice', 'false')
+        is_slice = is_slice_str.lower() == 'true'
+
         for photo in photos:
             mime = photo.content_type
             try:
-                file_url, photo_id = upload_curd.upload_one(
-                    photo=photo, mime=mime, type_=to_type)
-                data.append({
-                    "src": file_url,
-                    "filename": photo.filename,
-                    "photo_id": photo_id
-                })
+                # upload_one now returns a list of (file_url, photo_id, display_name)
+                upload_results = upload_curd.upload_one(
+                    photo=photo, mime=mime, type_=to_type, enable_slicing=is_slice)
+                
+                for file_url, photo_id, display_name in upload_results:
+                    data.append({
+                        "src": file_url,
+                        "filename": display_name, # Use the display name for frontend pairing
+                        "photo_id": photo_id
+                    })
             except ValueError as e:
                 # TIFF 处理失败
                 return fail_api(str(e))

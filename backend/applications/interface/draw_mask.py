@@ -9,6 +9,7 @@ def draw_masks(img_path):
     contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE,
                                            cv2.CHAIN_APPROX_SIMPLE)
     count = len(contours)  #变化区域个数
+    areas = [cv2.contourArea(c) for c in contours] # 变化区域面积列表
     img = np.ones((img.shape[0], img.shape[1], 4)) * (255, 255, 255, 0)
     img = cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
     b = img[:, :, 0]
@@ -20,4 +21,4 @@ def draw_masks(img_path):
             if not (b[i][j] > 0 and g[i][j] > 0 and r[i][j] > 0):
                 a[i][j] = 255  # 255不透明，0全透明，有像素的地方设置不透明
     mask = cv2.merge((b, g, r, a))
-    return mask, count
+    return mask, count, areas

@@ -88,6 +88,9 @@
               </label>
             </p>
           </el-row>
+          <div style="text-align: center; margin-bottom: 20px;">
+            <el-checkbox v-model="isSlice" label="开启大图切分" border />
+          </div>
           <el-row
             justify="center"
             align="middle"
@@ -399,7 +402,8 @@ export default {
         prehandle:0,
         type:4
       },
-      imgArr:[]
+      imgArr:[],
+      isSlice: false
     };
   },
   watch:{
