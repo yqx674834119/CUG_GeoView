@@ -2,7 +2,10 @@ version: "3.9"
 
 services:
   app:
-    image: cugrs:tiff-support-optimized
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cugrs:local-build
     container_name: cugrs-app
     ports:
       - "5008:5008"

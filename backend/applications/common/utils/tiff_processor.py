@@ -314,19 +314,20 @@ def slice_image(image_data: np.ndarray, output_dir: str, base_filename: str,
     return slices
 
 
-def process_uploaded_tiff(tiff_path: str, output_dir: str, original_filename: str = None) -> List[Dict[str, str]]:
+def process_uploaded_tiff(tiff_path: str, output_dir: str, original_filename: str = None, enable_slicing: bool = False) -> List[Dict[str, str]]:
     """
     处理上传的 TIFF 文件 (支持切片)
     
     1. 验证文件
     2. 读取并提取 RGB
-    3. 检查尺寸，如果过大则切片
+    3. 检查尺寸，如果过大且开启切片，则切片
     4. 导出为 PNG (单个或多个)
     5. 返回生成的文件列表
     
     :param tiff_path: 上传的 TIFF 文件路径
     :param output_dir: 输出目录
     :param original_filename: 原始文件名 (用于生成切片名)
+    :param enable_slicing: 是否允许切片
     :return: 文件信息列表 [{'path': ..., 'filename': ...}]
     """
     # 验证
@@ -345,15 +346,13 @@ def process_uploaded_tiff(tiff_path: str, output_dir: str, original_filename: st
     results = []
     
     # 确定基础文件名
-    if original_filename:
-        # 去除扩展名
-        base_name = osp.splitext(original_filename)[0]
-    else:
-        base_name = str(uuid.uuid4())
+    # 强制使用 UUID 作为基础文件名，避免中文、特殊字符或文件名冲突导致的问题
+    # 原文件名已经在 upload_one 中保存用于展示，这里只负责生成安全的文件路径
+    base_name = str(uuid.uuid4())
         
     # 判断是否需要切片
-    if is_large_image(width, height):
-        print(f"[TIFF] 检测到大图 ({width}x{height})，执行切片处理...")
+    if enable_slicing and is_large_image(width, height):
+        print(f"[TIFF] 检测到大图 ({width}x{height}) 且已开启切片，执行切片处理...")
         results = slice_image(rgb_data, output_dir, base_name)
     else:
         # 不切片，直接保存为单张 PNG

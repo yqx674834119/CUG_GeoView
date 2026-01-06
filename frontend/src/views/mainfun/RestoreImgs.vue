@@ -334,7 +334,14 @@ export default {
   created() {
     this.getUploadImg("影像超分重建")
     this.getCustomModel('image_restoration').then((res)=>{
-      this.modelPathArr = res.data.data
+      // 过滤掉4X模型，只保留2X模型（4X资源消耗太大）
+      this.modelPathArr = res.data.data.filter(model => {
+        const modelName = model.model_name.toLowerCase();
+        const modelPath = model.model_path.toLowerCase();
+        // 排除包含 x4 或 4x 的模型
+        return !modelName.includes('x4') && !modelName.includes('4x') && 
+               !modelPath.includes('x4') && !modelPath.includes('4x');
+      });
       this.uploadSrc.model_path = this.modelPathArr[0]?.model_path
     }).catch((rej)=>{})
   },

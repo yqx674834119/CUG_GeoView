@@ -94,12 +94,19 @@ def change_detection_api():
 def object_detection_api():
     req_json = request.json
     model_path = req_json["model_path"]
-    try:
-        model_info = get_model_info(model_path)
-        if model_info["_Attributes"]["model_type"] != "detector":
-            return fail_api("模型类型不正确，请检查")
-    except:
-        return fail_api("模型不存在，请检查")
+    req_json = request.json
+    model_path = req_json["model_path"]
+    
+    # 检查是否为 HuggingFace 模型
+    is_hf_model = model_path.startswith("hf:")
+    
+    if not is_hf_model:
+        try:
+            model_info = get_model_info(model_path)
+            if model_info["_Attributes"]["model_type"] != "detector":
+                return fail_api("模型类型不正确，请检查")
+        except:
+            return fail_api("模型不存在，请检查")
     list_ = req_json["list"]
     step1_ = req_json["prehandle"]
     step2_ = req_json["denoise"]

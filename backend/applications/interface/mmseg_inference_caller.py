@@ -81,17 +81,46 @@ def call_mmseg_inference(
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
     
     # 构建命令
+    # 转换相对路径为绝对路径
+    abs_data_path = os.path.abspath(data_path)
+    abs_out_dir = os.path.abspath(out_dir)
     file_names_str = ",".join(names)
-    cmd = [
-        "conda", "run", "-n", MMSEG_CONDA_ENV,
-        "python", MMSEG_SCRIPT,
-        "--config", config_path,
-        "--checkpoint", checkpoint_path,
-        "--input_dir", data_path,
-        "--output_dir", out_dir,
-        "--file_names", file_names_str,
-        "--device", device
+
+    # 动态检查 Python 解释器路径
+    candidate_paths = [
+        "/opt/conda/envs/MMSeg310/bin/python",              # Default Docker path
+        "/home/livablecity/miniconda3/envs/MMSeg310/bin/python", # Dev environment path
     ]
+    
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+            
+    # 如果找不到特定路径，回退到 conda run (虽然可能在某些 Docker 中有问题，但作为最后的 fallback)
+    if python_executable:
+        cmd = [
+            python_executable, MMSEG_SCRIPT,
+            "--config", config_path,
+            "--checkpoint", checkpoint_path,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
+    else:
+        print(f"[MMSeg-Caller] Warning: MMSeg310 python executable not found in candidates, falling back to 'conda run'", file=sys.stderr)
+        cmd = [
+            "conda", "run", "-n", MMSEG_CONDA_ENV,
+            "python", MMSEG_SCRIPT,
+            "--config", config_path,
+            "--checkpoint", checkpoint_path,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
     
     print(f"[MMSeg-Caller] Executing: {' '.join(cmd)}", flush=True)
     
@@ -116,11 +145,19 @@ def call_mmseg_inference(
         
         # 生成结果 URL 列表
         temps = []
-        for res in output_data.get("results", []):
+        result_map = {res["name"]: res for res in output_data.get("results", [])}
+        
+        for name in names:
+            res = result_map.get(name)
+            if not res:
+                raise RuntimeError(f"No result returned for file: {name}")
+            
             if res.get("status") == "success":
                 temps.append(generate_url + res["name"])
             else:
-                print(f"[MMSeg-Caller] Warning: {res}", file=sys.stderr)
+                error_msg = res.get("message", "Unknown error")
+                print(f"[MMSeg-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
+                raise RuntimeError(f"Processing failed for {name}: {error_msg}")
         
         return temps
         

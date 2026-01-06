@@ -101,8 +101,16 @@ def load_model(model_id: str, device: str):
     return processor, model
 
 
-def process_image(image_path: str, processor, model, device: str):
-    """处理单张图片进行超分辨率"""
+def process_image(image_path: str, processor, model, device: str, max_dimension: int = 1024):
+    """处理单张图片进行超分辨率
+    
+    Args:
+        image_path: 输入图片路径
+        processor: 图像处理器
+        model: 超分模型
+        device: 计算设备
+        max_dimension: 最大允许的图像尺寸，默认1024。如果图像超过此尺寸会自动缩小
+    """
     import torch
     import numpy as np
     from PIL import Image
@@ -112,7 +120,22 @@ def process_image(image_path: str, processor, model, device: str):
     # 加载图片
     load_start = time.time()
     image = Image.open(image_path).convert("RGB")
-    log(f"Image loaded: {image.size} in {time.time() - load_start:.2f}s")
+    original_size = image.size
+    log(f"Image loaded: {original_size} in {time.time() - load_start:.2f}s")
+    
+    # 检查图像尺寸，如果过大则resize
+    width, height = image.size
+    scale_factor = 1.0
+    
+    if width > max_dimension or height > max_dimension:
+        # 计算缩放比例
+        scale_factor = max_dimension / max(width, height)
+        new_width = int(width * scale_factor)
+        new_height = int(height * scale_factor)
+        
+        log(f"Image too large ({width}x{height}), resizing to {new_width}x{new_height} (scale: {scale_factor:.2f})", level="WARN")
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        log(f"Resized to: {image.size}")
     
     # 预处理
     preprocess_start = time.time()
@@ -161,7 +184,15 @@ def main():
     
     # 确定设备
     import torch
-    if args.device == "cuda":
+    if args.device == "auto":
+        # 自动选择：如果CUDA可用则使用CUDA，否则使用CPU
+        if torch.cuda.is_available():
+            device = "cuda"
+            log("Auto-selecting device: CUDA is available, using CUDA")
+        else:
+            device = "cpu"
+            log("Auto-selecting device: CUDA not available, using CPU")
+    elif args.device == "cuda":
         if not torch.cuda.is_available():
             log("CUDA requested but not available, falling back to CPU", level="WARN")
             device = "cpu"

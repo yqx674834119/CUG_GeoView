@@ -39,15 +39,21 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
     # 如果是 TIFF 文件，进行预处理 (可能切片)
     processed_files = []
     
-    # 只有当开启切片且是TIFF时才尝试处理
-    if enable_slicing and is_tiff_file(filename):
+    # 如果是 TIFF 文件，始终进行预处理 (转换为 PNG，可选切片)
+    if is_tiff_file(filename):
         try:
-            print(f"[Upload] 检测到 TIFF 文件: {filename}, 开启切片模式...")
+            print(f"[Upload] 检测到 TIFF 文件: {filename}, 切片开启: {enable_slicing}")
             
             # process_uploaded_tiff 返回列表: [{'path': ..., 'filename': ...}]
-            results = process_uploaded_tiff(full_path, upload_url, original_filename=original_filename)
+            # 无论是否切片，只要是 TIFF 都进行转换
+            results = process_uploaded_tiff(
+                full_path, 
+                upload_url, 
+                original_filename=original_filename,
+                enable_slicing=enable_slicing
+            )
             
-            # 删除原始 TIFF 文件
+            # 删除原始 TIFF 文件 (因为已经转换为 PNG 了)
             if os.path.exists(full_path):
                 os.remove(full_path)
             
@@ -56,7 +62,7 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
                     'filename': res['filename'],
                     'mime': 'image/png',
                     'path': res['path'],
-                    'display_name': res['filename'] # 切片后的文件名作为展示名
+                    'display_name': res['filename'] # 转换/切片后的文件名
                 })
                 
             print(f"[Upload] TIFF 处理完成, 生成 {len(processed_files)} 个文件")
@@ -70,7 +76,7 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
                     pass
             raise ValueError(f"TIFF 文件处理失败: {str(e)}")
     else:
-        # 非 TIFF 或未开启切片，直接使用原文件
+        # 非 TIFF，直接使用原文件
         processed_files.append({
             'filename': filename,
             'mime': mime,

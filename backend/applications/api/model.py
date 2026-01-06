@@ -27,6 +27,15 @@ HUGGINGFACE_MODELS = {
             "description": "HuggingFace Swin2SR 4倍超分辨率模型"
         }
     ],
+    "object_detection": [
+        {
+            "model_path": "hf:facebook/detr-resnet-50",
+            "model_type": "detector",
+            "model_name": "Facebook DETR-ResNet-50",
+            "backend": "huggingface",
+            "description": "DEtection TRansformer (DETR) model trained on COCO 2017. ResNet-50 backbone."
+        }
+    ],
     "semantic_segmentation": [
         {
             "model_path": "mmseg:cc-ln/CUGRS",

@@ -65,7 +65,8 @@ RUN conda run -n HFPyTorch310 pip install \
     conda run -n HFPyTorch310 pip install \
     numpy==1.26.4 pillow>=9.0.0 && \
     conda run -n HFPyTorch310 pip install \
-    transformers==4.36.2 huggingface_hub && \
+    transformers==4.36.2 huggingface_hub \
+    timm scipy "numpy<2" && \
     conda run -n HFPyTorch310 pip cache purge
 
 # Set HuggingFace mirror for China (optional, helps with network issues)
@@ -84,16 +85,17 @@ RUN conda run -n MMSeg310 pip install \
 RUN conda run -n MMSeg310 pip install \
     openmim==0.3.9 && \
     conda run -n MMSeg310 mim install mmengine==0.10.4 && \
-    conda run -n MMSeg310 mim install "mmcv>=2.0.0,<2.3.0"
+    conda run -n MMSeg310 mim install "mmcv==2.2.0"
 
-# Install MMSegmentation and other dependencies
+# Install MMSegmentation from local source (reference: mmsegmentation/dinov3+MMSEG.ipynb)
+COPY mmsegmentation /app/mmsegmentation
 RUN conda run -n MMSeg310 pip install \
-    mmsegmentation==1.2.2 \
     transformers==4.36.2 \
     huggingface_hub \
     numpy==1.26.4 \
     opencv-python-headless \
     pillow>=9.0.0 && \
+    conda run -n MMSeg310 pip install -v -e /app/mmsegmentation && \
     conda run -n MMSeg310 pip cache purge
 
 

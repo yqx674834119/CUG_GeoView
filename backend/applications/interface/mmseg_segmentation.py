@@ -21,6 +21,15 @@ import os
 import sys
 from typing import List, Optional
 
+# 添加 backend 路径到 sys.path，确保可以导入 backend 下的模块
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
+# 导入自定义模型以注册到 metrics/registry
+try:
+    import backend.model.custom_models
+    print("[MMSeg] Custom models registered", file=sys.stderr)
+except ImportError as e:
+    print(f"[MMSeg] Warning: Failed to import custom models: {e}", file=sys.stderr)
+
 import cv2
 import numpy as np
 

@@ -419,6 +419,15 @@ export default {
     this.getUploadImg("目标检测");
     this.getCustomModel('object_detection').then((res)=>{
       this.modelPathArr = res.data.data
+      // Add Hugging Face Model
+      this.modelPathArr.push({
+        model_name: 'Microsoft Conditional DETR (HuggingFace)',
+        model_path: 'hf:microsoft/conditional-detr-resnet-50'
+      })
+      this.modelPathArr.push({
+        model_name: 'WALDO30 (HuggingFace)',
+        model_path: 'hf:StephanST/WALDO30'
+      })
       this.uploadSrc.model_path = this.modelPathArr[0]?.model_path
     }).catch((rej)=>{})
   },

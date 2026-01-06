@@ -48,13 +48,17 @@ def call_hf_super_resolution(
         return []
     
     # 构建命令
+    # 转换相对路径为绝对路径，避免 subprocess cwd 导致路径错误
+    abs_data_path = os.path.abspath(data_path)
+    abs_out_dir = os.path.abspath(out_dir)
+    
     file_names_str = ",".join(names)
     cmd = [
         "conda", "run", "-n", HF_CONDA_ENV,
         "python", HF_SR_SCRIPT,
         "--model_id", model_id,
-        "--input_dir", data_path,
-        "--output_dir", out_dir,
+        "--input_dir", abs_data_path,
+        "--output_dir", abs_out_dir,
         "--file_names", file_names_str,
         "--device", device
     ]
@@ -82,11 +86,19 @@ def call_hf_super_resolution(
         
         # 生成结果 URL 列表
         temps = []
-        for res in output_data.get("results", []):
+        result_map = {res["name"]: res for res in output_data.get("results", [])}
+        
+        for name in names:
+            res = result_map.get(name)
+            if not res:
+                raise RuntimeError(f"No result returned for file: {name}")
+            
             if res.get("status") == "success":
                 temps.append(generate_url + res["name"])
             else:
-                print(f"[HF-Caller] Warning: {res}", file=sys.stderr)
+                error_msg = res.get("message", "Unknown error")
+                print(f"[HF-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
+                raise RuntimeError(f"Processing failed for {name}: {error_msg}")
         
         return temps
         
@@ -136,7 +148,79 @@ SUPPORTED_MODELS = {
     }
 }
 
+# HuggingFace Object Detection Script Path
+HF_OD_SCRIPT = os.path.join(_curr_dir, "hf_object_detection.py")
 
-def get_supported_models():
+
+def call_hf_object_detection(
+    model_id: str,
+    data_path: str,
+    out_dir: str,
+    names: List[str],
+    device: str = "auto",
+    timeout: int = 600
+) -> List[str]:
+    """
+    Call HuggingFace Object Detection model for inference
+    """
+    if not names:
+        return []
+    
+    abs_data_path = os.path.abspath(data_path)
+    abs_out_dir = os.path.abspath(out_dir)
+    
+    file_names_str = ",".join(names)
+    cmd = [
+        "conda", "run", "-n", HF_CONDA_ENV,
+        "python", HF_OD_SCRIPT,
+        "--model_id", model_id,
+        "--input_dir", abs_data_path,
+        "--output_dir", abs_out_dir,
+        "--file_names", file_names_str,
+        "--device", device
+    ]
+    
+    print(f"[HF-Caller] Executing OD: {' '.join(cmd)}", flush=True)
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir
+        )
+        
+        if result.returncode != 0:
+            print(f"[HF-Caller] OD Error output: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"HuggingFace inference failed: {result.stderr}")
+        
+        output_data = json.loads(result.stdout.strip())
+        
+        if output_data.get("status") != "completed":
+            raise RuntimeError(f"OD Inference incomplete: {output_data}")
+        
+        temps = []
+        result_map = {res["name"]: res for res in output_data.get("results", [])}
+        
+        for name in names:
+            res = result_map.get(name)
+            if not res:
+                raise RuntimeError(f"No result returned for file: {name}")
+            
+            if res.get("status") == "success":
+                temps.append(generate_url + res["name"])
+            else:
+                error_msg = res.get("message", "Unknown error")
+                print(f"[HF-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
+                raise RuntimeError(f"Processing failed for {name}: {error_msg}")
+        
+        return temps
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"HuggingFace OD inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse inference output: {e}")
     """返回支持的模型列表"""
     return SUPPORTED_MODELS

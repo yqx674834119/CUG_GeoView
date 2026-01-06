@@ -25,6 +25,19 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
     :param names: 待处理文件名列表
     :param threshold: 阈值
     """
+
+    # 检查是否为 HuggingFace 模型
+    if model_path.startswith("hf:"):
+        from applications.interface.hf_inference_caller import call_hf_object_detection
+        model_id = model_path[3:]  # 去掉 'hf:' 前缀
+        print(f"[OD-DEBUG] Routing to HuggingFace inference: {model_id}")
+        return call_hf_object_detection(
+            model_id=model_id,
+            data_path=data_path,
+            out_dir=out_dir,
+            names=names
+        )
+
     image_list = [osp.join(data_path, name) for name in names]
     print("[OD-DEBUG] 开始执行，模型目录:", model_path, flush=True)
     print("[OD-DEBUG] 数据目录:", data_path, flush=True)
