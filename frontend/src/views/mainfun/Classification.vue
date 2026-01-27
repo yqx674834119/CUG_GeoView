@@ -53,7 +53,16 @@
               <span v-if="modelPathArr.length === 0">未检测到模型文件，请查看上传目录是否有误</span>
               <el-radio v-for="(item, index) in modelPathArr" :key="index" v-model="uploadSrc.model_path"
                 class="choose-item" :label="item.model_path">
-                {{ item.model_name }}
+                <el-tooltip
+                  effect="dark"
+                  :content="item.description || '暂无描述'"
+                  placement="top-start"
+                >
+                  <span style="font-weight: bold; font-size: 14px;">
+                    {{ item.model_name }}
+                    <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                  </span>
+                </el-tooltip>
               </el-radio>
             </div>
           </el-row>
@@ -266,7 +275,21 @@ export default {
   height: 256px;
 }
 
-.el-radio /deep/ {
-  height: 62px;
+.el-radio {
+  height: auto !important;
+  margin-bottom: 15px;
+  margin-right: 30px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.el-radio /deep/ .el-radio__label {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+
+.el-radio /deep/ .el-radio__input {
+  margin-top: 0;
 }
 </style>

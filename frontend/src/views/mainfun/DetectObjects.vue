@@ -163,7 +163,16 @@
                 class="choose-item"
                 :label="item.model_path"
               >
-                {{ item.model_name }}
+                <el-tooltip
+                  effect="dark"
+                  :content="item.description || '暂无描述'"
+                  placement="top-start"
+                >
+                  <span style="font-weight: bold; font-size: 14px;">
+                    {{ item.model_name }}
+                    <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                  </span>
+                </el-tooltip>
               </el-radio>
             </div>
           </el-row>
@@ -419,15 +428,6 @@ export default {
     this.getUploadImg("目标检测");
     this.getCustomModel('object_detection').then((res)=>{
       this.modelPathArr = res.data.data
-      // Add Hugging Face Model
-      this.modelPathArr.push({
-        model_name: 'Microsoft Conditional DETR (HuggingFace)',
-        model_path: 'hf:microsoft/conditional-detr-resnet-50'
-      })
-      this.modelPathArr.push({
-        model_name: 'WALDO30 (HuggingFace)',
-        model_path: 'hf:StephanST/WALDO30'
-      })
       this.uploadSrc.model_path = this.modelPathArr[0]?.model_path
     }).catch((rej)=>{})
   },
@@ -514,7 +514,29 @@ export default {
   top: 10%;
   z-index: 100;
 }
-.el-radio /deep/{
-  height: 62px;
+
+.custom-model {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.el-radio {
+  height: auto !important;
+  margin-bottom: 15px;
+  margin-right: 30px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.el-radio /deep/ .el-radio__label {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+
+.el-radio /deep/ .el-radio__input {
+  margin-top: 0;
 }
 </style>

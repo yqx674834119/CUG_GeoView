@@ -30,26 +30,52 @@
         </div>
         <div>
           <div v-if="item.type!=='场景分类'">
-            <el-image
-              ref="tableTab"
-              class="img-display"
-              :src="item.after_img"
-              :fit="fit"
-              :lazy="true"
-              :preview-src-list="[item.after_img]"
-              :preview-teleported="true"
-            />
-            <div class="img-infor">
-              <span>预测结果</span>
-              <span
-                @click="
-                  downloadimgWithWords(
-                    item.id,
-                    item.after_img,
-                    `${item.type}结果图.png`
-                  )
-                "
-              ><i class="iconfont icon-xiazai" /></span>
+            <div style="display: flex;">
+              <div>
+                <el-image
+                  ref="tableTab"
+                  class="img-display"
+                  :src="item.after_img"
+                  :fit="fit"
+                  :lazy="true"
+                  :preview-src-list="[item.after_img]"
+                  :preview-teleported="true"
+                />
+                <div class="img-infor">
+                  <span>预测结果</span>
+                  <span
+                    @click="
+                      downloadimgWithWords(
+                        item.id,
+                        item.after_img,
+                        `${item.type}结果图.png`
+                      )
+                    "
+                  ><i class="iconfont icon-xiazai" /></span>
+                </div>
+              </div>
+              
+              <!-- 地物分类图例 -->
+              <div v-if="item.type === '地物分类'" style="margin-left: 20px; display: flex; flex-direction: column; justify-content: center;">
+                <h4>类别图例</h4>
+                <!-- DeepLabV3P (Paddle) Legend -->
+                <div v-if="!item.after_img.includes('pred_')" style="font-size: 14px; line-height: 1.8;">
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 0, 0); margin-right: 8px; border: 1px solid #ccc;"></span> <span>云 (Cloud)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(128, 0, 0); margin-right: 8px;"></span> <span>阴影 (Shadow)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 128, 0); margin-right: 8px;"></span> <span>雪 (Snow)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(128, 128, 0); margin-right: 8px;"></span> <span>水体 (Water)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 0, 128); margin-right: 8px;"></span> <span>陆地 (Land)</span></div>
+                </div>
+                <!-- MMSegmentation (CUGRS) Legend -->
+                <div v-else style="font-size: 14px; line-height: 1.8;">
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 255, 0); margin-right: 8px;"></span> <span>草地 (Grassland)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 128, 0); margin-right: 8px;"></span> <span>林地 (Forest)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(255, 0, 0); margin-right: 8px;"></span> <span>建筑 (Building)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(255, 255, 0); margin-right: 8px;"></span> <span>道路 (Road)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(255, 0, 255); margin-right: 8px;"></span> <span>裸地 (Bareground)</span></div>
+                   <div style="display: flex; align-items: center;"><span style="width: 20px; height: 20px; background-color: rgb(0, 191, 255); margin-right: 8px;"></span> <span>水体 (Water)</span></div>
+                </div>
+              </div>
             </div>
           </div>
           <div

@@ -66,7 +66,7 @@ RUN conda run -n HFPyTorch310 pip install \
     numpy==1.26.4 pillow>=9.0.0 && \
     conda run -n HFPyTorch310 pip install \
     transformers==4.36.2 huggingface_hub \
-    timm scipy "numpy<2" && \
+    timm scipy "numpy<2" ultralytics && \
     conda run -n HFPyTorch310 pip cache purge
 
 # Set HuggingFace mirror for China (optional, helps with network issues)
@@ -87,15 +87,19 @@ RUN conda run -n MMSeg310 pip install \
     conda run -n MMSeg310 mim install mmengine==0.10.4 && \
     conda run -n MMSeg310 mim install "mmcv==2.2.0"
 
-# Install MMSegmentation from local source (reference: mmsegmentation/dinov3+MMSEG.ipynb)
-COPY mmsegmentation /app/mmsegmentation
+# Install MMSegmentation 1.2.2 and patch version check for MMCV 2.2.0 compatibility
 RUN conda run -n MMSeg310 pip install \
+    mmsegmentation==1.2.2 \
     transformers==4.36.2 \
     huggingface_hub \
     numpy==1.26.4 \
-    opencv-python-headless \
-    pillow>=9.0.0 && \
-    conda run -n MMSeg310 pip install -v -e /app/mmsegmentation && \
+    "opencv-python-headless<4.11" \
+    pillow>=9.0.0 \
+    ftfy \
+    regex \
+    "scipy<1.14" && \
+    # Patch mmseg to accept mmcv 2.2.0 (change < 2.2.0 to <= 2.2.0)
+    conda run -n MMSeg310 sed -i "s/MMCV_MAX = '2.2.0'/MMCV_MAX = '2.3.0'/" /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmseg/__init__.py && \
     conda run -n MMSeg310 pip cache purge
 
 

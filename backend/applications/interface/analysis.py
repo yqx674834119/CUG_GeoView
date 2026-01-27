@@ -284,10 +284,16 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
 
     # 4. 地物分类
     retPics = SS.execute(model_path, data_path, out_dir, imgs)
+    
     # 5.入库
     for i, pair in enumerate(resizes):
         first_ = up_url + pair
         retPic = retPics[i]
+        
+        # If MMSeg returns a full URL, we might need to handle it.
+        # But save_analysis expects a URL or path. 
+        # The frontend usually displays whatever is in 'after_img'.
+        
         save_analysis(
             type_,
             first_,

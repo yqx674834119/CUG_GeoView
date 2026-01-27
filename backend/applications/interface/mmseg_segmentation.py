@@ -35,12 +35,12 @@ import numpy as np
 
 # 类别颜色配置 (RGB格式)
 PALETTE = [
-    [127, 127, 127],  # 0: grassland - gray
-    [200, 0, 0],      # 1: forest - red
-    [0, 200, 0],      # 2: building - green
-    [144, 238, 144],  # 3: road - light green
-    [30, 30, 30],     # 4: bareground - dark gray
-    [251, 189, 8],    # 5: water - cyan/yellow
+    [0, 255, 0],      # 0: grassland - Lime
+    [0, 128, 0],      # 1: forest - Green
+    [255, 0, 0],      # 2: building - Red
+    [255, 255, 0],    # 3: road - Yellow
+    [255, 0, 255],    # 4: bareground - Magenta
+    [0, 191, 255],    # 5: water - DeepSkyBlue
 ]
 
 CLASS_NAMES = ['grassland', 'forest', 'building', 'road', 'bareground', 'water']

@@ -137,20 +137,44 @@ def call_mmseg_inference(
             print(f"[MMSeg-Caller] Error output: {result.stderr}", file=sys.stderr)
             raise RuntimeError(f"MMSegmentation inference failed: {result.stderr}")
         
-        # 解析 JSON 输出
-        output_data = json.loads(result.stdout.strip())
+        # Parse JSON output (robustly find the JSON line)
+        output_data = None
+        stdout_lines = result.stdout.strip().split('\n')
+        for line in reversed(stdout_lines):
+            try:
+                if line.strip().startswith('{') and '"status": "completed"' in line:
+                    output_data = json.loads(line)
+                    break
+            except json.JSONDecodeError:
+                continue
+        
+        if output_data is None:
+             raise RuntimeError(f"Could not find valid JSON output in stdout: {result.stdout}")
         
         if output_data.get("status") != "completed":
             raise RuntimeError(f"Inference incomplete: {output_data}")
         
         # 生成结果 URL 列表
         temps = []
+        # Create map keyed by output filename (which is what res["name"] is)
         result_map = {res["name"]: res for res in output_data.get("results", [])}
         
         for name in names:
-            res = result_map.get(name)
+            # Construct expected output filename: pred_{basename_without_ext}.png
+            # Note: mmseg_segmentation.py uses os.path.splitext(filename)[0]
+            base_name = os.path.splitext(name)[0]
+            expected_out_name = f"pred_{base_name}.png"
+            
+            res = result_map.get(expected_out_name)
             if not res:
-                raise RuntimeError(f"No result returned for file: {name}")
+                # Fallback: check if the name itself is in the map (unlikely based on script logic)
+                res = result_map.get(name)
+            
+            if not res:
+                # Debug print to help identify mismatch
+                print(f"[MMSeg-Caller] available results: {list(result_map.keys())}", file=sys.stderr)
+                # Try to fuzzy match or just fail
+                raise RuntimeError(f"No result returned for file: {name} (expected {expected_out_name})")
             
             if res.get("status") == "success":
                 temps.append(generate_url + res["name"])
