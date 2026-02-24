@@ -101,10 +101,10 @@
     >
       <i
         v-show="isCollapse"
-        class="el-icon-picture-outline-round" 
+        class="icon-registration" 
       />
       <h3 v-show="!isCollapse">
-        <i class="el-icon-picture-outline-round" />多模态自动配准
+        <i class="icon-registration" />多模态自动配准
       </h3>
     </el-menu-item>
 
@@ -114,10 +114,10 @@
     >
       <i
         v-show="isCollapse"
-        class="el-icon-aim"
+        class="icon-tracking"
       />
       <h3 v-show="!isCollapse">
-        <i class="el-icon-aim" />全域目标跟踪
+        <i class="icon-tracking" />全域目标跟踪
       </h3>
     </el-menu-item>
 
