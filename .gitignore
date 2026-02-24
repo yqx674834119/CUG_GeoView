@@ -5,3 +5,10 @@ backend/static/*
 backend/model/**/*.zip
 backend/model/**/*.pdiparams
 offline_package
+dist/*
+frontend/node_modules/*
+frontend/dist/*
+frontend/build/*
+miner/frontend/node_modules/*
+miner/frontend/dist/*
+miner/frontend/build/*
