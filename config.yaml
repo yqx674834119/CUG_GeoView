@@ -7,3 +7,7 @@ host:
 baidu_map:
   access_key: <ACCESS_KEY>
 debug: false
+miner:
+  enabled: true
+  frontend_port: 4000
+  backend_port: 8000

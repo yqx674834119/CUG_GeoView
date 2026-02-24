@@ -10,6 +10,8 @@ services:
     ports:
       - "5008:5008"
       - "3000:3000"
+      - "4000:4000"
+      - "8000:8000"
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
@@ -27,6 +29,8 @@ services:
       - ./backend:/app/backend
       - ./frontend:/app/frontend
       - /app/frontend/node_modules
+      - ./miner:/app/miner
+      - /app/miner/node_modules
       # HuggingFace model cache (persists across container restarts)
       - hf_cache:/root/.cache/huggingface
 

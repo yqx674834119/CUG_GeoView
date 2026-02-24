@@ -4,6 +4,15 @@
       <span class="platform-info"> </span>
     </div>
     <div class="header-right">
+      <el-button
+        v-if="minerEnabled"
+        type="primary"
+        class="miner-btn"
+        @click="goToMiner"
+      >
+        <i class="icon-map" style="margin-right: 4px;" />
+        ⛏️ 矿山监测系统
+      </el-button>
       <el-button type="text" class="system-menu">
         <i class="icon-settings" />
         系统设置
@@ -15,10 +24,21 @@
 <script>
 export default {
   name: 'HeaderComponent',
+  computed: {
+    minerEnabled() {
+      return process.env.VUE_APP_MINER_ENABLED === 'true';
+    },
+    minerUrl() {
+      return process.env.VUE_APP_MINER_URL || 'http://localhost:4000';
+    },
+  },
   methods: {
     handleSystemSettings() {
       // 系统设置功能，暂时预留
       this.$message.info('系统设置功能开发中...');
+    },
+    goToMiner() {
+      window.open(this.minerUrl, '_blank');
     },
   },
 };
@@ -48,6 +68,21 @@ export default {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.miner-btn {
+  background: linear-gradient(135deg, #0984e3, #00cec9) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.miner-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(9, 132, 227, 0.4);
 }
 
 .system-menu {
@@ -83,3 +118,4 @@ export default {
   }
 }
 </style>
+

@@ -112,8 +112,7 @@ RUN conda run -n HFPyTorch310 pip install \
     matplotlib
 
 
-# Install Node.js 18
-# Install Node.js 18 (from Tsinghua University mirror)
+# Install Node.js 18 (system default, used by GeoView frontend)
 RUN set -eux; \
     ARCH="linux-x64"; \
     NODE_VERSION="v18.20.3"; \
@@ -168,6 +167,23 @@ COPY frontend /app/frontend
 RUN npm install --no-audit --prefer-offline
 RUN npm run build || true   # 不失败（开发模式可 serve）
 
+# ----------- MINER (矿山监测系统) -----------
+# Miner uses Vite 7.x which requires Node.js >=20.19.0
+# Install Node.js 20 to /opt/node20 (separate from system Node.js 18)
+RUN set -eux; \
+    ARCH="linux-x64"; \
+    NODE_VERSION="v20.19.0"; \
+    mkdir -p /opt/node20; \
+    (curl -fsSL --retry 3 https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz || \
+    curl -fsSL --retry 3 https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz); \
+    tar -xJf /tmp/node20.tar.xz -C /opt/node20 --strip-components=1; \
+    rm /tmp/node20.tar.xz
+
+WORKDIR /app/miner
+COPY miner/package.json miner/package-lock.json /app/miner/
+RUN PATH=/opt/node20/bin:$PATH npm install --no-audit --prefer-offline
+COPY miner /app/miner
+
 # ----------- ENTRYPOINT -----------
 WORKDIR /app
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -178,6 +194,6 @@ ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
     PYTHONUNBUFFERED=1 \
     LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH}
 
-EXPOSE 5008 3000
+EXPOSE 5008 3000 4000 8000
 
 CMD ["entrypoint.sh"]

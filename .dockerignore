@@ -4,6 +4,7 @@
 __pycache__/
 frontend/node_modules
 frontend/dist
+miner/node_modules
 backend/app.log
 tests/
 docker-compose.yml
