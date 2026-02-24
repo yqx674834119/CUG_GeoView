@@ -1,0 +1,42 @@
+# Task Checklist for GeoView Model Deployment
+
+- [x] Explore Project Structure and Identify Functional Pages
+    - [x] List root directory
+    - [x] List frontend/backend directories to map UI components to backend endpoints
+    - [x] Identify existing model integration points
+- [x] Research SOTA Models for Specified Datasets
+    - [x] Multimodal Registration (SEN1-2)
+    - [x] Small Object Detection (DOTA-v1.5)
+    - [x] Super Resolution (DF2K)
+    - [x] Change Detection (LEVIR-CD)
+    - [x] Tracking (SatSOT)
+    - [x] Fine-grained Detection (FAIR1M)
+- [x] Create Implementation Plan
+    - [x] Define Docker environment changes
+    - [x] Define backend API changes
+    - [x] Define frontend integration steps
+- [x] Deployment - Multimodal Remote Sensing Data Automatic Target Registration
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend (if needed)
+- [x] Deployment - Small Scale Target Detection (Feature-level fusion)
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend
+- [x] Deployment - Super Resolution Reconstruction
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend
+- [x] Deployment - Multi-target Change Detection
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend
+- [x] Deployment - Static Target Tracking and Early Warning
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend
+- [x] Deployment - Fine-grained Remote Sensing Target Detection
+    - [x] Implement/Integrate Model
+    - [x] Update Backend
+    - [x] Update Frontend
+- [ ] Verify All Deployments

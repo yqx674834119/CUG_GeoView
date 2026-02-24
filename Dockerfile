@@ -100,7 +100,16 @@ RUN conda run -n MMSeg310 pip install \
     "scipy<1.14" && \
     # Patch mmseg to accept mmcv 2.2.0 (change < 2.2.0 to <= 2.2.0)
     conda run -n MMSeg310 sed -i "s/MMCV_MAX = '2.2.0'/MMCV_MAX = '2.3.0'/" /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmseg/__init__.py && \
+    # Install MMRotate for Oriented Object Detection (DOTA, FAIR1M)
+    conda run -n MMSeg310 mim install "mmrotate==1.0.0rc1" && \
     conda run -n MMSeg310 pip cache purge
+
+# Install Kornia and dependencies for Registration/Tracking in HFPyTorch310
+RUN conda run -n HFPyTorch310 pip install \
+    kornia==0.7.1 \
+    kornia_moons \
+    opencv-python-headless \
+    matplotlib
 
 
 # Install Node.js 18

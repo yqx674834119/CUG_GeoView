@@ -15,7 +15,7 @@ from applications.common.utils.upload import img_url_handle
 from applications.extensions import db
 from applications.image_processing import histogram_match
 from applications.interface.analysis import change_detection, object_detection, terrain_classification, hole_handle, \
-    handle, classification, image_restoration
+    handle, classification, image_restoration, registration, tracking
 from applications.interface.compute_variation import compute_variation
 from applications.interface.draw_mask import draw_masks
 from applications.interface.utils import get_model_info
@@ -99,8 +99,9 @@ def object_detection_api():
     
     # 检查是否为 HuggingFace 模型
     is_hf_model = model_path.startswith("hf:")
+    is_mmrotate_model = model_path.startswith("mmrotate:")
     
-    if not is_hf_model:
+    if not is_hf_model and not is_mmrotate_model:
         try:
             model_info = get_model_info(model_path)
             if model_info["_Attributes"]["model_type"] != "detector":
@@ -239,6 +240,71 @@ def image_restoration_api():
         return success_api()
     except Exception as e:
         return fail_api(f"推理失败: {str(e)}")
+
+
+"""
+    多模态自动配准
+"""
+
+
+@analysis_api.post('/registration')
+def registration_api():
+    req_json = request.json
+    list_ = req_json.get("list")
+    
+    if not list_:
+        return fail_api("请上传图片")
+        
+    for pair in list_:
+        if "first" not in pair or "second" not in pair:
+            return fail_api("请求参数异常")
+            
+    try:
+        # type_ = 6 (assumed new type for registration)
+        registration(up_dir, generate_dir, list_, type_=6)
+        return success_api()
+    except Exception as e:
+        return fail_api(f"配准失败: {str(e)}")
+
+
+"""
+    全域静态目标跟踪与预警
+"""
+
+
+@analysis_api.post('/tracking')
+def tracking_api():
+    req_json = request.json
+    # tracking input usually a video or image sequence folder
+    # For now support single video file upload (which backend might have saved)
+    # or folder path if provided
+    
+    input_path = req_json.get("input_path") # e.g. uploaded video path
+    rect = req_json.get("rect") # [x, y, w, h]
+    
+    if not input_path:
+        return fail_api("请提供输入视频/图像序列")
+    if not rect or len(rect) != 4:
+         return fail_api("请提供初始跟踪框")
+         
+    # input_path needs to be handled. If it's a relative path from upload, resolve it.
+    # Assuming frontend uploads video and gets a path, or uploads images.
+    # For simplicity, assume input_path is relative to up_dir or is a full path.
+    
+    # If input is a list of images (sequence)
+    if isinstance(input_path, list):
+         # TODO: handle list of images
+         pass
+    else:
+         # Assume absolute or relative to up_dir
+         if not os.path.exists(input_path):
+             input_path = os.path.join(up_dir, input_path)
+             
+    try:
+        res = tracking(input_path, generate_dir, rect, type_=7)
+        return success_api(data=res)
+    except Exception as e:
+        return fail_api(f"跟踪失败: {str(e)}")
 
 
 """

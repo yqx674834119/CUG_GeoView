@@ -354,6 +354,70 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
     print("图像复原----------------->end")
 
 
+def registration(data_path, out_dir, names, type_):
+    """
+    多模态自动配准
+    """
+    import applications.interface.registration as REG
+    
+    print("自动配准----------------->start")
+    imgs = list()
+    for j, pair in enumerate(names):
+        names[j]["first"] = img_url_handle(pair["first"])
+        names[j]["second"] = img_url_handle(pair["second"])
+        
+    # Execute registration
+    retPics = REG.execute(data_path, out_dir, names)
+    
+    # Save to database
+    for i, pair in enumerate(names):
+        first_ = up_url + pair["first"]
+        # retPics contains the URL of the registered first image
+        retPic = retPics[i]
+        second_ = img_url_handle(pair["second"]) # Target image
+        
+        # Save analysis record
+        # We save "first" (source), "retPic" (registered source), "second" (target)
+        # Note: save_analysis might need adaptation if we want to store target image explicitly
+        # Current schema has before_img, before_img1, after_img. 
+        # So: before_img=source, before_img1=target, after_img=registered
+        save_analysis(type_, first_, retPic, pic2=up_url + second_, data="")
+        
+    print("自动配准----------------->end")
+
+
+def tracking(input_path, out_dir, rect, type_):
+    """
+    目标跟踪
+    """
+    import applications.interface.tracking as TRACK
+    
+    print("目标跟踪----------------->start")
+    
+    # Execute tracking
+    # rect is [x, y, w, h]
+    video_url = TRACK.execute(input_path, out_dir, rect)
+    
+    # Save to database
+    # Input is video path, output is video path
+    # We might need to handle video URL generation if it's a file path
+    
+    # For db record:
+    # before_img = input video (or first frame)
+    # after_img = output video with boxes
+    
+    input_url = ""
+    if input_path.startswith(up_dir):
+        input_url = up_url + os.path.relpath(input_path, up_dir)
+    else:
+        input_url = input_path # Or handle accordingly
+        
+    save_analysis(type_, input_url, video_url, pic2="", data=json.dumps({"rect": rect}))
+    
+    print("目标跟踪----------------->end")
+    return video_url
+
+
 def handle(fun_type, imgs, src_dir, save_dir, prefix=""):
     """
 

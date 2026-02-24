@@ -4,8 +4,8 @@ const Home = () => import('@/views/Home.vue')
 const DetectChanges = () => import('@/views/mainfun/DetectChanges.vue')
 const DetectObjects = () => import('@/views/mainfun/DetectObjects.vue')
 const Segmentation = () => import('@/views/mainfun/Segmentation.vue')
-const Classification = ()=> import('@/views/mainfun/Classification')
-const RestoreImgs = ()=> import('@/views/mainfun/RestoreImgs')
+const Classification = () => import('@/views/mainfun/Classification')
+const RestoreImgs = () => import('@/views/mainfun/RestoreImgs')
 // 在线地图模块已删除
 const History = () => import('@/views/history/History.vue')
 const NotFound = () => import('@/views/NotFound.vue')
@@ -28,20 +28,30 @@ const routes = [
         path: '/detectobjects',
         name: 'Detectobjects',
         component: DetectObjects
-      },  {
+      }, {
         path: '/segmentation',
         name: 'Segmentation',
         component: Segmentation
       },
       {
         path: '/classification',
-        name:'Classification',
-        component:Classification
+        name: 'Classification',
+        component: Classification
       },
       {
-        path:'/restoreimgs',
-        name:'Restoreimgs',
-        component:RestoreImgs
+        path: '/restoreimgs',
+        name: 'Restoreimgs',
+        component: RestoreImgs
+      },
+      {
+        path: '/registration',
+        name: 'Registration',
+        component: () => import('@/views/mainfun/Registration.vue')
+      },
+      {
+        path: '/tracking',
+        name: 'Tracking',
+        component: () => import('@/views/mainfun/Tracking.vue')
       },
       {
         path: '/history',

@@ -32,7 +32,7 @@ function goRestoreImgs() {
     } else this.$router.push("restoreimgs");
 }
 
-function goOnlineMap(){
+function goOnlineMap() {
     this.isNavigator = false
     if (this.$route.path === "/onlinemap") {
         this.$message.success('您已经在该界面了哦')
@@ -46,4 +46,18 @@ function goHistory() {
 
         });
 }
-export { goDetectChanges, goDetectObjects, goSegmentation,goClassification,goRestoreImgs,goOnlineMap,goHistory }
+function goRegistration() {
+    this.isNavigator = false;
+    if (this.$route.path === "/registration") {
+        this.$message.success('您已经在该界面了哦')
+    } else this.$router.push("registration");
+}
+
+function goTracking() {
+    this.isNavigator = false;
+    if (this.$route.path === "/tracking") {
+        this.$message.success('您已经在该界面了哦')
+    } else this.$router.push("tracking");
+}
+
+export { goDetectChanges, goDetectObjects, goSegmentation, goClassification, goRestoreImgs, goOnlineMap, goHistory, goRegistration, goTracking }

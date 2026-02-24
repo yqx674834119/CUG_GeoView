@@ -29,7 +29,8 @@ def create_app(config_name=None):
     init_plugs(app)
 
     # 初始化数据库
-    init_script(app)
+    if config_name != 'testing':
+        init_script(app)
 
     # 注册路由
     system_api(app)

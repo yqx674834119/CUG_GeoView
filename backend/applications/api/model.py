@@ -47,7 +47,14 @@ HUGGINGFACE_MODELS = {
             "model_type": "detector",
             "model_name": "航拍多目标识别",
             "backend": "huggingface",
-            "description": "用途：航拍图像目标检测。支持类别：车辆、人员、建筑、船只、自行车、集装箱、卡车、油罐、挖掘机、太阳能板、公交等12类民用目标。特点：专为无人机和卫星图像优化，需要ultralytics包支持。"
+            "description": "用途：航拍图像目标检测。支持类别：车辆、人员、建筑、船只、自行车、集装箱、卡车、油罐、挖掘机、太阳能板、公交等12类民用目标。"
+        },
+        {
+            "model_path": "mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90",
+            "model_type": "detector",
+            "model_name": "定向目标检测 (Oriented RCNN)",
+            "backend": "mmrotate",
+            "description": "用途：针对航拍图像中的旋转目标进行检测。特点：Oriented R-CNN 算法，DOTA 数据集训练，能够准确检测任意方向的密集排列物体。"
         }
     ],
     "semantic_segmentation": [
@@ -57,6 +64,24 @@ HUGGINGFACE_MODELS = {
             "model_name": "多要素地物分类",
             "backend": "mmsegmentation",
             "description": "用途：地物分类。支持类别：草地、林地、建筑、道路、裸地、水体。特点：结合DinoV3自监督特征和SwinTransformer，适合遥感复杂场景，泛化性强。"
+        }
+    ],
+    "registration": [
+        {
+            "model_path": "hf:kornia/loftr",
+            "model_type": "register",
+            "model_name": "LoFTR 深度特征配准",
+            "backend": "kornia",
+            "description": "用途：多模态/大视角差异图像自动配准。特点：基于Transformer的局部特征匹配，无需检测关键点，对弱纹理和重复纹理鲁棒性强。"
+        }
+    ],
+    "tracking": [
+        {
+            "model_path": "hf:opencv/csrt",
+            "model_type": "tracker",
+            "model_name": "CSRT 目标跟踪",
+            "backend": "opencv",
+            "description": "用途：单目标持续跟踪。特点：判别相关滤波器(DCF)与通道和空间可靠性(CSR)结合，适应目标形变和遮挡，精度较高。"
         }
     ]
 }
@@ -142,7 +167,9 @@ def get_model_list(model_type):
         "classification": "classifier",
         "image_restoration": "restorer",
         "object_detection": "detector",
-        "semantic_segmentation": "segmenter"
+        "semantic_segmentation": "segmenter",
+        "registration": "register",
+        "tracking": "tracker"
     }
     if model_type not in types_list:
         return fail_api("模型类型不正确")

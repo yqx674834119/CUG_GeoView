@@ -53,15 +53,35 @@ def call_hf_super_resolution(
     abs_out_dir = os.path.abspath(out_dir)
     
     file_names_str = ",".join(names)
-    cmd = [
-        "conda", "run", "-n", HF_CONDA_ENV,
-        "python", HF_SR_SCRIPT,
-        "--model_id", model_id,
-        "--input_dir", abs_data_path,
-        "--output_dir", abs_out_dir,
-        "--file_names", file_names_str,
-        "--device", device
+    candidate_paths = [
+        "/opt/conda/envs/HFPyTorch310/bin/python",
+        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
     ]
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+
+    if python_executable:
+        cmd = [
+            python_executable, HF_SR_SCRIPT,
+            "--model_id", model_id,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
+    else:
+        cmd = [
+            "conda", "run", "-n", HF_CONDA_ENV,
+            "python", HF_SR_SCRIPT,
+            "--model_id", model_id,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
     
     print(f"[HF-Caller] Executing: {' '.join(cmd)}", flush=True)
     
@@ -170,15 +190,35 @@ def call_hf_object_detection(
     abs_out_dir = os.path.abspath(out_dir)
     
     file_names_str = ",".join(names)
-    cmd = [
-        "conda", "run", "-n", HF_CONDA_ENV,
-        "python", HF_OD_SCRIPT,
-        "--model_id", model_id,
-        "--input_dir", abs_data_path,
-        "--output_dir", abs_out_dir,
-        "--file_names", file_names_str,
-        "--device", device
+    candidate_paths = [
+        "/opt/conda/envs/HFPyTorch310/bin/python",
+        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
     ]
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+
+    if python_executable:
+        cmd = [
+            python_executable, HF_OD_SCRIPT,
+            "--model_id", model_id,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
+    else:
+        cmd = [
+            "conda", "run", "-n", HF_CONDA_ENV,
+            "python", HF_OD_SCRIPT,
+            "--model_id", model_id,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
     
     print(f"[HF-Caller] Executing OD: {' '.join(cmd)}", flush=True)
     
@@ -222,5 +262,175 @@ def call_hf_object_detection(
     except json.JSONDecodeError as e:
         print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
         raise RuntimeError(f"Failed to parse inference output: {e}")
-    """返回支持的模型列表"""
-    return SUPPORTED_MODELS
+
+# HuggingFace Registration Script Path
+HF_REG_SCRIPT = os.path.join(_curr_dir, "hf_registration.py")
+
+def call_hf_registration(
+    data_path: str,
+    out_dir: str,
+    pairs: List[dict],
+    device: str = "auto",
+    timeout: int = 600
+) -> List[str]:
+    """
+    Call HuggingFace Registration model (Kornia)
+    pairs: [{"first": "a.jpg", "second": "b.jpg"}, ...]
+    """
+    if not pairs:
+        return []
+        
+    abs_data_path = os.path.abspath(data_path)
+    abs_out_dir = os.path.abspath(out_dir)
+    
+    # Serialize pairs to JSON string for CLI argument
+    pairs_json = json.dumps(pairs)
+    
+    candidate_paths = [
+        "/opt/conda/envs/HFPyTorch310/bin/python",
+        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
+    ]
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+
+    if python_executable:
+        cmd = [
+            python_executable, HF_REG_SCRIPT,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_pairs", pairs_json,
+            "--device", device
+        ]
+    else:
+        cmd = [
+            "conda", "run", "-n", HF_CONDA_ENV,
+            "python", HF_REG_SCRIPT,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_pairs", pairs_json,
+            "--device", device
+        ]
+    
+    print(f"[HF-Caller] Executing Reg: {' '.join(cmd)}", flush=True)
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir
+        )
+        
+        if result.returncode != 0:
+            print(f"[HF-Caller] Reg Error output: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"Registration inference failed: {result.stderr}")
+            
+        output_data = json.loads(result.stdout.strip())
+        
+        if output_data.get("status") != "completed":
+             raise RuntimeError(f"Reg Inference incomplete: {output_data}")
+             
+        temps = []
+        result_map = {res["name"]: res for res in output_data.get("results", [])}
+        
+        for pair in pairs:
+            name1 = pair['first']
+            expected_out_name = f"reg_{name1}"
+            
+            res = result_map.get(expected_out_name)
+            if not res:
+                raise RuntimeError(f"No result returned for: {name1}")
+                
+            if res.get("status") == "success":
+                temps.append(generate_url + res["name"])
+            else:
+                 error_msg = res.get("message", "Unknown error")
+                 raise RuntimeError(f"Processing failed for {name1}: {error_msg}")
+                 
+        return temps
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Registration inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse inference output: {e}")
+
+
+# HuggingFace Tracking Script Path
+HF_TRACK_SCRIPT = os.path.join(_curr_dir, "hf_tracking.py")
+
+def call_hf_tracking(
+    input_path: str,
+    output_path: str,
+    rect: List[int],
+    device: str = "auto",
+    timeout: int = 1200
+) -> str:
+    """
+    Call HuggingFace Tracking model (OpenCV CSRT)
+    rect: [x, y, w, h]
+    """
+    abs_input_path = os.path.abspath(input_path)
+    abs_output_path = os.path.abspath(output_path)
+    rect_str = ",".join(map(str, rect))
+    
+    candidate_paths = [
+        "/opt/conda/envs/HFPyTorch310/bin/python",
+        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
+    ]
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+
+    if python_executable:
+        cmd = [
+            python_executable, HF_TRACK_SCRIPT,
+            "--input", abs_input_path,
+            "--output", abs_output_path,
+            "--rect", rect_str
+        ]
+    else:
+        cmd = [
+            "conda", "run", "-n", HF_CONDA_ENV,
+            "python", HF_TRACK_SCRIPT,
+            "--input", abs_input_path,
+            "--output", abs_output_path,
+            "--rect", rect_str
+        ]
+    
+    print(f"[HF-Caller] Executing Track: {' '.join(cmd)}", flush=True)
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir
+        )
+        
+        if result.returncode != 0:
+            print(f"[HF-Caller] Track Error output: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"Tracking inference failed: {result.stderr}")
+            
+        output_data = json.loads(result.stdout.strip())
+        
+        if output_data.get("status") != "completed":
+             raise RuntimeError(f"Track Inference incomplete: {output_data}")
+             
+        return generate_url + os.path.basename(output_path)
+        
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Tracking inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse inference output: {e}")
+
+if __name__ == "__main__":
+    pass

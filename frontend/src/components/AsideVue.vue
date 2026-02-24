@@ -95,6 +95,32 @@
       </h3>
     </el-menu-item>
 
+    <el-menu-item
+      index="/registration"
+      @click="goRegistration"
+    >
+      <i
+        v-show="isCollapse"
+        class="el-icon-picture-outline-round" 
+      />
+      <h3 v-show="!isCollapse">
+        <i class="el-icon-picture-outline-round" />多模态自动配准
+      </h3>
+    </el-menu-item>
+
+    <el-menu-item
+      index="/tracking"
+      @click="goTracking"
+    >
+      <i
+        v-show="isCollapse"
+        class="el-icon-aim"
+      />
+      <h3 v-show="!isCollapse">
+        <i class="el-icon-aim" />全域目标跟踪
+      </h3>
+    </el-menu-item>
+
     <!-- 在线地图菜单项已删除 -->
 
     <el-divider content-position="center">
@@ -133,7 +159,9 @@ import {
   goSegmentation,
   goClassification,
   goRestoreImgs,
-  goHistory
+  goHistory,
+  goRegistration,
+  goTracking
 } from "@/utils/gosomewhere.js";
 // goOnlineMap 已删除
 export default {
@@ -154,6 +182,8 @@ export default {
     goClassification,
     goRestoreImgs,
     goHistory,
+    goRegistration,
+    goTracking,
     // goOnlineMap 已删除
     goShow() {
       this.$message.success('欢迎使用智能遥感解译系统')

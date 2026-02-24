@@ -38,6 +38,18 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
             names=names
         )
 
+    # 检查是否为 MMRotate 模型 (e.g., mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90)
+    if model_path.startswith("mmrotate:"):
+        from applications.interface.mmseg_inference_caller import call_mmrotate_inference
+        config_name = model_path[9:] # 去掉 'mmrotate:' 前缀
+        print(f"[OD-DEBUG] Routing to MMRotate inference: {config_name}")
+        return call_mmrotate_inference(
+            config_name=config_name,
+            data_path=data_path,
+            out_dir=out_dir,
+            names=names
+        )
+
     image_list = [osp.join(data_path, name) for name in names]
     print("[OD-DEBUG] 开始执行，模型目录:", model_path, flush=True)
     print("[OD-DEBUG] 数据目录:", data_path, flush=True)

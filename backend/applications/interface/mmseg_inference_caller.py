@@ -226,6 +226,117 @@ SUPPORTED_MODELS = {
 }
 
 
-def get_supported_models():
-    """返回支持的模型列表"""
-    return SUPPORTED_MODELS
+# MMRotate Inference Script Constant
+MMROTATE_SCRIPT = os.path.join(_curr_dir, "mmrotate_inference.py")
+
+def call_mmrotate_inference(
+    config_name: str,
+    data_path: str,
+    out_dir: str,
+    names: List[str],
+    device: str = "cuda:0",
+    timeout: int = 1200
+) -> List[str]:
+    """
+    Call MMRotate for oriented object detection
+    """
+    if not names:
+        return []
+
+    abs_data_path = os.path.abspath(data_path)
+    abs_out_dir = os.path.abspath(out_dir)
+    file_names_str = ",".join(names)
+
+    candidate_paths = [
+        "/opt/conda/envs/MMSeg310/bin/python",
+        "/home/livablecity/miniconda3/envs/MMSeg310/bin/python",
+    ]
+    python_executable = None
+    for path in candidate_paths:
+        if os.path.exists(path):
+            python_executable = path
+            break
+
+    if python_executable:
+        cmd = [
+            python_executable, MMROTATE_SCRIPT,
+            "--config", config_name,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
+    else:
+        cmd = [
+            "conda", "run", "-n", MMSEG_CONDA_ENV,
+            "python", MMROTATE_SCRIPT,
+            "--config", config_name,
+            "--input_dir", abs_data_path,
+            "--output_dir", abs_out_dir,
+            "--file_names", file_names_str,
+            "--device", device
+        ]
+
+    print(f"[MMRotate-Caller] Executing: {' '.join(cmd)}", flush=True)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir
+        )
+
+        if result.returncode != 0:
+            print(f"[MMRotate-Caller] Error output: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"MMRotate inference failed: {result.stderr}")
+
+        # Parse JSON output
+        output_data = None
+        stdout_lines = result.stdout.strip().split('\n')
+        for line in reversed(stdout_lines):
+            try:
+                if line.strip().startswith('{') and '"status": "completed"' in line:
+                    output_data = json.loads(line)
+                    break
+            except json.JSONDecodeError:
+                continue
+        
+        if output_data is None:
+             # Try passing strictly the last line if previous heuristic fails
+             try:
+                 output_data = json.loads(stdout_lines[-1])
+             except:
+                 raise RuntimeError(f"Could not find valid JSON output in stdout: {result.stdout}")
+
+        if output_data.get("status") != "completed":
+            raise RuntimeError(f"Inference incomplete: {output_data}")
+
+        temps = []
+        result_map = {res["name"]: res for res in output_data.get("results", [])}
+
+        for name in names:
+            expected_out_name = f"det_{name}"
+            res = result_map.get(expected_out_name)
+            
+            if not res:
+                res = result_map.get(name)
+
+            if not res:
+                 raise RuntimeError(f"No result returned for file: {name}")
+
+            if res.get("status") == "success":
+                temps.append(generate_url + res["name"])
+            else:
+                error_msg = res.get("message", "Unknown error")
+                print(f"[MMRotate-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
+                raise RuntimeError(f"Processing failed for {name}: {error_msg}")
+
+        return temps
+
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"MMRotate inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[MMRotate-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse inference output: {e}")
