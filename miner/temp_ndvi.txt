@@ -1,0 +1,1 @@
+{"fid":11647,"ndvi_data":[{"year":2017,"ndvi_value":"0.524"},{"year":2019,"ndvi_value":"0.395"},{"year":2021,"ndvi_value":"0.356"},{"year":2023,"ndvi_value":"0.421"},{"year":2025,"ndvi_value":"0.373"}],"ndvi_mean":0.414,"ndvi_trend":-0.0138,"mk_trend":"ÏÂ½µÇ÷ÊÆ"}
