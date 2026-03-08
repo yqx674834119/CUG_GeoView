@@ -31,8 +31,10 @@ services:
       - /app/frontend/node_modules
       - ./miner:/app/miner
       - /app/miner/node_modules
-      # HuggingFace model cache (persists across container restarts)
+      # HuggingFace & other models cache (persists across container restarts)
       - hf_cache:/root/.cache/huggingface
+      - torch_cache:/root/.cache/torch
+      - paddle_cache:/root/.paddle
 
     restart: unless-stopped
     deploy:
@@ -61,3 +63,5 @@ services:
 volumes:
   mysql-data:
   hf_cache:
+  torch_cache:
+  paddle_cache:
