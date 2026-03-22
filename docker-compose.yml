@@ -21,6 +21,9 @@ services:
       FLASK_CONFIG: production
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
     depends_on:
       - mysql
     volumes:
@@ -31,10 +34,10 @@ services:
       - /app/frontend/node_modules
       - ./miner:/app/miner
       - /app/miner/node_modules
-      # HuggingFace & other models cache (persists across container restarts)
-      - hf_cache:/root/.cache/huggingface
-      - torch_cache:/root/.cache/torch
-      - paddle_cache:/root/.paddle
+      # HuggingFace & other models cache (persists across container restarts and supports offline deployment)
+      - ./offline_cache/huggingface:/root/.cache/huggingface
+      - ./offline_cache/torch:/root/.cache/torch
+      - ./offline_cache/paddle:/root/.paddle
 
     restart: unless-stopped
     deploy:
@@ -62,6 +65,3 @@ services:
 
 volumes:
   mysql-data:
-  hf_cache:
-  torch_cache:
-  paddle_cache:
