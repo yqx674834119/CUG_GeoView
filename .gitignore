@@ -12,3 +12,4 @@ frontend/build/*
 miner/frontend/node_modules/*
 miner/frontend/dist/*
 miner/frontend/build/*
+backend/applications/interface/checkpoints/*

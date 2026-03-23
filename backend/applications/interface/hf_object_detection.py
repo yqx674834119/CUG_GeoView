@@ -18,6 +18,7 @@ import sys
 import time
 import traceback
 from datetime import datetime
+from contextlib import redirect_stdout
 
 # Configure logging
 def log(msg: str, level: str = "INFO"):
@@ -101,7 +102,13 @@ class ModelHandler:
         from PIL import Image
         
         image = Image.open(image_path).convert("RGB")
-        inputs = self.processor(images=[image], return_tensors="pt", padding=True).to(self.device)
+        # DETR-family processors are more stable here when we preprocess a single
+        # image and move tensor fields to the target device ourselves.
+        inputs = self.processor(images=image, return_tensors="pt")
+        inputs = {
+            key: value.to(self.device) if hasattr(value, "to") else value
+            for key, value in inputs.items()
+        }
         
         with torch.no_grad():
             outputs = self.model(**inputs)
@@ -121,8 +128,15 @@ class ModelHandler:
         return image, processed_results
 
     def _predict_ultralytics(self, image_path, threshold):
-        # Ultralytics load image internally or accept path
-        results = self.model.predict(image_path, conf=threshold, device=self.device)
+        # Ultralytics may write progress lines to stdout, which breaks the parent
+        # subprocess JSON parser. Suppress its normal console output.
+        with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull):
+            results = self.model.predict(
+                image_path,
+                conf=threshold,
+                device=self.device,
+                verbose=False
+            )
         result = results[0]
         
         processed_results = []

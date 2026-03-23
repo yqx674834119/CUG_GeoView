@@ -290,7 +290,10 @@ def call_mmrotate_inference(
 
         if result.returncode != 0:
             print(f"[MMRotate-Caller] Error output: {result.stderr}", file=sys.stderr)
-            raise RuntimeError(f"MMRotate inference failed: {result.stderr}")
+            raise RuntimeError(
+                "MMRotate inference failed: "
+                f"stderr={result.stderr.strip()} stdout={result.stdout.strip()}"
+            )
 
         # Parse JSON output
         output_data = None

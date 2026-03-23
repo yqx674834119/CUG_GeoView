@@ -67,6 +67,10 @@ RUN conda run -n HFPyTorch310 pip install \
     conda run -n HFPyTorch310 pip install \
     transformers==4.36.2 huggingface_hub \
     timm scipy "numpy<2" ultralytics && \
+    conda run -n HFPyTorch310 pip install --force-reinstall \
+    "numpy<2" \
+    "opencv-python<4.11" \
+    "opencv-python-headless<4.11" && \
     conda run -n HFPyTorch310 pip cache purge
 
 # Set HuggingFace mirror for China (optional, helps with network issues)
@@ -77,17 +81,17 @@ ENV HF_ENDPOINT=https://hf-mirror.com
 RUN conda create -y -n MMSeg310 python=3.10 gdal && \
     conda clean -afy
 
-# Install PyTorch 2.4 with CUDA 11.8 support in MMSeg310
+# Install a PyTorch release with broad OpenMMLab wheel support in MMSeg310
 RUN conda run -n MMSeg310 pip install \
-    torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu118
+    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
 
 # Install OpenMMLab dependencies in MMSeg310
 RUN conda run -n MMSeg310 pip install \
     openmim==0.3.9 && \
     conda run -n MMSeg310 mim install mmengine==0.10.4 && \
-    conda run -n MMSeg310 mim install "mmcv==2.2.0"
+    conda run -n MMSeg310 mim install "mmcv==2.1.0"
 
-# Install MMSegmentation 1.2.2 and patch version check for MMCV 2.2.0 compatibility
+# Install MMSegmentation / MMRotate with mutually compatible OpenMMLab versions
 RUN conda run -n MMSeg310 pip install \
     mmsegmentation==1.2.2 \
     transformers==4.36.2 \
@@ -98,17 +102,18 @@ RUN conda run -n MMSeg310 pip install \
     ftfy \
     regex \
     "scipy<1.14" && \
-    # Patch mmseg to accept mmcv 2.2.0 (change < 2.2.0 to <= 2.2.0)
-    conda run -n MMSeg310 sed -i "s/MMCV_MAX = '2.2.0'/MMCV_MAX = '2.3.0'/" /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmseg/__init__.py && \
-    # Install MMRotate for Oriented Object Detection (DOTA, FAIR1M)
+    conda run -n MMSeg310 mim install "mmdet>=3.0.0rc5,<3.1.0" && \
     conda run -n MMSeg310 mim install "mmrotate==1.0.0rc1" && \
+    conda run -n MMSeg310 pip install --force-reinstall \
+    "numpy<2" \
+    "opencv-python<4.11" && \
     conda run -n MMSeg310 pip cache purge
 
 # Install Kornia and dependencies for Registration/Tracking in HFPyTorch310
 RUN conda run -n HFPyTorch310 pip install \
     kornia==0.7.1 \
     kornia_moons \
-    opencv-python-headless \
+    "opencv-python-headless<4.11" \
     matplotlib
 
 

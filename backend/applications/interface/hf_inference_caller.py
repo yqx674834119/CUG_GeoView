@@ -25,6 +25,30 @@ _curr_dir = os.path.dirname(os.path.abspath(__file__))
 HF_SR_SCRIPT = os.path.join(_curr_dir, "hf_super_resolution.py")
 
 
+def _parse_json_from_stdout(stdout: str) -> dict:
+    """Extract the final JSON payload from a subprocess stdout stream."""
+    stdout = (stdout or "").strip()
+    if not stdout:
+        raise json.JSONDecodeError("empty stdout", "", 0)
+
+    # Fast path for clean JSON-only output.
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        pass
+
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            continue
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+    raise json.JSONDecodeError("no json object found in stdout", stdout, 0)
+
+
 def call_hf_super_resolution(
     model_id: str,
     data_path: str,
@@ -96,10 +120,13 @@ def call_hf_super_resolution(
         
         if result.returncode != 0:
             print(f"[HF-Caller] Error output: {result.stderr}", file=sys.stderr)
-            raise RuntimeError(f"HuggingFace inference failed: {result.stderr}")
+            raise RuntimeError(
+                "HuggingFace inference failed: "
+                f"stderr={result.stderr.strip()} stdout={result.stdout.strip()}"
+            )
         
         # 解析 JSON 输出
-        output_data = json.loads(result.stdout.strip())
+        output_data = _parse_json_from_stdout(result.stdout)
         
         if output_data.get("status") != "completed":
             raise RuntimeError(f"Inference incomplete: {output_data}")
@@ -233,9 +260,12 @@ def call_hf_object_detection(
         
         if result.returncode != 0:
             print(f"[HF-Caller] OD Error output: {result.stderr}", file=sys.stderr)
-            raise RuntimeError(f"HuggingFace inference failed: {result.stderr}")
+            raise RuntimeError(
+                "HuggingFace inference failed: "
+                f"stderr={result.stderr.strip()} stdout={result.stdout.strip()}"
+            )
         
-        output_data = json.loads(result.stdout.strip())
+        output_data = _parse_json_from_stdout(result.stdout)
         
         if output_data.get("status") != "completed":
             raise RuntimeError(f"OD Inference incomplete: {output_data}")

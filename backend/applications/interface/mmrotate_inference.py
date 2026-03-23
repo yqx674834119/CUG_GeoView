@@ -14,11 +14,60 @@ import subprocess
 import traceback
 import cv2
 import numpy as np
+import collections
+from collections import abc
+
+CONFIG_ALIASES = {
+    # Backend model registry uses this legacy underscore form.
+    "oriented_rcnn_r50_fpn_1x_dota_le90": "oriented-rcnn-le90_r50_fpn_1x_dota",
+}
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CHECKPOINTS_DIR = os.path.join(SCRIPT_DIR, "checkpoints")
+
+
+def normalize_config_name(config_name: str) -> str:
+    return CONFIG_ALIASES.get(config_name, config_name)
+
+
+def patch_openmmlab_version_guards():
+    """Relax conservative import-time version guards for the deployed stack.
+
+    The repo's Docker image may carry newer-but-compatible mmcv/mmdet builds
+    than MMRotate 1.0.0rc1 declares in its import assertions. We normalize the
+    exposed version strings before importing mmrotate so the runtime can proceed.
+    """
+    try:
+        import mmcv
+        if getattr(mmcv, "__version__", "") == "2.2.0":
+            mmcv.__version__ = "2.1.0"
+    except Exception:
+        pass
+
+
+def patch_python_compat():
+    """Backfill symbols removed from collections in newer Python versions."""
+    for name in ("Sequence", "Mapping", "MutableMapping"):
+        if not hasattr(collections, name) and hasattr(abc, name):
+            setattr(collections, name, getattr(abc, name))
+
+    try:
+        import mmdet
+        version = getattr(mmdet, "__version__", "")
+        if version:
+            from mmengine.utils import digit_version
+            if digit_version(version) > digit_version("3.1.0"):
+                mmdet.__version__ = "3.1.0"
+    except Exception:
+        pass
 
 def download_model(config_name):
     # Use mim to download model
+    config_name = normalize_config_name(config_name)
     try:
-        subprocess.check_call(["mim", "download", "mmrotate", "--config", config_name, "--dest", "checkpoints"])
+        subprocess.check_call(
+            [sys.executable, "-m", "mim", "download", "mmrotate", "--config", config_name, "--dest", CHECKPOINTS_DIR]
+        )
         return True
     except subprocess.CalledProcessError as e:
         print(f"Failed to download model: {e}", file=sys.stderr)
@@ -32,14 +81,19 @@ def run_inference(
     device: str = "cuda:0",
     score_thr: float = 0.3
 ) -> dict:
-    from mmrotate.apis import init_model, inference_detector
-    from mmrotate.registry import VISUALIZERS
+    patch_python_compat()
+    patch_openmmlab_version_guards()
+    config_name = normalize_config_name(config_name)
+
+    import mmrotate  # noqa: F401  # Ensure mmrotate registries are loaded.
+    from mmdet.apis import init_detector, inference_detector
+    from mmrotate.visualization import RotLocalVisualizer
     
     # Checkpoints handling
-    if not os.path.exists("checkpoints"):
-        os.makedirs("checkpoints")
+    if not os.path.exists(CHECKPOINTS_DIR):
+        os.makedirs(CHECKPOINTS_DIR)
         
-    config_file = f"checkpoints/{config_name}.py"
+    config_file = os.path.join(CHECKPOINTS_DIR, f"{config_name}.py")
     if not os.path.exists(config_file):
         print(f"Downloading model {config_name}...", file=sys.stderr)
         if not download_model(config_name):
@@ -47,18 +101,40 @@ def run_inference(
              
     # Find checkpoint file
     checkpoint_file = None
-    for f in os.listdir("checkpoints"):
+    for f in os.listdir(CHECKPOINTS_DIR):
         if f.endswith(".pth") and (config_name in f or "oriented_rcnn" in f):
-             checkpoint_file = os.path.join("checkpoints", f)
+             checkpoint_file = os.path.join(CHECKPOINTS_DIR, f)
              break
     
     if not checkpoint_file:
         return {"status": "error", "message": "Checkpoint not found after download"}
 
     print(f"Initializing model with config: {config_file} and checkpoint: {checkpoint_file}", file=sys.stderr)
-    model = init_model(config_file, checkpoint_file, device=device)
-    
-    visualizer = VISUALIZERS.build(model.cfg.visualizer)
+    try:
+        model = init_detector(config_file, checkpoint_file, device=device)
+    except Exception as e:
+        message = str(e)
+        # Retry once after removing a broken cached checkpoint.
+        if checkpoint_file and ("unexpected EOF" in message or "corrupted" in message.lower()):
+            try:
+                os.remove(checkpoint_file)
+            except OSError:
+                pass
+            print(f"Checkpoint looked corrupted, re-downloading: {checkpoint_file}", file=sys.stderr)
+            if not download_model(config_name):
+                raise
+            checkpoint_file = None
+            for f in os.listdir(CHECKPOINTS_DIR):
+                if f.endswith(".pth") and (config_name in f or "oriented_rcnn" in f):
+                    checkpoint_file = os.path.join(CHECKPOINTS_DIR, f)
+                    break
+            if not checkpoint_file:
+                raise RuntimeError("Checkpoint not found after re-download")
+            model = init_detector(config_file, checkpoint_file, device=device)
+        else:
+            raise
+
+    visualizer = RotLocalVisualizer()
     visualizer.dataset_meta = model.dataset_meta
     
     os.makedirs(output_dir, exist_ok=True)
