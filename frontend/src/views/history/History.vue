@@ -8,7 +8,9 @@
           'iconfont icon-mubiaojiance': type === '目标检测',
           'iconfont icon-erfenleibianhuajiance16px': type === '地物分类',
           'iconfont icon-changjingguanli' : type === '场景分类',
-          'iconfont icon-jishu' : type === '影像超分重建'
+          'iconfont icon-jishu' : type === '影像超分重建',
+          'icon-registration': type === '自动配准',
+          'icon-tracking': type === '目标跟踪'
         }"
       />
     </div>
@@ -32,7 +34,9 @@
               'iconfont icon-erfenleibianhuajiance16px':
                 scope.row.type === '地物分类',
               'iconfont icon-changjingguanli' : scope.row.type === '场景分类',
-              'iconfont icon-jishu' : scope.row.type ==='影像超分重建'
+              'iconfont icon-jishu' : scope.row.type ==='影像超分重建',
+              'icon-registration' : scope.row.type === '自动配准',
+              'icon-tracking' : scope.row.type === '目标跟踪'
             }"
           />{{ scope.row.type }}
           </span>
@@ -49,7 +53,7 @@
           >
 
           <img
-            v-if="scope.row.type === '变化检测'"
+            v-if="scope.row.type === '变化检测' || scope.row.type === '自动配准'"
             :src="global.BASEURL + scope.row.before_img1"
             min-width="70"
             height="70"
@@ -86,7 +90,7 @@
             删除
           </el-button>
           <el-button
-            v-show="scope.row.type !== '变化检测'&&scope.row.type !=='场景分类'"
+            v-show="scope.row.type !== '变化检测'&&scope.row.type !=='场景分类'&&scope.row.type !== '自动配准'"
             size="default"
             type="primary"
             @click="previewTwoPic(scope.row.before_img, scope.row.after_img)"
@@ -102,7 +106,7 @@
             预览
           </el-button>
           <el-button
-            v-show="scope.row.type ==='变化检测'"
+            v-show="scope.row.type ==='变化检测' || scope.row.type === '自动配准'"
             size="default"
             type="primary"
             @click="
@@ -198,6 +202,22 @@
           </el-menu-item>
           <el-menu-item
             index="6"
+            @click="onlyOneFun('自动配准')"
+          >
+            <h3>
+              <i class="icon-registration" />多模态自动配准
+            </h3>
+          </el-menu-item>
+          <el-menu-item
+            index="7"
+            @click="onlyOneFun('目标跟踪')"
+          >
+            <h3>
+              <i class="icon-tracking" />全域目标跟踪
+            </h3>
+          </el-menu-item>
+          <el-menu-item
+            index="8"
             @click="onlyOneFun('')"
           >
             <h3><i class="iconfont icon-fuyuan" />列表复原</h3>

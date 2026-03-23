@@ -354,36 +354,49 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
     print("图像复原----------------->end")
 
 
-def registration(data_path, out_dir, names, type_):
+def registration(model_path, data_path, out_dir, names, type_):
     """
     多模态自动配准
     """
     import applications.interface.registration as REG
     
     print("自动配准----------------->start")
-    imgs = list()
     for j, pair in enumerate(names):
         names[j]["first"] = img_url_handle(pair["first"])
         names[j]["second"] = img_url_handle(pair["second"])
         
     # Execute registration
-    retPics = REG.execute(data_path, out_dir, names)
+    results = REG.execute(model_path, data_path, out_dir, names)
     
     # Save to database
     for i, pair in enumerate(names):
+        result = results[i]
+        if result.get("status") != "success":
+            continue
         first_ = up_url + pair["first"]
-        # retPics contains the URL of the registered first image
-        retPic = retPics[i]
-        second_ = img_url_handle(pair["second"]) # Target image
-        
-        # Save analysis record
-        # We save "first" (source), "retPic" (registered source), "second" (target)
-        # Note: save_analysis might need adaptation if we want to store target image explicitly
-        # Current schema has before_img, before_img1, after_img. 
-        # So: before_img=source, before_img1=target, after_img=registered
-        save_analysis(type_, first_, retPic, pic2=up_url + second_, data="")
+        second_ = up_url + pair["second"]
+        ret_pic = result["output_path"]
+        metadata = {
+            "pair_name": result.get("pair_name"),
+            "method_used": result.get("method_used"),
+            "transform_type": result.get("transform_type"),
+            "match_count": result.get("match_count"),
+            "inlier_count": result.get("inlier_count"),
+            "inlier_ratio": result.get("inlier_ratio"),
+            "rmse": result.get("rmse"),
+            "overlay_path": result.get("overlay_path"),
+            "checkerboard_path": result.get("checkerboard_path"),
+        }
+        save_analysis(
+            type_,
+            first_,
+            ret_pic,
+            pic2=second_,
+            data=json.dumps(metadata, ensure_ascii=False),
+        )
         
     print("自动配准----------------->end")
+    return results
 
 
 def tracking(input_path, out_dir, rect, type_):

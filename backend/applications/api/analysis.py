@@ -251,18 +251,31 @@ def image_restoration_api():
 def registration_api():
     req_json = request.json
     list_ = req_json.get("list")
+    model_path = req_json.get("model_path", "builtin:registration:auto")
     
     if not list_:
         return fail_api("请上传图片")
         
     for pair in list_:
-        if "first" not in pair or "second" not in pair:
+        if ("first" not in pair or "second" not in pair or not pair["first"]
+                or not pair["second"]):
             return fail_api("请求参数异常")
             
     try:
-        # type_ = 6 (assumed new type for registration)
-        registration(up_dir, generate_dir, list_, type_=6)
-        return success_api()
+        results = registration(model_path, up_dir, generate_dir, list_, type_=6)
+        success_count = len([item for item in results if item.get("status") == "success"])
+        return success_api(
+            msg=f"配准完成，共 {success_count}/{len(results)} 对成功",
+            data={
+                "results": results,
+                "summary": {
+                    "total_pairs": len(results),
+                    "success_pairs": success_count,
+                    "failed_pairs": len(results) - success_count,
+                    "model_path": model_path,
+                }
+            },
+        )
     except Exception as e:
         return fail_api(f"配准失败: {str(e)}")
 

@@ -11,60 +11,79 @@ import argparse
 import json
 import os
 import sys
-import traceback
+
 import cv2
-import torch
 import kornia as K
 import kornia.feature as KF
 import numpy as np
-from kornia.geometry import ransac
+import torch
+
+
+_MATCHER_CACHE = {}
+
 
 def register_pair(img1_path, img2_path, output_path, device='cuda'):
-    # Load images
-    img1_t = K.io.load_image(img1_path, K.io.ImageLoadType.RGB32)[None, ...]
-    img2_t = K.io.load_image(img2_path, K.io.ImageLoadType.RGB32)[None, ...]
-    
-    img1_t = img1_t.to(device)
-    img2_t = img2_t.to(device)
-    
-    # Convert to grayscale for feature extraction
+    img1_t = K.io.load_image(img1_path, K.io.ImageLoadType.RGB32)[None, ...].to(device)
+    img2_t = K.io.load_image(img2_path, K.io.ImageLoadType.RGB32)[None, ...].to(device)
+
     img1_gray = K.color.rgb_to_grayscale(img1_t)
     img2_gray = K.color.rgb_to_grayscale(img2_t)
-    
-    # Initialize LoFTR
-    matcher = KF.LoFTR(pretrained='outdoor').to(device)
-    
-    input_dict = {
-        "image0": img1_gray,
-        "image1": img2_gray
-    }
-    
+
+    matcher = _get_matcher(device)
+    input_dict = {"image0": img1_gray, "image1": img2_gray}
+
     with torch.inference_mode():
         correspondences = matcher(input_dict)
-        
-    mkpts0 = correspondences['keypoints0'].cpu().numpy()
-    mkpts1 = correspondences['keypoints1'].cpu().numpy()
-    
+
+    mkpts0 = correspondences['keypoints0'].detach().cpu().numpy()
+    mkpts1 = correspondences['keypoints1'].detach().cpu().numpy()
+
     if len(mkpts0) < 4:
         raise RuntimeError("Not enough matches found.")
-        
-    # Find Homography using OpenCV for robustness
-    # Kornia has find_homography but usage with RANSAC can be tricky to tune perfectly in one go, 
-    # cv2 is often more stable for generic use.
-    H, mask = cv2.findHomography(mkpts0, mkpts1, cv2.RANSAC, 5.0)
-    
-    if H is None:
+
+    homography, mask = cv2.findHomography(mkpts0, mkpts1, cv2.RANSAC, 5.0)
+    if homography is None or mask is None:
         raise RuntimeError("Homography estimation failed.")
-        
-    # Warp image1 to image2's frame
-    # We use cv2 for warping to keep it simple and consistent with IO
+
+    mask = mask.reshape(-1).astype(bool)
+    inlier_count = int(mask.sum())
+    if inlier_count < 4:
+        raise RuntimeError("Not enough inliers after RANSAC.")
+
     img1_cv = cv2.imread(img1_path)
-    h, w, _ = cv2.imread(img2_path).shape
-    
-    img1_warped = cv2.warpPerspective(img1_cv, H, (w, h))
-    
+    img2_cv = cv2.imread(img2_path)
+    h, w = img2_cv.shape[:2]
+    img1_warped = cv2.warpPerspective(img1_cv, homography, (w, h))
     cv2.imwrite(output_path, img1_warped)
-    return True
+
+    rmse = _compute_rmse(mkpts0[mask], mkpts1[mask], homography)
+    return {
+        "transform_matrix": np.round(homography.astype(float), 6).tolist(),
+        "transform_type": "homography",
+        "method_used": "kornia_loftr_external",
+        "match_count": int(len(mask)),
+        "inlier_count": inlier_count,
+        "inlier_ratio": round(float(inlier_count / len(mask)), 4),
+        "rmse": round(float(rmse), 4),
+    }
+
+
+def _get_matcher(device):
+    matcher = _MATCHER_CACHE.get(device)
+    if matcher is not None:
+        return matcher
+
+    matcher = KF.LoFTR(pretrained='outdoor').to(device)
+    matcher.eval()
+    _MATCHER_CACHE[device] = matcher
+    return matcher
+
+
+def _compute_rmse(src_points, dst_points, matrix):
+    projected = cv2.perspectiveTransform(src_points.reshape(-1, 1, 2),
+                                         matrix).reshape(-1, 2)
+    error = np.linalg.norm(projected - dst_points, axis=1)
+    return float(np.sqrt(np.mean(np.square(error))))
 
 def main():
     parser = argparse.ArgumentParser(description="Registration Inference")
@@ -102,8 +121,13 @@ def main():
                 continue
                 
             try:
-                register_pair(input_path1, input_path2, output_path, device)
-                results.append({"name": out_name, "status": "success", "output_path": output_path})
+                metadata = register_pair(input_path1, input_path2, output_path, device)
+                results.append({
+                    "name": out_name,
+                    "status": "success",
+                    "output_path": output_path,
+                    **metadata,
+                })
             except Exception as e:
                 results.append({"name": out_name, "status": "error", "message": str(e)})
         

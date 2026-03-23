@@ -68,11 +68,25 @@ HUGGINGFACE_MODELS = {
     ],
     "registration": [
         {
+            "model_path": "builtin:registration:auto",
+            "model_type": "register",
+            "model_name": "工程基线自动配准",
+            "backend": "geoview",
+            "description": "用途：当前默认的多模态配准基线。特点：优先尝试 Kornia LoFTR，失败时自动回退到 OpenCV 特征匹配，适合先把前端流程真正跑通。"
+        },
+        {
+            "model_path": "builtin:registration:opencv",
+            "model_type": "register",
+            "model_name": "OpenCV 特征配准",
+            "backend": "opencv",
+            "description": "用途：轻量级快速配准。特点：使用 SIFT/ORB/AKAZE 与 RANSAC 估计变换，不依赖额外深度模型，适合作为 CPU 兜底方案。"
+        },
+        {
             "model_path": "hf:kornia/loftr",
             "model_type": "register",
             "model_name": "LoFTR 深度特征配准",
             "backend": "kornia",
-            "description": "用途：多模态/大视角差异图像自动配准。特点：基于Transformer的局部特征匹配，无需检测关键点，对弱纹理和重复纹理鲁棒性强。"
+            "description": "用途：多模态/大视角差异图像自动配准。特点：基于 Kornia LoFTR 的稠密深度匹配，无需显式关键点检测，对 Sentinel-1 / Sentinel-2 这类 SAR-光学场景更有潜力。"
         }
     ],
     "tracking": [
