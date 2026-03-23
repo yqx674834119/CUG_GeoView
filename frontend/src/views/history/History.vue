@@ -2,7 +2,7 @@
   <div>
     <div class="hint">
       当前浏览功能区：<span v-if="type !== ''">{{ type }}</span><span v-else>全部</span><i
-        style="margin-left: 8px; font-size: 20px"
+        class="hint-icon"
         :class="{
           'iconfont icon-bianhuajiance': type === '变化检测',
           'iconfont icon-mubiaojiance': type === '目标检测',
@@ -139,7 +139,7 @@
       @click="isSelect = true"
     >
       <div class="select-fun-title">
-        <span style="">功能筛选</span>
+        <span>功能筛选</span>
       </div>
       <div class="select-fun-icon">
         <i class="iconfont icon-shaixuan" />
@@ -154,8 +154,6 @@
     >
       <el-menu
         class="el-menu-vertical-demo"
-        text-color="black"
-        background-color="white"
       >
         <el-menu-item-group>
           <el-menu-item
@@ -493,11 +491,13 @@ export default {
 
 <style lang="less" scoped>
 .hint {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   font-size: 18px;
   margin: 10px 0;
+  color: var(--text-secondary);
+}
+.hint-icon {
+  margin-left: 8px;
+  font-size: 20px;
 }
 #sub-title {
   font-size: 16px;
@@ -514,8 +514,8 @@ export default {
 .select-fun-drawer {
   position: fixed;
   z-index: 100;
-  background: rgb(252, 252, 252);
-  color: #000;
+  background: var(--theme-surface-elevated);
+  color: var(--text-primary);
   top: 250px;
   right: 0;
   width: 34px;
@@ -523,17 +523,16 @@ export default {
   padding: 0.5rem;
   border-top-left-radius: 0.2rem;
   border-bottom-left-radius: 0.2rem;
-  box-shadow: -5px 0 10px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: -12px 0 28px rgba(0, 0, 0, 0.14);
   transition: all 0.1s ease-in-out;
   cursor: pointer;
-  font-family: SimHei sans-serif;
   .select-fun-title {
     font-size: 17px;
     font-weight: 1000;
     -webkit-writing-mode: vertical-rl;
     writing-mode: vertical-rl;
-    color: var(--theme--color);
-    background: rgb(237, 242, 245);
+    color: var(--theme-active-color);
+    background: var(--theme-tag-bg);
     padding: 0.12rem;
     border-radius: 0.2rem;
     height: 80px;
@@ -542,16 +541,15 @@ export default {
     span {
       display: block;
       padding-right: 6px;
-      color: red; 
-      font-family: Microsoft JhengHei UI, sans-serif;
+      color: var(--theme-danger-color); 
     }
   }
   .select-fun-icon {
     width: 37px;
     text-align: center;
     margin-top: 6px;
-    color: var(--theme--color);
-    background: rgb(237, 242, 245);
+    color: var(--theme-active-color);
+    background: var(--theme-tag-bg);
     border-radius: 0.2rem;
     height: 30px;
     .iconfont {
@@ -562,7 +560,7 @@ export default {
 }
 .select-fun-title:hover,
 .select-fun-icon:hover {
-  background-color: rgb(228, 235, 240);
+  background-color: var(--bg-hover);
 }
 .el-menu {
   width: 100%;

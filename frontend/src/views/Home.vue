@@ -11,17 +11,16 @@
         class="main-ctx"
       >
         <el-header class="platform-header">
-          <el-row align="middle" justify="space-between">
-            <el-col :span="2">
-              <i
-                class="icon-menu"
-                @click="goCollapse"
-              />
-            </el-col>
-            <el-col :span="22">
-              <Tablogin />
-            </el-col>
-          </el-row>
+          <div class="platform-header__inner">
+            <button
+              class="platform-header__menu"
+              type="button"
+              @click="goCollapse"
+            >
+              <i class="icon-menu" />
+            </button>
+            <Tablogin />
+          </div>
         </el-header>
         <router-view v-slot="{ Component }">
           <transition
@@ -97,23 +96,53 @@ export default {
   opacity: 0;
 }
 .platform-header {
-  padding: 0 20px;
-  height: 60px;
+  padding: 0 24px;
+  min-height: 72px;
   line-height: 60px;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--theme-header-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 var(--theme-radius-lg) var(--theme-radius-lg);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px);
   display: flex;
   align-items: center;
+  margin-bottom: 18px;
 }
 
-.platform-header .icon-menu {
-  font-size: 20px;
+.platform-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+}
+
+.platform-header__menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--theme-surface-elevated);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
-.platform-header .icon-menu:hover {
-  color: var(--primary-color);
+.platform-header__menu:hover {
+  color: var(--theme-active-color);
+  border-color: var(--theme-active-color);
+  background: var(--bg-hover);
+}
+
+@media (max-width: 768px) {
+  .platform-header {
+    padding: 0 14px;
+  }
+
+  .platform-header__inner {
+    gap: 10px;
+  }
 }
 </style>

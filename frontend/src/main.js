@@ -3,6 +3,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
+import { initializeTheme } from '@/utils/theme'
 
 import '@/assets/font/iconfont.css'
 import './assets/css/normalize.css'
@@ -13,6 +14,8 @@ import 'animate.css';
 
 import JSZIP from "jszip"
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+
+initializeTheme()
 
 const app = createApp(App)
 app.use(router).use(ElementPlus,{locale: zhCn}).use(JSZIP).mount('#app')

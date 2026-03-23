@@ -22,7 +22,7 @@
       justify="center"
     >
       <el-col :span="24">
-        <el-card style="border: 4px dashed var(--el-border-color)">
+        <el-card class="upload-panel upload-panel--single">
           <div
             v-if="fileList.length"
             class="clear-queue"
@@ -56,7 +56,7 @@
               只能上传一张或多张图片，请在下方上传文件夹
             </div>
           </el-upload>
-          <el-row justify="center">
+          <el-row justify="center" class="upload-action-row">
             <input
               id="folder"
               ref="uploadFile"
@@ -67,12 +67,12 @@
               @change="uploadMore()"
             >
             <i
-              class="iconfont icon-wenjianshangchuan"
+              class="iconfont icon-wenjianshangchuan upload-folder-action"
               @click="fileClick"
             >上传文件夹</i>
           </el-row>
 
-          <el-row justify="center">
+          <el-row justify="center" class="upload-helper-row">
             <p>
               <label class="prehandle-label container">
                 <input
@@ -88,7 +88,7 @@
               </label>
             </p>
           </el-row>
-          <div style="text-align: center; margin-bottom: 20px;">
+          <div class="upload-options-row" style="margin-bottom: 20px;">
             <el-checkbox v-model="isSlice" label="开启大图切分" border />
           </div>
           <el-row
@@ -168,9 +168,9 @@
                   :content="item.description || '暂无描述'"
                   placement="top-start"
                 >
-                  <span style="font-weight: bold; font-size: 14px;">
+                  <span class="model-label">
                     {{ item.model_name }}
-                    <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                    <i class="iconfont icon-tishi model-label__icon" />
                   </span>
                 </el-tooltip>
               </el-radio>
@@ -357,7 +357,6 @@
     <ImgShow
       :img-arr="imgArr"
     />
-    <Bottominfor />
   </div>
 </template>
 <script>
@@ -368,14 +367,12 @@ import {getUploadImg, goCompress, upload} from "@/utils/getUploadImg";
 import {selectClahe, selectFilter, selectSharpen, selectSmooth,} from "@/utils/preHandle";
 import ImgShow from "@/components/ImgShow";
 import Tabinfor from "@/components/Tabinfor";
-import Bottominfor from "@/components/Bottominfor";
 import MyVueCropper from "@/components/MyVueCropper";
 export default {
   name: "Detectobjects",
   components: {
     ImgShow,
     Tabinfor,
-    Bottominfor,
     MyVueCropper,
   },
   beforeRouteEnter(to, from, next) {
@@ -498,7 +495,7 @@ export default {
 </script>
 <style lang="less" scoped>
 * {
-  font-family: SimHei sans-serif;
+  font-family: var(--theme-default-fontfamily);
 }
 #sub-title{
   font-size: 25px;

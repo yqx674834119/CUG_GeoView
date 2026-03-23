@@ -18,7 +18,7 @@
         :xl="4"
         style="margin-left:30px"
       >
-        more details please click <a @click="goGithub">here<i
+        更多说明请点击 <a @click="goGithub">项目主页<i
           class="iconfont icon-dianji1"
         /></a>
       </el-col>
@@ -46,17 +46,16 @@ export default {
   position: relative;
   left: -37px;
   width: 120%;
-  color: rgb(157,164,168);
+  color: var(--text-muted);
   font-size: 15px;
-  font-family: sans-serif;
   overflow: hidden;
 }
 a{
-  color: rgba(255, 0, 128, 0.979);
+  color: var(--theme-active-color);
   cursor: pointer;
   transition: all .4s;
 }
 a:hover{
-  color: var(--theme--color);
+  color: var(--theme-major-color);
 }
 </style>

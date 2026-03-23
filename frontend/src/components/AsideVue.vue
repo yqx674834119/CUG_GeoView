@@ -1,16 +1,13 @@
 <template>
   <el-menu
-    class="el-menu-vertical-demo"
+    class="el-menu-vertical-demo geo-aside-menu"
     :collapse="isCollapse"
-    text-color="black"
-    background-color="rgb(247,246,242)"
     :default-active="activeIndex"
-    active-text-color="#FFFFFF"
   >
     <div class="platform">
       <img
         class="platform-logo"
-        :src="require('@/assets/image/logo/80.png')"
+        :src="require('@/assets/image/logo/80.svg')"
         alt="logo"
         @click="goDetectChanges"
       >
@@ -193,39 +190,51 @@ export default {
 </script>
 
 <style lang="less">
-.el-menu {
+.geo-aside-menu {
   position: relative;
   height: 100vh;
   top: 0;
   bottom: 0;
   text-align: center;
-  font-family: Microsoft JhengHei UI, sans-serif;
+  background: var(--theme-sidebar-bg) !important;
+  border-right: 1px solid var(--border-color) !important;
+  box-shadow: 18px 0 32px rgba(7, 31, 63, 0.08);
 
   .el-menu-item {
-    padding: 0 0;
-    border-radius: 10px;
+    margin: 6px 12px;
+    min-height: 50px;
+    border-radius: 16px;
     position: relative;
-    color: rgb(117, 117, 117);
+    color: var(--text-secondary);
     z-index: 1;
+    transition: transform var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
     h3 {
-      padding-right: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      padding-right: 18px;
       width: 100%;
       margin: 0 auto;
+      font-size: var(--font-size-h3);
+      font-weight: 600;
       .iconfont {
         font-weight: normal;
-        margin-right: 5px;
       }
     }
   }
+
   .el-menu-item:hover {
-    background-color: rgb(247, 246, 242);
-    color: #ecf4ff !important;
+    background-color: var(--bg-hover);
+    color: var(--theme-active-color) !important;
+    transform: translateX(2px);
   }
 
   .el-menu-item :hover::after {
     width: 100%;
-    background: var(--theme--color);
+    background: linear-gradient(135deg, var(--theme-major-color), var(--theme-active-color));
   }
+
   .el-menu-item ::after {
     position: absolute;
     content: "";
@@ -233,39 +242,46 @@ export default {
     height: 100%;
     top: 0;
     left: 0;
-    border-radius: 10px;
+    border-radius: 16px;
     transition: 0.25s;
     z-index: -1;
   }
 }
+
 .el-menu-vertical-demo:not(.el-menu--collapse) {
   width: 250px;
   min-height: 400px;
 }
 
 .is-active {
-  background-color: var(--theme--color);
+  background: linear-gradient(135deg, var(--theme-major-color), var(--primary-hover));
   h3,i{
-    color:rgb(247, 246, 242)!important;
+    color: var(--text-inverse) !important;
   }
 }
 
 .platform {
-  padding-top: 14px;
+  padding-top: 18px;
   text-align: center;
-  color: var(--theme--color);
-  height: 80px;
+  color: var(--theme-active-color);
+  height: 108px;
   width: auto;
   overflow: hidden;
 
   .platform-logo {
-    color: var(--theme--color);
+    width: 58px;
+    height: 58px;
+    padding: 8px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.68);
+    box-shadow: var(--shadow-sm);
   }
 
   .platform-title {
-    color: var(--theme--color);
-    font-family: Microsoft JhengHei UI, sans-serif;
-    font-size: 21px;
+    color: var(--theme-heading-color);
+    font-family: var(--theme-display-fontfamily);
+    font-size: 22px;
+    letter-spacing: 0.04em;
   }
 }
 
@@ -274,13 +290,13 @@ export default {
   line-height: 24.4px;
   overflow: hidden;
   width: 70px;
-  color: rgb(140, 157, 182)
+  color: var(--text-muted);
 }
 
 #platform-title {
   position: relative;
   font-size: 20px;
-  font-weight: 1000;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -302,7 +318,7 @@ export default {
   width: 85%;
 }
 .el-menu .el-divider__text{
-  background-color: rgb(247,246,242);
+  background-color: transparent;
 }
 </style>
  

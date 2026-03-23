@@ -28,7 +28,7 @@
     </p><p>
       
     </p>
-    <el-card style="border: 4px dashed var(--el-border-color);position: relative">
+    <el-card class="upload-panel upload-panel--double">
       <div
         v-if="fileList1.length||fileList2.length"
         class="clear-queue"
@@ -43,7 +43,9 @@
       </div>
       <div class="upload-box">
         <div class="upload-item">
+          <div class="upload-caption">第一时期影像</div>
           <el-upload
+            class="upload-card"
             ref="uploadA"
             v-model:file-list="fileList1"
             drag
@@ -62,7 +64,7 @@
               只能上传一张或多张图片，请在下方上传文件夹
             </div>
           </el-upload>
-          <div>
+          <div class="upload-action-row">
             <input
               id="upload-fileA"
               ref="refFileA"
@@ -73,13 +75,15 @@
               @change="uploadFirst"
             >
             <i
-              class="iconfont icon-wenjianshangchuan"
+              class="iconfont icon-wenjianshangchuan upload-folder-action"
               @click="file1Click"
             >上传文件夹</i>
           </div>
         </div>
         <div class="upload-item">
+          <div class="upload-caption">第二时期影像</div>
           <el-upload
+            class="upload-card"
             ref="uploadB"
             v-model:file-list="fileList2"
             drag
@@ -98,7 +102,7 @@
               只能上传一张或多张图片，请在下方上传文件夹
             </div>
           </el-upload>
-          <div>
+          <div class="upload-action-row">
             <input
               id="upload-fileB"
               ref="refFileB"
@@ -109,7 +113,7 @@
               @change="uploadSecond"
             >
             <i
-              class="iconfont icon-wenjianshangchuan"
+              class="iconfont icon-wenjianshangchuan upload-folder-action"
               @click="file2Click"
             >上传文件夹</i>
           </div>
@@ -133,7 +137,7 @@
           />
         </div>
       </div>
-      <div style="text-align: center; margin-bottom: 20px;">
+      <div class="upload-options-row" style="margin-bottom: 20px;">
         <el-checkbox v-model="isSlice" label="开启大图切分" border />
       </div>
       <el-row
@@ -210,9 +214,9 @@
               :content="item.description || '暂无描述'"
               placement="top-start"
             >
-              <span style="font-weight: bold; font-size: 14px;">
+              <span class="model-label">
                 {{ item.model_name }}
-                <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                <i class="iconfont icon-tishi model-label__icon" />
               </span>
             </el-tooltip>
           </el-radio>
@@ -433,7 +437,6 @@
       <template #left>
         <div
           id="sub-title"
-          style="font-size: 25px"
         >
           结果图预览<i
             class="iconfont icon-dianji"
@@ -494,12 +497,13 @@
         >
           <div
             id="image-slider"
-            @mousemove="sliderMouseMove"
-            @mousedown="sliderMouseDown"
-            @mouseup="sliderMouseUp"
-            @mouseleave="sliderMouseLeave"
+            ref="resultSlider"
+            @pointerdown.prevent="startSliderDrag"
           >
-            <div v-show="!isHiddenMask">
+            <div
+              v-show="!isHiddenMask"
+              class="mask-layer"
+            >
               <img
                 v-if="resultArr[currentIndex]?.data.mask && !holeShow"
                 :src="resultArr[currentIndex].data.mask "
@@ -529,7 +533,10 @@
               :src="exampleArr[0].before_img "
               alt=""
             >
-            <div class="img-wrapper">
+            <div
+              class="img-wrapper"
+              :style="sliderWrapperStyle"
+            >
               <img
                 v-if="resultArr[currentIndex]?.before_img1"
                 :src="resultArr[currentIndex].before_img1"
@@ -541,7 +548,10 @@
                 alt=""
               >
             </div>
-            <div class="handle">
+            <div
+              class="handle"
+              :style="sliderHandleStyle"
+            >
               <div class="handle-line" />
               <div class="handle-circle">
                 &#171;&#187;
@@ -836,7 +846,6 @@
         />
       </div>
     </el-card>
-    <Bottominfor />
   </div>
 </template>
 
@@ -855,7 +864,6 @@ import {
 } from "@/utils/download.js";
 import { historyGetPage } from "@/api/history";
 import Tabinfor from "@/components/Tabinfor";
-import Bottominfor from "@/components/Bottominfor";
 import DraggableItem from "@/components/DraggableItem";
 import global from "@/global";
 import { use } from "echarts/core";
@@ -883,7 +891,6 @@ export default {
   name: "Detectchanges",
   components: {
     Tabinfor,
-    Bottominfor,
     DraggableItem,
     VChart
   },
@@ -895,9 +902,9 @@ export default {
   data() {
     return {
       holeShow:true,
-      holeShow:true,
       isSlice: false,
-      isSliderLocked: false,
+      sliderPosition: 50,
+      isDragging: false,
       preMode: 1,
       pairs: [],
       hisPairs: [],
@@ -997,13 +1004,27 @@ export default {
       onRenderExample:require('@/assets/image/example/normal.png'),
       isHiddenMask:false,
       dragShow:true,
-      isHiddenMask:false,
-      dragShow:true,
       sizeValue:[0,200],
       detailedAnalysisVisible: false,
       sizeDistributionOption: {},
       topChangesOption: {},
     };
+  },
+  computed: {
+    sliderWrapperStyle() {
+      return {
+        clipPath: `inset(0 0 0 ${this.sliderPosition}%)`,
+        WebkitClipPath: `inset(0 0 0 ${this.sliderPosition}%)`,
+      };
+    },
+    sliderHandleStyle() {
+      return {
+        left: `${this.sliderPosition}%`,
+      };
+    },
+  },
+  beforeUnmount() {
+    this.removeSliderListeners();
   },
   created() {
     this.getMore();
@@ -1031,6 +1052,7 @@ export default {
       this.currentIndex = this.currentQroup;
       this.currentIndex += index;
       this.onRender = index;
+      this.resetSliderPosition();
       this.setOneWay(this.renderstyle)
     },
     goRenderThese(index) {
@@ -1217,7 +1239,13 @@ export default {
               item.data['mask_hole'] = global.BASEURL + item.data.mask_hole
             })
             this.resultArr = res.data.data
-            this.onRenderResult = this.resultArr[this.currentIndex].after_img
+            if (this.resultArr.length) {
+              this.currentQroup = 0;
+              this.currentIndex = 0;
+              this.onRender = 0;
+              this.onRenderResult = this.resultArr[0].after_img
+            }
+            this.resetSliderPosition();
           })
           .catch((rej) => {});
     },
@@ -1445,6 +1473,7 @@ export default {
     toggleHoleStatus() {
       this.resultArr[this.currentIndex].is_hole = !this.resultArr[this.currentIndex].is_hole
       this.holeShow = !this.holeShow
+      this.resetSliderPosition();
       this.setOneWay(this.renderstyle,this.resultArr.length===0,this.holeShow)
     },
     uploadFirst() {
@@ -1515,47 +1544,49 @@ export default {
       } else {
         this.preMode = 1;
       }
+      this.resetSliderPosition();
     },
-    sliderMouseMove(event) {
-      const slider = document.querySelector("#image-slider");
-      const wrapper = document.querySelector(".img-wrapper");
-      const handle = document.querySelector(".handle");
-
-      if (this.isSliderLocked) return;
-
-      const sliderLeftX = slider.offsetLeft;
-
-      const sliderWidth = slider.clientWidth;
-
-      const sliderHandleWidth = handle.clientWidth;
-
-      let mouseX = event.clientX - sliderLeftX;
-
-      if (mouseX < 0) mouseX = 0;
-      else if (mouseX > sliderWidth) mouseX = sliderWidth;
-
-      wrapper.style.width = `${((1 - mouseX / sliderWidth) * 100).toFixed(4)}%`;
-
-      handle.style.left = `calc(${((mouseX / sliderWidth) * 100).toFixed(
-          4
-      )}% - ${sliderHandleWidth / 2}px)`;
-
+    resetSliderPosition() {
+      this.sliderPosition = 50;
     },
-    sliderMouseDown() {
-      if (this.isSliderLocked) this.isSliderLocked = false;
-      this.sliderMouseMove(event);
+    updateSliderPosition(clientX) {
+      const slider = this.$refs.resultSlider;
+      if (!slider) return;
+
+      const { left, width } = slider.getBoundingClientRect();
+      if (!width) return;
+
+      const position = ((clientX - left) / width) * 100;
+      this.sliderPosition = Math.min(100, Math.max(0, Number(position.toFixed(4))));
     },
-    sliderMouseUp() {
-      if (!this.isSliderLocked) this.isSliderLocked = true;
+    startSliderDrag(event) {
+      if (this.preMode !== 1) return;
+      this.isDragging = true;
+      this.updateSliderPosition(event.clientX);
+      this.removeSliderListeners();
+      window.addEventListener("pointermove", this.onSliderDrag);
+      window.addEventListener("pointerup", this.stopSliderDrag);
+      window.addEventListener("pointercancel", this.stopSliderDrag);
     },
-    sliderMouseLeave() {
-      if (this.isSliderLocked) this.isSliderLocked = false;
+    onSliderDrag(event) {
+      if (!this.isDragging) return;
+      this.updateSliderPosition(event.clientX);
+    },
+    stopSliderDrag() {
+      this.isDragging = false;
+      this.removeSliderListeners();
+    },
+    removeSliderListeners() {
+      window.removeEventListener("pointermove", this.onSliderDrag);
+      window.removeEventListener("pointerup", this.stopSliderDrag);
+      window.removeEventListener("pointercancel", this.stopSliderDrag);
     },
     vanishDrag(){
       this.dragShow = false
     },
     hideMask(){
       this.isHiddenMask = !this.isHiddenMask
+      this.resetSliderPosition();
     },
     showDetailedAnalysis() {
       if (!this.resultArr[this.currentIndex]) return;
@@ -1679,14 +1710,14 @@ export default {
 
 <style scoped lang="less">
 * {
-  font-family: SimHei sans-serif;
+  font-family: var(--theme-default-fontfamily);
 }
 .list {
   text-align: center;
   cursor: pointer;
   width: auto;
   height: 20px;
-  background-color: rgb(236, 244, 255);
+  background-color: var(--theme-tag-bg);
   position: relative;
   margin-bottom: 10px;
 }
@@ -1706,7 +1737,7 @@ export default {
   z-index: -1;
 }
 .list:hover * {
-  color: #ecf4ff !important;
+  color: var(--text-inverse) !important;
 }
 .list-number {
   z-index: 1;
@@ -1764,9 +1795,10 @@ export default {
 .style-title {
   text-align: center;
   font-size: 22px;
-  font-family: "幼圆", sans-serif;
-  font-weight: 600;
+  font-family: var(--theme-display-fontfamily);
+  font-weight: 700;
   margin-bottom: 20px;
+  color: var(--theme-heading-color);
 }
 .img-index {
   text-align: center;
@@ -1775,11 +1807,11 @@ export default {
   line-height: 428px;
 }
 .index-number {
-  font-family: Yu Gothic Medium;
-  font-style: oblique;
+  font-family: var(--theme-display-fontfamily);
   font-size: 30px;
   margin-left: 5px;
   margin-right: 10px;
+  color: var(--theme-heading-color);
 }
 .img-infor {
   text-align: center;
@@ -1801,48 +1833,55 @@ export default {
   top: 0;
   z-index:2
 }
-#image-slider {
+.render-img-box #image-slider {
   position: relative;
-  max-width:100%;
-  max-height: 100%;
+  width: min(100%, 650px);
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 1em;
   cursor: col-resize;
   display: inline-block;
+  touch-action: none;
+  background: var(--theme-card-bg);
 }
 
-#image-slider img {
+.render-img-box #image-slider > img,
+.render-img-box #image-slider .img-wrapper img,
+.render-img-box #image-slider .mask-img {
   display: block;
+  width: 100%;
   height: 100%;
-  max-width:650px;
-  max-height: 650px;
   object-fit: cover;
   pointer-events: none;
   user-select: none;
 }
 
-#image-slider .img-wrapper {
+.render-img-box #image-slider .mask-layer {
   position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  width: 50%;
-  overflow: hidden;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.render-img-box #image-slider .img-wrapper {
+  position: absolute;
+  inset: 0;
   z-index: 1;
 }
 
-#image-slider .img-wrapper img {
+.render-img-box #image-slider .img-wrapper img {
   position: absolute;
   top: 0;
-  right: 0;
-  height: 100%;
+  left: 0;
+  max-width: 100%;
 }
 
-#image-slider .handle {
+.render-img-box #image-slider .handle {
   border: 0 solid red;
   position: absolute;
   top: 0;
-  left: calc(50% - var(--image-slider-handle-width) / 2);
+  left: 50%;
+  transform: translateX(-50%);
   width: var(--image-slider-handle-width);
   height: 100%;
   display: flex;
@@ -1851,9 +1890,10 @@ export default {
   align-items: center;
   user-select: none;
   z-index: 3;
+  pointer-events: none;
 }
 
-#image-slider .handle-circle {
+.render-img-box #image-slider .handle-circle {
   color: white;
   border: 2px solid white;
   border-radius: 50%;
@@ -1862,7 +1902,7 @@ export default {
   justify-content: space-evenly;
 }
 
-#image-slider .handle-line {
+.render-img-box #image-slider .handle-line {
   width: 2px;
   flex-grow: 1;
   background: white;
@@ -1903,7 +1943,7 @@ export default {
   background-image: linear-gradient(#011142, #00bbc9 100%);
 }
 .active-normal {
-  background-color: rgb(64, 158, 255);
+  background-color: var(--theme-active-color);
 }
 .active-woods {
   background-image: linear-gradient(#9be15d, #00e3ae 100%);
@@ -1982,13 +2022,13 @@ export default {
   height: 20px;
   text-align: center;
   padding: 5px;
-  color: var(--theme--color);
-  background: rgb(237, 242, 245);
+  color: var(--theme-active-color);
+  background: var(--theme-tag-bg);
   border-radius: 0.2rem;
   .iconfont {
     display: block;
     &:hover{
-      background-color: rgb(228, 235, 240);
+      background-color: var(--bg-hover);
     }
   }
 }

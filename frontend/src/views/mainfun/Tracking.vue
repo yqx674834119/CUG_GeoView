@@ -12,7 +12,7 @@
       请选择待跟踪的<span class="go-bold">视频文件</span>或<span class="go-bold">图像序列文件夹</span>。
     </p>
     
-    <el-card style="border: 4px dashed var(--el-border-color);position: relative">
+    <el-card class="upload-panel upload-panel--single">
       <div v-if="fileList.length" class="clear-queue">
         <el-button type="primary" class="btn-animate2 btn-animate__surround" @click="clearQueue">
           清空
@@ -23,6 +23,7 @@
          <el-upload
             ref="upload"
             v-model:file-list="fileList"
+            class="upload-card"
             drag
             action="#"
             multiple
@@ -37,9 +38,9 @@
                或者下方上传文件夹
             </div>
           </el-upload>
-          <div style="margin-top: 10px;">
+          <div class="upload-action-row">
              <input id="upload-folder" ref="refFolder" type="file" webkitdirectory directory multiple @change="uploadFolder" style="display:none">
-             <el-button size="small" @click="folderClick">上传文件夹</el-button>
+             <i class="iconfont icon-wenjianshangchuan upload-folder-action" @click="folderClick">上传文件夹</i>
           </div>
       </div>
 
@@ -54,7 +55,7 @@
             :label="item.model_path"
           >
             <el-tooltip effect="dark" :content="item.description || '暂无描述'" placement="top-start">
-              <span style="font-weight: bold; font-size: 14px;">
+              <span class="model-label">
                 {{ item.model_name }}
               </span>
             </el-tooltip>
@@ -62,18 +63,16 @@
         </div>
       </el-row>
       
-      <div v-if="firstFrame" style="margin-top: 20px; text-align: center;">
+      <div v-if="firstFrame" class="frame-selector">
           <p>请在下方第一帧图像中框选初始目标：</p>
-          <div style="position: relative; display: inline-block;">
-              <img ref="firstFrameImg" :src="firstFrame" style="max-width: 600px; cursor: crosshair;" @mousedown="startDraw" @mousemove="drawing" @mouseup="endDraw">
+          <div class="frame-selector__canvas">
+              <img ref="firstFrameImg" :src="firstFrame" class="frame-selector__image" @mousedown="startDraw" @mousemove="drawing" @mouseup="endDraw">
               <div v-if="rect.w > 0" :style="{
-                  position: 'absolute',
-                  border: '2px solid red',
                   left: rect.x + 'px',
                   top: rect.y + 'px',
                   width: rect.w + 'px',
                   height: rect.h + 'px'
-              }"></div>
+              }" class="frame-selector__rect"></div>
           </div>
           <p v-if="rect.w > 0">已选择区域: {{ rect }}</p>
       </div>
@@ -87,7 +86,7 @@
 
     <Tabinfor>
       <template #left>
-        <div id="sub-title" style="font-size: 25px">
+        <div id="sub-title">
           结果预览<i class="iconfont icon-dianji" />
         </div>
       </template>
@@ -95,8 +94,8 @@
     <el-divider />
     
     <div v-if="resultVideo" class="result-box" style="text-align: center;">
-        <video controls :src="resultVideo" style="max-width: 800px;"></video>
-        <div style="margin-top: 10px;">
+        <video controls :src="resultVideo" class="result-video"></video>
+        <div class="result-actions">
             <el-button type="primary" @click="downloadResult">下载结果视频</el-button>
         </div>
     </div>
@@ -252,7 +251,7 @@ export default {
 </script>
 
 <style lang="less" scoped>
-* { font-family: SimHei sans-serif; }
+* { font-family: var(--theme-default-fontfamily); }
 #sub-title { font-size: 25px; }
 .custom-model { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .handle-button { margin-top: 20px; text-align: center; }

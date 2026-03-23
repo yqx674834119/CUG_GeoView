@@ -76,10 +76,10 @@ export default {
   min-height: 200px;
   padding: 10px;
   z-index: 200;
-  background-color: white;
+  background-color: var(--theme-surface-elevated);
   cursor: pointer;
-  box-shadow: 1px 1px 5px #535353;
-  border-radius: 10px;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--theme-radius-md);
   outline: 2px dashed var(--theme--color);
   outline-offset: -4px;
   .shut-bitton{
@@ -91,9 +91,10 @@ export default {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-family: "幼圆", sans-serif;
-    font-weight: 500;
+    font-family: var(--theme-display-fontfamily);
+    font-weight: 700;
     font-size: 22px;
+    color: var(--theme-heading-color);
   }
   .drag-box-item{
     display: flex;
@@ -105,6 +106,7 @@ export default {
   margin: 10px;
   display: flex;
   justify-content: space-between;
+  color: var(--text-secondary);
 }
 
 </style>

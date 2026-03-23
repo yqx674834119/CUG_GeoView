@@ -22,7 +22,7 @@
       justify="center"
     >
       <el-col :span="24">
-        <el-card style="border: 4px dashed var(--el-border-color)">
+        <el-card class="upload-panel upload-panel--single">
           <div
             v-if="fileList.length"
             class="clear-queue"
@@ -55,7 +55,7 @@
               支持上传 PNG/JPG/TIFF 格式遥感影像，请在下方上传文件夹
             </div>
           </el-upload>
-          <el-row justify="center">
+          <el-row justify="center" class="upload-action-row">
             <input
               id="folder"
               ref="uploadFile"
@@ -66,12 +66,12 @@
               @change="uploadMore()"
             >
             <i
-              class="iconfont icon-wenjianshangchuan"
+              class="iconfont icon-wenjianshangchuan upload-folder-action"
               @click="fileClick"
             >上传文件夹</i>
           </el-row>
 
-          <el-row justify="center">
+          <el-row justify="center" class="upload-helper-row">
             <p>
               <label class="prehandle-label container">
                 <input
@@ -86,7 +86,7 @@
               </label>
             </p>
           </el-row>
-          <div style="text-align: center; margin-bottom: 20px;">
+          <div class="upload-options-row" style="margin-bottom: 20px;">
             <el-checkbox v-model="isSlice" label="开启大图切分" border />
           </div>
           <el-row justify="center">
@@ -105,9 +105,9 @@
                   :content="item.description || '暂无描述'"
                   placement="top-start"
                 >
-                  <span style="font-weight: bold; font-size: 14px;">
+                  <span class="model-label">
                     {{ item.model_name }}
-                    <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                    <i class="iconfont icon-tishi model-label__icon" />
                   </span>
                 </el-tooltip>
               </el-radio>
@@ -187,22 +187,26 @@
           <div
             v-else
             id="image-slider"
-            @mousemove="sliderMouseMove"
-            @mousedown="sliderMouseDown"
-            @mouseup="sliderMouseUp"
-            @mouseleave="sliderMouseLeave"
+            ref="resultSlider"
+            @pointerdown.prevent="startSliderDrag"
           >
             <img
               :src="imgArr[currentIndex]?.before_img"
               alt=""
             >
-            <div class="img-wrapper">
+            <div
+              class="img-wrapper"
+              :style="sliderWrapperStyle"
+            >
               <img
                 :src="imgArr[currentIndex]?.after_img"
                 alt=""
               >
             </div>
-            <div class="handle">
+            <div
+              class="handle"
+              :style="sliderHandleStyle"
+            >
               <div class="handle-line" />
               <div class="handle-circle">
                 &#171;&#187;
@@ -277,7 +281,6 @@
         </div>
       </el-row>
     </el-card>
-    <Bottominfor />
   </div>
 </template>
 <script>
@@ -286,14 +289,12 @@ import {historyGetPage} from "@/api/history";
 import {getUploadImg, goCompress, upload} from "@/utils/getUploadImg";
 import {atchDownload, downloadimgWithWords, getImgArrayBuffer} from "@/utils/download.js";
 import Tabinfor from "@/components/Tabinfor";
-import Bottominfor from "@/components/Bottominfor";
 import MyVueCropper from "@/components/MyVueCropper";
 
 export default {
   name: "Restoreimgs",
   components: {
     Tabinfor,
-    Bottominfor,
     MyVueCropper,
   },
   beforeRouteEnter(to, from, next) {
@@ -317,7 +318,8 @@ export default {
         model_path:''
       },
       modelPathArr:[],
-      isSliderLocked: false,
+      sliderPosition: 50,
+      isDragging: false,
       onRender: 0,
       currentIndex:0,
       currentQroup:0,
@@ -325,6 +327,18 @@ export default {
       isUpload:false,
       isSlice: false
     };
+  },
+  computed: {
+    sliderWrapperStyle() {
+      return {
+        width: `${100 - this.sliderPosition}%`,
+      };
+    },
+    sliderHandleStyle() {
+      return {
+        left: `${this.sliderPosition}%`,
+      };
+    },
   },
   watch:{
     uploadSrc:{
@@ -337,8 +351,14 @@ export default {
     isUpload:{
       handler(newVal, oldVal) {
         this.isUpload = newVal
+        if (newVal) {
+          this.resetSliderPosition();
+        }
       }
     }
+  },
+  beforeUnmount() {
+    this.removeSliderListeners();
   },
   created() {
     this.getUploadImg("影像超分重建")
@@ -361,6 +381,7 @@ export default {
     goCompress,
     clearQueue() {
       this.fileList = [];
+      this.resetSliderPosition();
       this.$message.success("清除成功");
     },
     notvisible() {
@@ -370,6 +391,7 @@ export default {
     getMore() {
       this.getUploadImg("影像超分重建");
       this.goShowThese(0)
+      this.resetSliderPosition();
       console.log(this.imgArr.length)
     },
     uploadMore() {
@@ -408,46 +430,47 @@ export default {
       this.currentIndex = this.currentQroup;
       this.currentIndex += index;
       this.onRender = index
+      this.resetSliderPosition();
     },
     goShowThese(index) {
       this.currentQroup = 5 * index;
       this.currentIndex = 5 * index;
       this.goShowThis(0)
     },
-    sliderMouseMove(event) {
-      const slider = document.querySelector("#image-slider");
-      const wrapper = document.querySelector(".img-wrapper");
-      const handle = document.querySelector(".handle");
-
-      if (this.isSliderLocked) return;
-
-      const sliderLeftX = slider.offsetLeft;
-
-      const sliderWidth = slider.clientWidth;
-
-      const sliderHandleWidth = handle.clientWidth;
-
-      let mouseX = event.clientX - sliderLeftX;
-
-      if (mouseX < 0) mouseX = 0;
-      else if (mouseX > sliderWidth) mouseX = sliderWidth;
-
-      wrapper.style.width = `${((1 - mouseX / sliderWidth) * 100).toFixed(4)}%`;
-
-      handle.style.left = `calc(${((mouseX/ sliderWidth) * 100).toFixed(
-          4
-      )}% - ${sliderHandleWidth / 2}px)`;
-
+    resetSliderPosition() {
+      this.sliderPosition = 50;
     },
-    sliderMouseDown() {
-      if (this.isSliderLocked) this.isSliderLocked = false;
-      this.sliderMouseMove(event);
+    updateSliderPosition(clientX) {
+      const slider = this.$refs.resultSlider;
+      if (!slider) return;
+
+      const { left, width } = slider.getBoundingClientRect();
+      if (!width) return;
+
+      const position = ((clientX - left) / width) * 100;
+      this.sliderPosition = Math.min(100, Math.max(0, Number(position.toFixed(4))));
     },
-    sliderMouseUp() {
-      if (!this.isSliderLocked) this.isSliderLocked = true;
+    startSliderDrag(event) {
+      if (!this.isUpload) return;
+      this.isDragging = true;
+      this.updateSliderPosition(event.clientX);
+      this.removeSliderListeners();
+      window.addEventListener("pointermove", this.onSliderDrag);
+      window.addEventListener("pointerup", this.stopSliderDrag);
+      window.addEventListener("pointercancel", this.stopSliderDrag);
     },
-    sliderMouseLeave() {
-      if (this.isSliderLocked) this.isSliderLocked = false;
+    onSliderDrag(event) {
+      if (!this.isDragging) return;
+      this.updateSliderPosition(event.clientX);
+    },
+    stopSliderDrag() {
+      this.isDragging = false;
+      this.removeSliderListeners();
+    },
+    removeSliderListeners() {
+      window.removeEventListener("pointermove", this.onSliderDrag);
+      window.removeEventListener("pointerup", this.stopSliderDrag);
+      window.removeEventListener("pointercancel", this.stopSliderDrag);
     },
   },
 }
@@ -455,7 +478,7 @@ export default {
 
 <style lang="less" scoped>
 * {
-  font-family: SimHei sans-serif;
+  font-family: var(--theme-default-fontfamily);
 }
 #sub-title{
   font-size: 25px;
@@ -479,11 +502,11 @@ export default {
   flex-wrap: wrap;
 }
 .index-number {
-  font-family: Yu Gothic Medium;
-  font-style: oblique;
+  font-family: var(--theme-display-fontfamily);
   font-size: 30px;
   margin-left: 5px;
   margin-right: 10px;
+  color: var(--theme-heading-color);
 }
 .img-infor {
   text-align: center;
@@ -493,32 +516,36 @@ export default {
   width: 256px;
   height: 30px;
   font-weight: 500;
-  font-family: Microsoft JhengHei UI, sans-serif;
+  color: var(--text-secondary);
 }
 .custom-pic{
   width: 256px;
   height: 256px;
 }
 
-#image-slider {
+.restore-img-box #image-slider {
   position: relative;
-  max-width:600px;
+  width: min(100%, 580px);
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 1em;
   cursor: col-resize;
   display: inline-block;
+  touch-action: none;
+  background: var(--theme-card-bg);
 }
 
-#image-slider img {
+.restore-img-box #image-slider > img,
+.restore-img-box #image-slider .img-wrapper img {
   display: block;
-  width:580px;
-  height:580px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   pointer-events: none;
   user-select: none;
 }
 
-#image-slider .img-wrapper {
+.restore-img-box #image-slider .img-wrapper {
   position: absolute;
   top: 0;
   right: 0;
@@ -528,18 +555,19 @@ export default {
   z-index: 1;
 }
 
-#image-slider .img-wrapper img {
+.restore-img-box #image-slider .img-wrapper img {
   position: absolute;
   top: 0;
   right: 0;
-  height: 100%;
+  max-width: none;
 }
 
-#image-slider .handle {
+.restore-img-box #image-slider .handle {
   border: 0 solid red;
   position: absolute;
   top: 0;
-  left: calc(50% - var(--image-slider-handle-width) / 2);
+  left: 50%;
+  transform: translateX(-50%);
   width: var(--image-slider-handle-width);
   height: 100%;
   display: flex;
@@ -548,9 +576,10 @@ export default {
   align-items: center;
   user-select: none;
   z-index: 2;
+  pointer-events: none;
 }
 
-#image-slider .handle-circle {
+.restore-img-box #image-slider .handle-circle {
 
   color: white;
   border: 2px solid white;
@@ -560,7 +589,7 @@ export default {
   justify-content: space-evenly;
 }
 
-#image-slider .handle-line {
+.restore-img-box #image-slider .handle-line {
   width: 2px;
   flex-grow: 1;
   background: white;
@@ -579,22 +608,23 @@ export default {
 .style-title {
   text-align: center;
   font-size: 22px;
-  font-family: "幼圆", sans-serif;
-  font-weight: 600;
+  font-family: var(--theme-display-fontfamily);
+  font-weight: 700;
   margin-bottom: 20px;
+  color: var(--theme-heading-color);
 }
 .list {
   text-align: center;
   cursor: pointer;
   width: auto;
   height: 20px;
-  background-color: rgb(236, 244, 255);
+  background-color: var(--theme-tag-bg);
   position: relative;
   margin-bottom: 10px;
 }
 .list-number:hover::after {
   width: 100%;
-  background: rgb(64, 158, 255);
+  background: var(--theme-active-color);
 }
 .list-number::after {
   position: absolute;
@@ -608,7 +638,7 @@ export default {
   z-index: -1;
 }
 .list:hover * {
-  color: #ecf4ff !important;
+  color: var(--text-inverse) !important;
 }
 .list-number {
   z-index: 1;

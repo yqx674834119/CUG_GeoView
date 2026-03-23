@@ -13,7 +13,7 @@
       支持<span class="go-bold">文件夹批量上传</span>或<span class="go-bold">单文件上传</span>。
     </p>
     
-    <el-card style="border: 4px dashed var(--el-border-color);position: relative">
+    <el-card class="upload-panel upload-panel--double">
       <div v-if="fileList1.length||fileList2.length" class="clear-queue">
         <el-button type="primary" class="btn-animate2 btn-animate__surround" @click="clearQueue">
           清空图片
@@ -21,10 +21,11 @@
       </div>
       <div class="upload-box">
         <div class="upload-item">
-          <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">参考影像 (Fixed)</div>
+          <div class="upload-caption">参考影像 (Fixed)</div>
           <el-upload
             ref="uploadA"
             v-model:file-list="fileList1"
+            class="upload-card"
             drag
             action="#"
             multiple
@@ -36,16 +37,17 @@
               拖拽或<em>点击上传</em>
             </div>
           </el-upload>
-          <div style="text-align: center;">
+          <div class="upload-action-row">
              <input id="upload-fileA" ref="refFileA" type="file" webkitdirectory directory multiple @change="uploadFirst" style="display:none">
-             <el-button size="small" @click="file1Click">上传文件夹</el-button>
+             <i class="iconfont icon-wenjianshangchuan upload-folder-action" @click="file1Click">上传文件夹</i>
           </div>
         </div>
         <div class="upload-item">
-          <div style="text-align: center; margin-bottom: 10px; font-weight: bold;">待配准影像 (Moving)</div>
+          <div class="upload-caption">待配准影像 (Moving)</div>
           <el-upload
             ref="uploadB"
             v-model:file-list="fileList2"
+            class="upload-card"
             drag
             action="#"
             multiple
@@ -57,9 +59,9 @@
               拖拽或<em>点击上传</em>
             </div>
           </el-upload>
-          <div style="text-align: center;">
+          <div class="upload-action-row">
              <input id="upload-fileB" ref="refFileB" type="file" webkitdirectory directory multiple @change="uploadSecond" style="display:none">
-             <el-button size="small" @click="file2Click">上传文件夹</el-button>
+             <i class="iconfont icon-wenjianshangchuan upload-folder-action" @click="file2Click">上传文件夹</i>
           </div>
         </div>
       </div>
@@ -76,7 +78,7 @@
             :label="item.model_path"
           >
             <el-tooltip effect="dark" :content="item.description || '暂无描述'" placement="top-start">
-              <span style="font-weight: bold; font-size: 14px;">
+              <span class="model-label">
                 {{ item.model_name }}
               </span>
             </el-tooltip>
@@ -93,7 +95,7 @@
 
     <Tabinfor>
       <template #left>
-        <div id="sub-title" style="font-size: 25px">
+        <div id="sub-title">
           结果预览<i class="iconfont icon-dianji" />
         </div>
       </template>
@@ -260,10 +262,8 @@ export default {
 </script>
 
 <style lang="less" scoped>
-* { font-family: SimHei sans-serif; }
+* { font-family: var(--theme-default-fontfamily); }
 #sub-title { font-size: 25px; }
-.upload-box { display: flex; justify-content: space-around; }
-.upload-item { width: 45%; }
 .custom-model { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .handle-button { margin-top: 20px; text-align: center; }
 </style>

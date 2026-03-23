@@ -1,7 +1,7 @@
 <template>
   <div class="header-content">
     <div class="header-left">
-      <span class="platform-info"> </span>
+      <span class="platform-info">智能遥感解译系统</span>
     </div>
     <div class="header-right">
       <el-button
@@ -13,17 +13,31 @@
         <i class="icon-map" style="margin-right: 4px;" />
         ⛏️ 矿山监测系统
       </el-button>
-      <el-button type="text" class="system-menu">
-        <i class="icon-settings" />
-        系统设置
+      <el-button
+        class="theme-toggle"
+        @click="handleThemeToggle"
+      >
+        <i :class="themeIconClass" />
+        {{ isDarkTheme ? "切换浅色" : "切换深色" }}
       </el-button>
     </div>
   </div>
 </template>
 
 <script>
+import {
+  THEME_CHANGE_EVENT,
+  getCurrentTheme,
+  toggleTheme,
+} from "@/utils/theme";
+
 export default {
   name: 'HeaderComponent',
+  data() {
+    return {
+      currentTheme: getCurrentTheme(),
+    };
+  },
   computed: {
     minerEnabled() {
       return process.env.VUE_APP_MINER_ENABLED === 'true';
@@ -31,11 +45,25 @@ export default {
     minerUrl() {
       return process.env.VUE_APP_MINER_URL || 'http://localhost:4000';
     },
+    isDarkTheme() {
+      return this.currentTheme === "dark";
+    },
+    themeIconClass() {
+      return this.isDarkTheme ? "icon-sun" : "icon-moon";
+    },
+  },
+  mounted() {
+    window.addEventListener(THEME_CHANGE_EVENT, this.syncTheme);
+  },
+  beforeUnmount() {
+    window.removeEventListener(THEME_CHANGE_EVENT, this.syncTheme);
   },
   methods: {
-    handleSystemSettings() {
-      // 系统设置功能，暂时预留
-      this.$message.info('系统设置功能开发中...');
+    syncTheme(event) {
+      this.currentTheme = event.detail.theme;
+    },
+    handleThemeToggle() {
+      this.currentTheme = toggleTheme();
     },
     goToMiner() {
       window.open(this.minerUrl, '_blank');
@@ -48,74 +76,89 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex: 1;
   width: 100%;
+  min-width: 0;
   padding: 0;
-  font-family: Microsoft JhengHei UI, sans-serif;
   height: 60px;
+  gap: 16px;
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   flex: 1;
 }
 
 .platform-info {
-  color: var(--text-primary);
+  color: var(--theme-heading-color);
   font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .miner-btn {
-  background: linear-gradient(135deg, #0984e3, #00cec9) !important;
+  background: linear-gradient(135deg, var(--theme-major-color), var(--primary-hover)) !important;
   border: none !important;
-  color: #fff !important;
+  color: var(--text-inverse) !important;
   font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.3s ease;
+  border-radius: 999px;
+  transition: all var(--transition-fast);
 }
 
 .miner-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(9, 132, 227, 0.4);
+  box-shadow: 0 10px 22px rgba(0, 100, 201, 0.24);
 }
 
-.system-menu {
-  color: var(--text-secondary);
-  font-size: 14px;
-  padding: 8px 16px;
-  border-radius: 6px;
-  transition: all var(--transition-fast);
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--theme-tag-bg);
+  border: 1px solid transparent;
+  color: var(--theme-active-color);
 }
 
-.system-menu:hover {
-  color: var(--primary-light);
-  background-color: var(--bg-hover);
+.theme-toggle:hover {
+  border-color: var(--theme-active-color);
+  background: transparent;
 }
 
-.system-menu .iconfont {
-  margin-right: 6px;
-  font-size: 16px;
+.theme-toggle [class^="icon-"]::before,
+.theme-toggle [class*=" icon-"]::before {
+  width: 16px;
+  height: 16px;
 }
 
 @media (max-width: 768px) {
   .header-content {
-    padding: 0 10px;
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    padding: 6px 0;
   }
   
   .platform-info {
     font-size: 16px;
   }
-  
-  .system-menu {
-    font-size: 12px;
-    padding: 6px 12px;
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
   }
 }
 </style>
-

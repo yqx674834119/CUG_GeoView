@@ -14,7 +14,7 @@
     </p>
     <el-row type="flex" justify="center">
       <el-col :span="24">
-        <el-card style="border: 4px dashed var(--el-border-color)">
+        <el-card class="upload-panel upload-panel--single">
           <div v-if="fileList.length" class="clear-queue">
             <el-button type="primary" class="btn-animate2 btn-animate__surround" @click="clearQueue">
               清空图片
@@ -30,12 +30,12 @@
               只能上传一张或多张图片，请在下方上传文件夹
             </div>
           </el-upload>
-          <el-row justify="center">
+          <el-row justify="center" class="upload-action-row">
             <input id="folder" ref="uploadFile" type="file" webkitdirectory directory multiple @change="uploadMore()">
-            <i class="iconfont icon-wenjianshangchuan" @click="fileClick">上传文件夹</i>
+            <i class="iconfont icon-wenjianshangchuan upload-folder-action" @click="fileClick">上传文件夹</i>
           </el-row>
 
-          <el-row justify="center">
+          <el-row justify="center" class="upload-helper-row">
             <p>
               <label class="prehandle-label container">
                 <input ref="cut" type="checkbox" @change="select()">
@@ -44,7 +44,7 @@
               </label>
             </p>
           </el-row>
-          <div style="text-align: center; margin-bottom: 20px;">
+          <div class="upload-options-row" style="margin-bottom: 20px;">
             <el-checkbox v-model="isSlice" label="开启大图切分" border />
           </div>
           <el-row justify="center">
@@ -58,9 +58,9 @@
                   :content="item.description || '暂无描述'"
                   placement="top-start"
                 >
-                  <span style="font-weight: bold; font-size: 14px;">
+                  <span class="model-label">
                     {{ item.model_name }}
-                    <i class="iconfont icon-tishi" style="font-size: 14px; color: #909399; margin-left: 5px;" />
+                    <i class="iconfont icon-tishi model-label__icon" />
                   </span>
                 </el-tooltip>
               </el-radio>
@@ -102,7 +102,6 @@
         @child-refresh="getMore" />
     </el-dialog>
     <ImgShow :img-arr="imgArr" />
-    <Bottominfor />
   </div>
 </template>
 <script>
@@ -111,14 +110,12 @@ import { historyGetPage } from "@/api/history";
 import { getUploadImg, upload } from "@/utils/getUploadImg";
 import ImgShow from '@/components/ImgShow'
 import Tabinfor from "@/components/Tabinfor";
-import Bottominfor from "@/components/Bottominfor";
 import MyVueCropper from "@/components/MyVueCropper";
 
 export default {
   name: "Classification",
   components: {
     Tabinfor,
-    Bottominfor,
     MyVueCropper,
     ImgShow
   },
@@ -223,7 +220,7 @@ export default {
 </script>
 <style lang="less" scoped>
 * {
-  font-family: SimHei sans-serif;
+  font-family: var(--theme-default-fontfamily);
 }
 
 #sub-title {
@@ -252,11 +249,11 @@ export default {
 }
 
 .index-number {
-  font-family: Yu Gothic Medium;
-  font-style: oblique;
+  font-family: var(--theme-display-fontfamily);
   font-size: 30px;
   margin-left: 5px;
   margin-right: 10px;
+  color: var(--theme-heading-color);
 }
 
 .img-infor {
@@ -267,7 +264,7 @@ export default {
   width: 256px;
   height: 30px;
   font-weight: 500;
-  font-family: Microsoft JhengHei UI, sans-serif;
+  color: var(--text-secondary);
 }
 
 .custom-pic {

@@ -1,9 +1,36 @@
-<!doctype html><html lang=""><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/x-icon" href="/logo.svg"><title>CUG 智能遥感解译系统</title><script defer="defer" src="/js/chunk-vendors.9ecf6eba.js"></script><script defer="defer" src="/js/app.3abd91fe.js"></script><link href="/css/chunk-vendors.214eaf79.css" rel="stylesheet"><link href="/css/app.41a0dcf9.css" rel="stylesheet"></head><body><noscript><strong>We're sorry but cugrs doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript><div id="app"><div id="loader-wrapper"><div id="loader"></div><div class="loader-section section-left"></div><div class="loader-section section-right"></div><div class="load_title">正在加载 CUG 智能遥感解译系统,请耐心等待...<br><p>v1.0</p></div></div></div></body></html><style>html,
+<!doctype html><html lang=""><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/x-icon" href="/logo.svg"><title>CUG 智能遥感解译系统</title><script>(function () {
+      var storageKey = "geoview-theme";
+      var theme = "light";
+      try {
+        var cached = window.localStorage.getItem(storageKey);
+        if (cached === "dark" || cached === "light") {
+          theme = cached;
+        }
+      } catch (error) {}
+      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.style.colorScheme = theme;
+    })();</script><script defer="defer" src="/js/chunk-vendors.9ecf6eba.js"></script><script defer="defer" src="/js/app.bf6de336.js"></script><link href="/css/chunk-vendors.214eaf79.css" rel="stylesheet"><link href="/css/app.1d852271.css" rel="stylesheet"></head><body><noscript><strong>We're sorry but cugrs doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript><div id="app"><div id="loader-wrapper"><div id="loader"></div><div class="loader-section section-left"></div><div class="loader-section section-right"></div><div class="load_title">正在加载 CUG 智能遥感解译系统,请耐心等待...<br><p>v1.0</p></div></div></div></body></html><style>html,
   body,
   #app {
     height: 100%;
     margin: 0;
-    padding: 0
+    padding: 0;
+    font-family: "Alibaba PuHuiTi", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  :root,
+  :root[data-theme="light"] {
+    --loader-bg: linear-gradient(180deg, #f5fbff 0%, #e4f0fb 100%);
+    --loader-ring: #0064c9;
+    --loader-text: #15345e;
+    --loader-accent: #2f8eff;
+  }
+
+  :root[data-theme="dark"] {
+    --loader-bg: linear-gradient(180deg, #031f45 0%, #0b356d 100%);
+    --loader-ring: #fac372;
+    --loader-text: #f8fbff;
+    --loader-accent: #9fcbff;
   }
 
   .chromeframe {
@@ -33,7 +60,7 @@
     margin: -75px 0 0 -75px;
     border-radius: 50%;
     border: 3px solid transparent;
-    border-top-color: #4ea3fb;
+    border-top-color: var(--loader-ring);
     -webkit-animation: spin 2s linear infinite;
     -ms-animation: spin 2s linear infinite;
     -moz-animation: spin 2s linear infinite;
@@ -51,7 +78,7 @@
     bottom: 5px;
     border-radius: 50%;
     border: 3px solid transparent;
-    border-top-color: #4ea3fb;
+    border-top-color: var(--loader-accent);
     -webkit-animation: spin 3s linear infinite;
     -moz-animation: spin 3s linear infinite;
     -o-animation: spin 3s linear infinite;
@@ -68,7 +95,7 @@
     bottom: 15px;
     border-radius: 50%;
     border: 3px solid transparent;
-    border-top-color: #4ea3fb;
+    border-top-color: var(--loader-ring);
     -moz-animation: spin 1.5s linear infinite;
     -o-animation: spin 1.5s linear infinite;
     -ms-animation: spin 1.5s linear infinite;
@@ -110,10 +137,10 @@
     width: 100%;
     height: 100%;
     /* global 94%+ browsers support */
-    background: repeating-linear-gradient(50deg, #fff1eb 0%, #ace0f9 100%);
+    background: var(--loader-bg);
 
     /* safari 5.1+,chrome 10+ */
-    background: -webkit-repeating-linear-gradient(50deg, #fff1eb 0%, #ace0f9 100%);
+    background: var(--loader-bg);
     z-index: 1000;
     -webkit-transform: translateX(0);
     -ms-transform: translateX(0);
@@ -168,8 +195,8 @@
   }
 
   #loader-wrapper .load_title {
-    font-family: 'Open Sans';
-    color: #4ea3fb;
+    font-family: "YouSheBiaoTiHei", "Alibaba PuHuiTi", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--loader-text);
     font-size: 36px;
     width: 100%;
     text-align: center;
@@ -186,6 +213,6 @@
     font-weight: normal;
     font-style: italic;
     font-size: 26px;
-    color: #4ea3fb;
+    color: var(--loader-accent);
     opacity: .8
   }</style>

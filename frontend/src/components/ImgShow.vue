@@ -123,14 +123,14 @@ export default {
 
 <style scoped lang="less">
 * {
-  font-family: SimHei sans-serif;
+  font-family: var(--theme-default-fontfamily);
 }
 .index-number {
-  font-family: Yu Gothic Medium;
-  font-style: oblique;
+  font-family: var(--theme-display-fontfamily);
   font-size: 30px;
   margin-left: 5px;
   margin-right: 10px;
+  color: var(--theme-heading-color);
 }
 .img-infor {
   text-align: center;
@@ -140,7 +140,7 @@ export default {
   height: 30px;
   line-height: 30px;
   font-weight: 500;
-  font-family: Microsoft JhengHei UI, sans-serif;
+  color: var(--text-secondary);
 }
 .img-display-box{
   display: flex;
@@ -163,6 +163,6 @@ export default {
   }
 }
 .el-divider /deep/{
-  background-color: white;
+  background-color: transparent;
 }
 </style>
