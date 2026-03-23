@@ -120,16 +120,18 @@
             预览
           </el-button>
           <el-button
+            v-show="scope.row.type === '目标跟踪'"
+            size="default"
+            type="primary"
+            @click="openTrackingVideo(scope.row)"
+          >
+            视频
+          </el-button>
+          <el-button
             v-show="scope.row.type !== '场景分类'"
             size="default"
             type="primary"
-            @click="
-              downloadimgWithWords(
-                scope.row.id,
-                global.BASEURL + scope.row.after_img,
-                `${scope.row.type}结果图.png`
-              )
-            "
+            @click="downloadHistoryAsset(scope.row)"
           >
             下载
           </el-button>
@@ -393,6 +395,43 @@ export default {
     historyDelete,
     previewTwoPic,
     previewThreePic,
+    toAbsoluteUrl(path) {
+      if (!path) {
+        return "";
+      }
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+      }
+      return `${global.BASEURL}${path.replace(/^\//, "")}`;
+    },
+    downloadDirect(url, filename) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+    },
+    downloadHistoryAsset(row) {
+      if (row.type === "目标跟踪" && row.data && row.data.output_video_path) {
+        this.downloadDirect(
+          this.toAbsoluteUrl(row.data.output_video_path),
+          `第${row.id}组目标跟踪结果.mp4`,
+        );
+        return;
+      }
+      this.downloadimgWithWords(
+        row.id,
+        this.toAbsoluteUrl(row.after_img),
+        `${row.type}结果图.png`,
+      );
+    },
+    openTrackingVideo(row) {
+      const videoPath = row.data && row.data.output_video_path;
+      if (!videoPath) {
+        this.previewTwoPic(row.before_img, row.after_img);
+        return;
+      }
+      window.open(this.toAbsoluteUrl(videoPath), "_blank");
+    },
     handleDelete(index, row) {
       this.$confirm("此操作将永久删除, 是否继续?", "提示", {
         confirmButtonText: "确定",
@@ -457,12 +496,7 @@ export default {
         this.$message.warning("请选择要下载的历史记录的图片哦");
       } else {
         for (let item of this.multipleSelection) {
-          this.downloadimgWithWords(
-            item.id,
-            global.BASEURL + item.after_img,
-
-            `${item.type}结果图.png`
-          );
+          this.downloadHistoryAsset(item);
         }
       }
     },

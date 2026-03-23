@@ -9,6 +9,13 @@ torchvision
 # HuggingFace Transformers
 transformers>=4.30.0
 
-# Image processing
+# Registration / image processing
 pillow>=9.0.0
 numpy>=1.21.0
+opencv-contrib-python<4.11
+scipy<1.14
+matplotlib
+
+# Registration model stack
+kornia==0.7.1
+kornia_moons

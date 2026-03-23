@@ -288,33 +288,25 @@ def registration_api():
 @analysis_api.post('/tracking')
 def tracking_api():
     req_json = request.json
-    # tracking input usually a video or image sequence folder
-    # For now support single video file upload (which backend might have saved)
-    # or folder path if provided
-    
-    input_path = req_json.get("input_path") # e.g. uploaded video path
-    rect = req_json.get("rect") # [x, y, w, h]
-    
-    if not input_path:
-        return fail_api("请提供输入视频/图像序列")
+    model_path = req_json.get("model_path", "builtin:tracking:auto")
+    list_ = req_json.get("list")
+    rect = req_json.get("rect")
+
+    if not list_:
+        return fail_api("请提供上传后的图像序列")
     if not rect or len(rect) != 4:
-         return fail_api("请提供初始跟踪框")
-         
-    # input_path needs to be handled. If it's a relative path from upload, resolve it.
-    # Assuming frontend uploads video and gets a path, or uploads images.
-    # For simplicity, assume input_path is relative to up_dir or is a full path.
-    
-    # If input is a list of images (sequence)
-    if isinstance(input_path, list):
-         # TODO: handle list of images
-         pass
-    else:
-         # Assume absolute or relative to up_dir
-         if not os.path.exists(input_path):
-             input_path = os.path.join(up_dir, input_path)
-             
+        return fail_api("请提供初始跟踪框")
+
     try:
-        res = tracking(input_path, generate_dir, rect, type_=7)
+        rect = [int(value) for value in rect]
+    except Exception:
+        return fail_api("初始跟踪框格式错误")
+
+    if rect[2] <= 0 or rect[3] <= 0:
+        return fail_api("初始跟踪框宽高必须大于0")
+
+    try:
+        res = tracking(model_path, up_dir, generate_dir, list_, rect, type_=7)
         return success_api(data=res)
     except Exception as e:
         return fail_api(f"跟踪失败: {str(e)}")

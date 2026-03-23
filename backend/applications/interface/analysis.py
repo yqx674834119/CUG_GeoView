@@ -399,36 +399,35 @@ def registration(model_path, data_path, out_dir, names, type_):
     return results
 
 
-def tracking(input_path, out_dir, rect, type_):
+def tracking(model_path, data_path, out_dir, names, rect, type_):
     """
     目标跟踪
     """
     import applications.interface.tracking as TRACK
     
     print("目标跟踪----------------->start")
-    
-    # Execute tracking
-    # rect is [x, y, w, h]
-    video_url = TRACK.execute(input_path, out_dir, rect)
-    
-    # Save to database
-    # Input is video path, output is video path
-    # We might need to handle video URL generation if it's a file path
-    
-    # For db record:
-    # before_img = input video (or first frame)
-    # after_img = output video with boxes
-    
-    input_url = ""
-    if input_path.startswith(up_dir):
-        input_url = up_url + os.path.relpath(input_path, up_dir)
-    else:
-        input_url = input_path # Or handle accordingly
-        
-    save_analysis(type_, input_url, video_url, pic2="", data=json.dumps({"rect": rect}))
+
+    result = TRACK.execute(model_path, data_path, out_dir, names, rect)
+
+    first_frame = result.get("first_frame_input")
+    preview_path = result.get("preview_path")
+    metadata = {
+        "rect": rect,
+        "output_video_path": result.get("output_video_path"),
+        "trajectory_path": result.get("trajectory_path"),
+        "summary": result.get("summary"),
+        "method_used": result.get("method_used"),
+    }
+    save_analysis(
+        type_,
+        first_frame,
+        preview_path,
+        pic2="",
+        data=json.dumps(metadata, ensure_ascii=False),
+    )
     
     print("目标跟踪----------------->end")
-    return video_url
+    return result
 
 
 def handle(fun_type, imgs, src_dir, save_dir, prefix=""):

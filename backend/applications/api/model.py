@@ -91,11 +91,25 @@ HUGGINGFACE_MODELS = {
     ],
     "tracking": [
         {
-            "model_path": "hf:opencv/csrt",
+            "model_path": "builtin:tracking:auto",
+            "model_type": "tracker",
+            "model_name": "工程基线目标跟踪",
+            "backend": "geoview",
+            "description": "用途：遥感图像序列单目标跟踪。特点：默认优先使用 CSRT，自动回退到 KCF/MIL；若运行环境缺少 OpenCV Tracker 模块，则继续使用模板匹配基线完成跟踪。"
+        },
+        {
+            "model_path": "builtin:tracking:csrt",
             "model_type": "tracker",
             "model_name": "CSRT 目标跟踪",
             "backend": "opencv",
             "description": "用途：单目标持续跟踪。特点：判别相关滤波器(DCF)与通道和空间可靠性(CSR)结合，适应目标形变和遮挡，精度较高。"
+        },
+        {
+            "model_path": "builtin:tracking:kcf",
+            "model_type": "tracker",
+            "model_name": "KCF 快速跟踪",
+            "backend": "opencv",
+            "description": "用途：轻量级单目标跟踪。特点：速度更快，适合帧数较多或资源受限场景，但对尺度变化和遮挡的鲁棒性弱于 CSRT。"
         }
     ]
 }
