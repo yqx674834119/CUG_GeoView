@@ -1,5 +1,11 @@
 FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
 
+ARG MMENGINE_VERSION=0.10.4
+ARG MMCV_VERSION=2.2.0
+ARG MMSEG_VERSION=1.2.2
+ARG MMDET_VERSION=3.0.0
+ARG MMROTATE_VERSION=1.0.0rc1
+
 ARG USER_HOME=/root
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
@@ -88,12 +94,13 @@ RUN conda run -n MMSeg310 pip install \
 # Install OpenMMLab dependencies in MMSeg310
 RUN conda run -n MMSeg310 pip install \
     openmim==0.3.9 && \
-    conda run -n MMSeg310 mim install mmengine==0.10.4 && \
-    conda run -n MMSeg310 mim install "mmcv==2.1.0"
+    conda run -n MMSeg310 pip uninstall -y mmdet || true && \
+    conda run -n MMSeg310 mim install "mmengine==${MMENGINE_VERSION}" && \
+    conda run -n MMSeg310 mim install "mmcv==${MMCV_VERSION}"
 
 # Install MMSegmentation / MMRotate with mutually compatible OpenMMLab versions
 RUN conda run -n MMSeg310 pip install \
-    mmsegmentation==1.2.2 \
+    "mmsegmentation==${MMSEG_VERSION}" \
     transformers==4.36.2 \
     huggingface_hub \
     numpy==1.26.4 \
@@ -102,12 +109,15 @@ RUN conda run -n MMSeg310 pip install \
     ftfy \
     regex \
     "scipy<1.14" && \
-    conda run -n MMSeg310 mim install "mmdet>=3.0.0rc5,<3.1.0" && \
-    conda run -n MMSeg310 mim install "mmrotate==1.0.0rc1" && \
+    conda run -n MMSeg310 mim install "mmdet==${MMDET_VERSION}" && \
+    conda run -n MMSeg310 mim install "mmrotate==${MMROTATE_VERSION}" && \
     conda run -n MMSeg310 pip install --force-reinstall \
     "numpy<2" \
-    "opencv-python<4.11" && \
-    conda run -n MMSeg310 pip cache purge
+    "opencv-python<4.11"
+
+RUN conda run -n MMSeg310 python -c "import mmcv, mmengine, mmdet, mmrotate, mmseg; print('mmcv', mmcv.__version__); print('mmengine', mmengine.__version__); print('mmdet', mmdet.__version__); print('mmrotate', mmrotate.__version__); print('mmseg', mmseg.__version__)"
+
+RUN conda run -n MMSeg310 pip cache purge
 
 # Install Kornia and dependencies for Registration/Tracking in HFPyTorch310
 RUN conda run -n HFPyTorch310 pip install \

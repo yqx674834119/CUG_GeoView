@@ -47,7 +47,7 @@ def get_model_paths(model_ref: str) -> tuple:
         os.path.join(model_dir, manifest.get("config_file", "config.py")))
     checkpoint = os.path.abspath(
         os.path.join(model_dir, manifest.get("checkpoint_file", "checkpoint.pth")))
-    return config, checkpoint
+    return config, checkpoint, model_dir
 
 
 def call_mmseg_inference(
@@ -73,7 +73,7 @@ def call_mmseg_inference(
         return []
     
     # 获取模型路径
-    config_path, checkpoint_path = get_model_paths(model_ref)
+    config_path, checkpoint_path, model_dir = get_model_paths(model_ref)
     
     # 检查模型文件是否存在
     if not os.path.exists(config_path):
@@ -125,13 +125,17 @@ def call_mmseg_inference(
     
     print(f"[MMSeg-Caller] Executing: {' '.join(cmd)}", flush=True)
     
+    env = os.environ.copy()
+    env["GEOVIEW_MMSEG_MODEL_DIR"] = model_dir
+
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=timeout,
-            cwd=_curr_dir
+            cwd=_curr_dir,
+            env=env,
         )
         
         if result.returncode != 0:

@@ -77,10 +77,10 @@ python app.py
 2. 克隆或下载本项目的代码，并保持目录结构完整（至少包含 `Dockerfile`、`docker-compose.yml`、`config.yaml`、`backend/`、`frontend/`）。
 3. 若需要修改服务端口或数据库密码，可先编辑仓库根目录的 `config.yaml` 和 `docker-compose.yml`。
 
-### 1. 构建镜像
+### 1. 拉取最新应用镜像
 在项目根目录执行：
 ```bash
-docker compose build
+docker compose pull app
 ```
 
 > 如需使用 GPU，请确保宿主机已安装正确版本的 NVIDIA 驱动，并按照 [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) 的指引完成配置。
@@ -116,7 +116,7 @@ docker compose exec app bash
 ```
 
 ### 4. 推送镜像到云端镜像仓库（推荐）
-构建完成后，推荐将镜像推送到云端仓库（如 Docker Hub、阿里云、华为云等），方便团队成员直接拉取。
+如需自行重建并推送镜像，可将镜像推送到云端仓库（如 Docker Hub、阿里云、华为云等），方便团队成员直接拉取。
 
 1. 选择并创建镜像仓库  
    - Docker Hub: 新建公开或私有仓库，例如 `yourname/cugrs`。  
@@ -131,11 +131,11 @@ docker compose exec app bash
    ```
 
 3. 为本地镜像重新打 Tag  
-   构建完成后默认镜像名为 `cugrs/app:latest`。根据创建的仓库地址重新打标签，例如：
+   如果您手动 `docker build` 生成了本地镜像，请按实际镜像名重新打标签，例如：
    ```bash
-   docker tag cugrs/app:latest yourname/cugrs:latest
+   docker tag your-local-image:latest yourname/cugrs:latest
    # 或针对阿里云仓库
-   docker tag cugrs/app:latest crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
+   docker tag your-local-image:latest crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
    ```
 
 4. 推送镜像  
@@ -173,9 +173,9 @@ cugrs/
 #### 5.2 导出 Docker 镜像
 在项目根目录执行：
 ```bash
-docker save cugrs/app:latest -o cugrs-image.tar
+docker save crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest -o cugrs-image.tar
 ```
-> 如果本地镜像标签不同，请将 `cugrs/app:latest` 替换为实际名称。
+> 如果本地镜像标签不同，请将上面的镜像名替换为实际名称。
 
 #### 5.3 打包项目代码
 ```bash

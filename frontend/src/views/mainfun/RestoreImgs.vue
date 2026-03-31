@@ -148,6 +148,15 @@
         </p>
       </template>
 
+      <template #mid>
+        <p v-if="imgArr.length">
+          <i
+            class="iconfont icon-dabaoxiazai"
+            @click="goCompress('影像超分重建')"
+          >结果图打包</i>
+        </p>
+      </template>
+
       <template #right>
         <span class="go-bold"><i
           class="iconfont icon-shuaxin"
@@ -174,128 +183,23 @@
         @child-refresh="getMore"
       />
     </el-dialog>
-
-    <el-card>
-      <div
-        class="restore-img-box"
-      >
-        <div>
-          <el-empty
-            v-if="!isUpload"
-            :image-size="300"
-          />
-          <div
-            v-else
-            id="image-slider"
-            ref="resultSlider"
-            @pointerdown.prevent="startSliderDrag"
-          >
-            <img
-              :src="imgArr[currentIndex]?.before_img"
-              alt=""
-            >
-            <div
-              class="img-wrapper"
-              :style="sliderWrapperStyle"
-            >
-              <img
-                :src="imgArr[currentIndex]?.after_img"
-                alt=""
-              >
-            </div>
-            <div
-              class="handle"
-              :style="sliderHandleStyle"
-            >
-              <div class="handle-line" />
-              <div class="handle-circle">
-                &#171;&#187;
-              </div>
-              <div class="handle-line" />
-            </div>
-          </div>
-        </div>
-        <div class="choose-restore">
-          <el-divider style="margin-top:0" />
-          <div class="style-title">
-            选择图片
-          </div>
-          <el-empty
-            v-if="!isUpload"
-            :image-size="100"
-          />
-          <div v-else>
-            <div
-              v-for="(item, index) in Math.ceil(imgArr.length / 5)"
-              :key="index"
-              class="list"
-            >
-              <div
-                class="list-number"
-                @click="goShowThese(index)"
-              >
-                {{ 5 * index + 1 }}-----{{ 5 * (index + 1) }}
-              </div>
-            </div>
-            <div
-              style="text-align:center"
-            >
-              下载此图片：<el-button
-                type="primary"
-                style="width:60px"
-                class="btn-animate btn-animate__shiny"
-                @click="
-                  downloadimgWithWords(
-                    imgArr[currentIndex].id,
-                    imgArr[currentIndex].after_img,
-                    `影像超分重建结果图.png`
-                  )
-                "
-              >
-                下载
-              </el-button>
-              <p
-                style="text-align:center"
-              >
-                <span> <i
-                  class="iconfont icon-dabaoxiazai"
-                  @click="goCompress('影像超分重建')"
-                >所有结果图打包</i></span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <el-row class="swiper-img">
-        <div
-          v-for="(item, index) in 5"
-          :key="index"
-          class="img-box"
-        >
-          <el-image
-            v-if="imgArr[currentQroup+index]?.after_img"
-            :src="imgArr[currentQroup+index]?.after_img"
-            :class="{'render-border':onRender===index}"
-            @click="goShowThis(index)"
-          />
-        </div>
-      </el-row>
-    </el-card>
+    <ImgShow :img-arr="imgArr" />
   </div>
 </template>
 <script>
 import {createSrc,imgUpload,getCustomModel} from "@/api/upload";
 import {historyGetPage} from "@/api/history";
 import {getUploadImg, goCompress, upload} from "@/utils/getUploadImg";
-import {atchDownload, downloadimgWithWords, getImgArrayBuffer} from "@/utils/download.js";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
+import ImgShow from "@/components/ImgShow";
 
 export default {
   name: "Restoreimgs",
   components: {
     Tabinfor,
     MyVueCropper,
+    ImgShow,
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -318,27 +222,9 @@ export default {
         model_path:''
       },
       modelPathArr:[],
-      sliderPosition: 50,
-      isDragging: false,
-      onRender: 0,
-      currentIndex:0,
-      currentQroup:0,
       imgArr:[],
-      isUpload:false,
       isSlice: false
     };
-  },
-  computed: {
-    sliderWrapperStyle() {
-      return {
-        width: `${100 - this.sliderPosition}%`,
-      };
-    },
-    sliderHandleStyle() {
-      return {
-        left: `${this.sliderPosition}%`,
-      };
-    },
   },
   watch:{
     uploadSrc:{
@@ -347,18 +233,7 @@ export default {
       },
       deep:true,
       immediate:true
-    },
-    isUpload:{
-      handler(newVal, oldVal) {
-        this.isUpload = newVal
-        if (newVal) {
-          this.resetSliderPosition();
-        }
-      }
     }
-  },
-  beforeUnmount() {
-    this.removeSliderListeners();
   },
   created() {
     this.getUploadImg("影像超分重建")
@@ -375,13 +250,9 @@ export default {
     createSrc,
     getUploadImg,
     upload,
-    downloadimgWithWords,
-    getImgArrayBuffer,
-    atchDownload,
     goCompress,
     clearQueue() {
       this.fileList = [];
-      this.resetSliderPosition();
       this.$message.success("清除成功");
     },
     notvisible() {
@@ -390,9 +261,6 @@ export default {
     },
     getMore() {
       this.getUploadImg("影像超分重建");
-      this.goShowThese(0)
-      this.resetSliderPosition();
-      console.log(this.imgArr.length)
     },
     uploadMore() {
       this.beforeUpload(...this.$refs.uploadFile.files)
@@ -425,52 +293,6 @@ export default {
     },
     select() {
       this.isNotCut = this.$refs.cut.checked;
-    },
-    goShowThis(index) {
-      this.currentIndex = this.currentQroup;
-      this.currentIndex += index;
-      this.onRender = index
-      this.resetSliderPosition();
-    },
-    goShowThese(index) {
-      this.currentQroup = 5 * index;
-      this.currentIndex = 5 * index;
-      this.goShowThis(0)
-    },
-    resetSliderPosition() {
-      this.sliderPosition = 50;
-    },
-    updateSliderPosition(clientX) {
-      const slider = this.$refs.resultSlider;
-      if (!slider) return;
-
-      const { left, width } = slider.getBoundingClientRect();
-      if (!width) return;
-
-      const position = ((clientX - left) / width) * 100;
-      this.sliderPosition = Math.min(100, Math.max(0, Number(position.toFixed(4))));
-    },
-    startSliderDrag(event) {
-      if (!this.isUpload) return;
-      this.isDragging = true;
-      this.updateSliderPosition(event.clientX);
-      this.removeSliderListeners();
-      window.addEventListener("pointermove", this.onSliderDrag);
-      window.addEventListener("pointerup", this.stopSliderDrag);
-      window.addEventListener("pointercancel", this.stopSliderDrag);
-    },
-    onSliderDrag(event) {
-      if (!this.isDragging) return;
-      this.updateSliderPosition(event.clientX);
-    },
-    stopSliderDrag() {
-      this.isDragging = false;
-      this.removeSliderListeners();
-    },
-    removeSliderListeners() {
-      window.removeEventListener("pointermove", this.onSliderDrag);
-      window.removeEventListener("pointerup", this.stopSliderDrag);
-      window.removeEventListener("pointercancel", this.stopSliderDrag);
     },
   },
 }

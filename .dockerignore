@@ -5,9 +5,15 @@ __pycache__/
 frontend/node_modules
 frontend/dist
 miner/node_modules
+miner/dist
 backend/app.log
+backend/static/upload
 tests/
 docker-compose.yml
 install.md
 demo.md
 Modified/
+offline_cache
+offline_images
+offline_bundle*
+TestData

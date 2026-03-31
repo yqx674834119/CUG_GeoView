@@ -19,8 +19,8 @@ from collections import abc
 def patch_openmmlab_version_guards():
     try:
         import mmcv
-        if getattr(mmcv, "__version__", "") == "2.2.0":
-            mmcv.__version__ = "2.1.0"
+        if getattr(mmcv, "__version__", "") in {"2.1.0", "2.2.0"}:
+            mmcv.__version__ = "2.0.1"
     except Exception:
         pass
 
@@ -72,8 +72,17 @@ def run_inference(
     device: str = "cuda:0",
     score_thr: float = 0.3,
 ) -> dict:
-    patch_python_compat()
     patch_openmmlab_version_guards()
+    patch_python_compat()
+
+    try:
+        import mmdet  # noqa: F401
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "MMRotate runtime dependency missing: mmdet is not installed in the MMSeg310 "
+            "environment. Please rebuild the Docker image so the current Dockerfile can "
+            "install the OpenMMLab detection stack."
+        ) from exc
 
     import mmrotate  # noqa: F401
     from mmdet.apis import init_detector, inference_detector

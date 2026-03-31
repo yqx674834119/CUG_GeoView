@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-APP_IMAGE="cugrs:local-build"
+APP_IMAGE="crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest"
 MYSQL_IMAGE="registry.openanolis.cn/openanolis/mysql:8.0.30-8.6"
 APP_PULL_IMAGE="${APP_PULL_IMAGE:-crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest}"
 MYSQL_PULL_IMAGE="${MYSQL_PULL_IMAGE:-registry.openanolis.cn/openanolis/mysql:8.0.30-8.6}"

@@ -21,6 +21,18 @@ import os
 import sys
 from typing import List, Optional
 
+
+def patch_openmmlab_version_guards():
+    try:
+        import mmcv
+        if getattr(mmcv, "__version__", "") in {"2.1.0", "2.2.0"}:
+            mmcv.__version__ = "2.0.1"
+    except Exception:
+        pass
+
+
+patch_openmmlab_version_guards()
+
 # 添加 backend 路径到 sys.path，确保可以导入 backend 下的模块
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../../"))
 # 导入自定义模型以注册到 metrics/registry

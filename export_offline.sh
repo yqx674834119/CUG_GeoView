@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-APP_IMAGE="cugrs:local-build"
+APP_IMAGE="crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest"
 MYSQL_IMAGE="registry.openanolis.cn/openanolis/mysql:8.0.30-8.6"
 APP_CONTAINER="cugrs-app"
 HF_DEST="${SCRIPT_DIR}/offline_cache/huggingface"
@@ -142,7 +142,7 @@ ensure_cache_writable
 python3 ./sync_model_assets.py --quiet
 
 if ! docker image inspect "${APP_IMAGE}" >/dev/null 2>&1; then
-    echo "未找到镜像 ${APP_IMAGE}。请先尝试在一台有网的机器上完成构建（docker compose build）。"
+    echo "未找到镜像 ${APP_IMAGE}。请先在联网环境执行 docker pull ${APP_IMAGE}。"
     exit 1
 fi
 

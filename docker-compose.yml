@@ -2,10 +2,7 @@ version: "3.9"
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: cugrs:local-build
+    image: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
     container_name: cugrs-app
     ports:
       - "5008:5008"
