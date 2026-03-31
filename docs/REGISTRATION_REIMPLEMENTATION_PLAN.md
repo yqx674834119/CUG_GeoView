@@ -24,6 +24,7 @@
   - 待配准影像
   - 配准结果
   - 叠加预览
+- 历史页会保留 fixed / moving / registered 三图主记录，并可继续查看 `overlay_path` 与 `checkerboard_path` 对应的复核图。
 
 ### 后端
 

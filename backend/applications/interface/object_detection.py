@@ -14,6 +14,9 @@ import paddlers as pdrs
 from paddlers.transforms import decode_image
 from paddlers.tasks.utils.visualize import visualize_detection
 
+from applications.common.model_assets import (infer_model_backend,
+                                              load_hf_config,
+                                              resolve_model_dir)
 from applications.common.path_global import md5_name, generate_url
 
 
@@ -26,10 +29,18 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
     :param threshold: 阈值
     """
 
+    model_backend = infer_model_backend(model_path)
+
     # 检查是否为 HuggingFace 模型
-    if model_path.startswith("hf:"):
+    if model_backend == "huggingface":
         from applications.interface.hf_inference_caller import call_hf_object_detection
-        model_id = model_path[3:]  # 去掉 'hf:' 前缀
+        if model_path.startswith("hf:"):
+            model_id = model_path[3:]
+        else:
+            hf_config = load_hf_config(model_path) or {}
+            model_id = hf_config.get("model_id", "")
+        if not model_id:
+            raise ValueError(f"无法解析 HuggingFace 模型 ID: {model_path}")
         print(f"[OD-DEBUG] Routing to HuggingFace inference: {model_id}")
         return call_hf_object_detection(
             model_id=model_id,
@@ -39,26 +50,26 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
         )
 
     # 检查是否为 MMRotate 模型 (e.g., mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90)
-    if model_path.startswith("mmrotate:"):
+    if model_backend == "mmrotate":
         from applications.interface.mmseg_inference_caller import call_mmrotate_inference
-        config_name = model_path[9:] # 去掉 'mmrotate:' 前缀
-        print(f"[OD-DEBUG] Routing to MMRotate inference: {config_name}")
+        print(f"[OD-DEBUG] Routing to MMRotate inference: {model_path}")
         return call_mmrotate_inference(
-            config_name=config_name,
+            model_ref=model_path,
             data_path=data_path,
             out_dir=out_dir,
             names=names
         )
 
+    model_dir = str(resolve_model_dir(model_path))
     image_list = [osp.join(data_path, name) for name in names]
-    print("[OD-DEBUG] 开始执行，模型目录:", model_path, flush=True)
+    print("[OD-DEBUG] 开始执行，模型目录:", model_dir, flush=True)
     print("[OD-DEBUG] 数据目录:", data_path, flush=True)
     print("[OD-DEBUG] 输出目录:", out_dir, flush=True)
     print("[OD-DEBUG] 待处理图片数量:", len(image_list), flush=True)
     for i, p in enumerate(image_list[:10]):
         print("[OD-DEBUG] 输入样本", i, p, "存在:" , osp.exists(p))
     try:
-        files = sorted([f for f in os.listdir(model_path)])
+        files = sorted([f for f in os.listdir(model_dir)])
         print("[OD-DEBUG] 模型目录文件:", files[:20], flush=True)
     except Exception as e:
         print("[OD-DEBUG] 无法列出模型目录:", e, flush=True)
@@ -93,7 +104,7 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
         fsg = os.environ.get("FLAGS_selected_gpus")
         use_gpu = bool(compiled and gpu_count > 0 and (cvd is None or str(cvd).strip() != ""))
         print("[OD-DEBUG] 初始化预测器(use_gpu=", use_gpu, ", compiled=", compiled, ", gpu_count=", gpu_count, ", CUDA_VISIBLE_DEVICES=", cvd, ")", sep="", flush=True)
-        predictor = pdrs.deploy.Predictor(model_dir=model_path, use_gpu=use_gpu)
+        predictor = pdrs.deploy.Predictor(model_dir=model_dir, use_gpu=use_gpu)
         print("[OD-DEBUG] 预测器初始化完成，用时秒:", round(time.time() - t0, 3), flush=True)
     except Exception:
         print("[OD-DEBUG] 预测器初始化失败:\n", traceback.format_exc(), flush=True)

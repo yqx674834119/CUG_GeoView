@@ -1,222 +1,163 @@
-import os
-import json
+from __future__ import annotations
+
+from pathlib import Path
 
 from flask import Blueprint
 
-from applications.common.utils.http import success_api, fail_api
+from applications.common.model_assets import (MODEL_ROOT, load_model_manifest,
+                                              to_public_model_path)
+from applications.common.utils.http import fail_api, success_api
 from applications.interface.utils import get_model_info
 
-model_api = Blueprint('model_api', __name__, url_prefix='/api/model')
+
+model_api = Blueprint("model_api", __name__, url_prefix="/api/model")
 
 
-# HuggingFace 内置模型列表
-HUGGINGFACE_MODELS = {
-    "image_restoration": [
-        {
-            "model_path": "hf:caidas/swin2SR-classical-sr-x2-64",
-            "model_type": "restorer",
-            "model_name": "两倍细节增强",
-            "backend": "huggingface",
-            "description": "用途：2倍超分辨率重建。特点：基于Swin Transformer，能较好地恢复图像高频细节，适合轻微模糊图像。"
-        },
-        {
-            "model_path": "hf:caidas/swin2SR-classical-sr-x4-64",
-            "model_type": "restorer",
-            "model_name": "四倍高清重建",
-            "backend": "huggingface",
-            "description": "用途：4倍超分辨率重建。特点：即使在放大倍数很高的情况下，仍保持较好的结构一致性，适合低分辨率图像。"
-        }
-    ],
-    "object_detection": [
-        {
-            "model_path": "hf:facebook/detr-resnet-50",
-            "model_type": "detector",
-            "model_name": "全局上下文目标检测",
-            "backend": "huggingface",
-            "description": "用途：通用目标检测。特点：端到端Transformer架构，全局上下文理解能力强，适合检测大场景下的物体。"
-        },
-        {
-            "model_path": "hf:microsoft/conditional-detr-resnet-50",
-            "model_type": "detector",
-            "model_name": "加速训练目标检测",
-            "backend": "huggingface",
-            "description": "用途：通用目标检测。特点：训练收敛速度比传统DETR快6.7倍，采用条件交叉注意力机制，定位更精准。"
-        },
-        {
-            "model_path": "hf:StephanST/WALDO30",
-            "model_type": "detector",
-            "model_name": "航拍多目标识别",
-            "backend": "huggingface",
-            "description": "用途：航拍图像目标检测。支持类别：车辆、人员、建筑、船只、自行车、集装箱、卡车、油罐、挖掘机、太阳能板、公交等12类民用目标。"
-        },
-        {
-            "model_path": "mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90",
-            "model_type": "detector",
-            "model_name": "定向目标检测 (Oriented RCNN)",
-            "backend": "mmrotate",
-            "description": "用途：针对航拍图像中的旋转目标进行检测。特点：Oriented R-CNN 算法，DOTA 数据集训练，能够准确检测任意方向的密集排列物体。"
-        }
-    ],
-    "semantic_segmentation": [
-        {
-            "model_path": "mmseg:cc-ln/CUGRS",
-            "model_type": "segmenter",
-            "model_name": "多要素地物分类",
-            "backend": "mmsegmentation",
-            "description": "用途：地物分类。支持类别：草地、林地、建筑、道路、裸地、水体。特点：结合DinoV3自监督特征和SwinTransformer，适合遥感复杂场景，泛化性强。"
-        }
-    ],
-    "registration": [
-        {
-            "model_path": "builtin:registration:auto",
-            "model_type": "register",
-            "model_name": "工程基线自动配准",
-            "backend": "geoview",
-            "description": "用途：当前默认的多模态配准基线。特点：优先尝试 Kornia LoFTR，失败时自动回退到 OpenCV 特征匹配，适合先把前端流程真正跑通。"
-        },
-        {
-            "model_path": "builtin:registration:opencv",
-            "model_type": "register",
-            "model_name": "OpenCV 特征配准",
-            "backend": "opencv",
-            "description": "用途：轻量级快速配准。特点：使用 SIFT/ORB/AKAZE 与 RANSAC 估计变换，不依赖额外深度模型，适合作为 CPU 兜底方案。"
-        },
-        {
-            "model_path": "hf:kornia/loftr",
-            "model_type": "register",
-            "model_name": "LoFTR 深度特征配准",
-            "backend": "kornia",
-            "description": "用途：多模态/大视角差异图像自动配准。特点：基于 Kornia LoFTR 的稠密深度匹配，无需显式关键点检测，对 Sentinel-1 / Sentinel-2 这类 SAR-光学场景更有潜力。"
-        }
-    ],
-    "tracking": [
-        {
-            "model_path": "builtin:tracking:auto",
-            "model_type": "tracker",
-            "model_name": "工程基线目标跟踪",
-            "backend": "geoview",
-            "description": "用途：遥感图像序列单目标跟踪。特点：默认优先使用 CSRT，自动回退到 KCF/MIL；若运行环境缺少 OpenCV Tracker 模块，则继续使用模板匹配基线完成跟踪。"
-        },
-        {
-            "model_path": "builtin:tracking:csrt",
-            "model_type": "tracker",
-            "model_name": "CSRT 目标跟踪",
-            "backend": "opencv",
-            "description": "用途：单目标持续跟踪。特点：判别相关滤波器(DCF)与通道和空间可靠性(CSR)结合，适应目标形变和遮挡，精度较高。"
-        },
-        {
-            "model_path": "builtin:tracking:kcf",
-            "model_type": "tracker",
-            "model_name": "KCF 快速跟踪",
-            "backend": "opencv",
-            "description": "用途：轻量级单目标跟踪。特点：速度更快，适合帧数较多或资源受限场景，但对尺度变化和遮挡的鲁棒性弱于 CSRT。"
-        }
-    ]
+MODEL_TYPES = {
+    "change_detection": "change_detector",
+    "classification": "classifier",
+    "image_restoration": "restorer",
+    "object_detection": "detector",
+    "semantic_segmentation": "segmenter",
+    "registration": "register",
+    "tracking": "tracker",
 }
 
 
-def get_paddle_models(model_type, expected_type):
-    """获取 Paddle 模型列表"""
-    model_list = []
-    model_dir = "model/{}".format(model_type)
-    
-    if os.path.exists(model_dir):
-        for dirname in os.listdir(model_dir):
-            dirpath = os.path.join(model_dir, dirname)
-            if not os.path.isdir(dirpath):
-                continue
-            try:
-                model_info = get_model_info(dirpath)
-                if model_info["_Attributes"]["model_type"] == expected_type:
-                    # 获取原始模型名称
-                    raw_model_name = model_info.get("Model", dirname)
-                    
-                    # 定义模型元数据映射 (Friendly Name & Description)
-                    PADDLE_MODEL_METADATA = {
-                        # Change Detection
-                        "BIT": {"name": "建筑物变化专用模型", "desc": "基于Transformer架构。特点：擅长捕捉建筑物等规则物体的变化，抗干扰能力强。"},
-                        "CDNet": {"name": "通用地表变化检测", "desc": "经典深度网络。特点：结构简单，适用于一般性的地表变化检测。"},
-                        "FC-EF": {"name": "快速变化检测", "desc": "特点：计算量小，速度快，适用于大范围快速普查。"},
-                        "FC-Siam-conc": {"name": "敏感变化检测", "desc": "特点：保留了更多通道特征，对颜色变化敏感。"},
-                        "FC-Siam-diff": {"name": "形状变化检测", "desc": "特点：直接比较特征差异，对只有形状改变的目标更敏感。"},
-                        
-                        # Classification
-                        "CondenseNetV2": {"name": "移动端场景分类", "desc": "特点：模型轻量，推理速度极快，适合资源受限环境。"},
-                        "ResNet50": {"name": "高精度场景分类", "desc": "特点：深层网络，特征提取能力强，分类准确率高。"},
-                        
-                        # Object Detection
-                        "FCOS": {"name": "密集小目标检测", "desc": "特点：无锚框设计，对重叠目标和密集小目标检测效果优秀。"},
-                        "YOLOv3": {"name": "实时通用目标检测", "desc": "特点：检测速度极快，适用于对实时性要求高的场景。"},
-                        "PPYOLO": {"name": "通用遥感目标识别", "desc": "特点：PaddleRS优化的YOLO系列模型，针对遥感图像优化，速度与精度平衡好。"},
-                        
-                        # Segmentation
-                        "DeepLabV3P": {"name": "高精度地物分类", "desc": "支持类别：云、阴影、雪、水体、陆地。特点：能有效处理多尺度物体，边界分割精细。"},
-                        "UNet": {"name": "通用地物分类", "desc": "特点：结构对称，对边缘信息的保留较好，适用于医学或简单遥感图像。"},
-                        
-                        # Restoration
-                        "DRN": {"name": "图像清晰化重建", "desc": "用途：将低分辨率模糊图像重建为高分辨率清晰图像。"},
-                        "ESRGAN": {"name": "照片级纹理增强", "desc": "用途：生成逼真的纹理细节，显著提升图像的主观视觉质量。"},
-                        "LesRCNN": {"name": "智能去噪修复", "desc": "用途：去除图像中的噪点和云雾干扰，还原真实地表细节。"}
-                    }
-                    
-                    # 查找匹配的元数据 (优先匹配 Model 字段，其次匹配目录名)
-                    meta = PADDLE_MODEL_METADATA.get(raw_model_name) or PADDLE_MODEL_METADATA.get(dirname)
-                    
-                    if meta:
-                        friendly_name = meta["name"]
-                        description = meta["desc"]
-                    else:
-                        friendly_name = raw_model_name
-                        description = "暂无详细描述"
+PADDLE_MODEL_METADATA = {
+    "BIT": {
+        "name": "建筑物变化专用模型",
+        "desc": "基于Transformer架构。特点：擅长捕捉建筑物等规则物体的变化，抗干扰能力强。",
+    },
+    "CDNet": {
+        "name": "通用地表变化检测",
+        "desc": "经典深度网络。特点：结构简单，适用于一般性的地表变化检测。",
+    },
+    "FC-EF": {
+        "name": "快速变化检测",
+        "desc": "特点：计算量小，速度快，适用于大范围快速普查。",
+    },
+    "FC-Siam-conc": {
+        "name": "敏感变化检测",
+        "desc": "特点：保留了更多通道特征，对颜色变化敏感。",
+    },
+    "FC-Siam-diff": {
+        "name": "形状变化检测",
+        "desc": "特点：直接比较特征差异，对只有形状改变的目标更敏感。",
+    },
+    "CondenseNetV2": {
+        "name": "移动端场景分类",
+        "desc": "特点：模型轻量，推理速度极快，适合资源受限环境。",
+    },
+    "ResNet50": {
+        "name": "高精度场景分类",
+        "desc": "特点：深层网络，特征提取能力强，分类准确率高。",
+    },
+    "FCOS": {
+        "name": "密集小目标检测",
+        "desc": "特点：无锚框设计，对重叠目标和密集小目标检测效果优秀。",
+    },
+    "YOLOv3": {
+        "name": "实时通用目标检测",
+        "desc": "特点：检测速度极快，适用于对实时性要求高的场景。",
+    },
+    "PPYOLO": {
+        "name": "通用遥感目标识别",
+        "desc": "特点：PaddleRS优化的YOLO系列模型，针对遥感图像优化，速度与精度平衡好。",
+    },
+    "DeepLabV3P": {
+        "name": "高精度地物分类",
+        "desc": "支持类别：云、阴影、雪、水体、陆地。特点：能有效处理多尺度物体，边界分割精细。",
+    },
+    "UNet": {
+        "name": "通用地物分类",
+        "desc": "特点：结构对称，对边缘信息的保留较好，适用于医学或简单遥感图像。",
+    },
+    "DRN": {
+        "name": "图像清晰化重建",
+        "desc": "用途：将低分辨率模糊图像重建为高分辨率清晰图像。",
+    },
+    "ESRGAN": {
+        "name": "照片级纹理增强",
+        "desc": "用途：生成逼真的纹理细节，显著提升图像的主观视觉质量。",
+    },
+    "LesRCNN": {
+        "name": "智能去噪修复",
+        "desc": "用途：去除图像中的噪点和云雾干扰，还原真实地表细节。",
+    },
+}
 
-                    model_list.append({
-                        "model_path": dirpath,
-                        "model_type": model_info["_Attributes"]["model_type"],
-                        "model_name": friendly_name,
-                        "description": description,
-                        "backend": "paddle"
-                    })
-            except Exception as e:
-                print(f"[Model] 跳过无效模型目录 {dirpath}: {e}")
-                continue
-    
+
+def iter_model_dirs(model_type: str):
+    model_dir = MODEL_ROOT / model_type
+    if not model_dir.exists():
+        return []
+    return sorted(path for path in model_dir.iterdir() if path.is_dir())
+
+
+def build_manifest_entry(model_dir: Path, expected_type: str):
+    manifest = load_model_manifest(model_dir)
+    if manifest is None or manifest.get("model_type") != expected_type:
+        return None
+    return {
+        "model_path": to_public_model_path(model_dir),
+        "model_type": manifest["model_type"],
+        "model_name": manifest["model_name"],
+        "backend": manifest["backend"],
+        "description": manifest.get("description", "暂无详细描述"),
+    }
+
+
+def build_paddle_entry(model_dir: Path, expected_type: str):
+    try:
+        model_info = get_model_info(str(model_dir))
+    except Exception:
+        return None
+
+    if model_info["_Attributes"]["model_type"] != expected_type:
+        return None
+
+    raw_model_name = model_info.get("Model", model_dir.name)
+    metadata = PADDLE_MODEL_METADATA.get(raw_model_name) or PADDLE_MODEL_METADATA.get(
+        model_dir.name)
+    friendly_name = metadata["name"] if metadata else raw_model_name
+    description = metadata["desc"] if metadata else "暂无详细描述"
+    return {
+        "model_path": to_public_model_path(model_dir),
+        "model_type": model_info["_Attributes"]["model_type"],
+        "model_name": friendly_name,
+        "backend": "paddle",
+        "description": description,
+    }
+
+
+def get_directory_models(model_type: str, expected_type: str):
+    model_list = []
+    for model_dir in iter_model_dirs(model_type):
+        entry = build_manifest_entry(model_dir, expected_type)
+        if entry is None:
+            entry = build_paddle_entry(model_dir, expected_type)
+        if entry is not None:
+            model_list.append(entry)
     return model_list
 
 
-def get_huggingface_models(model_type):
-    """获取 HuggingFace 模型列表"""
-    return HUGGINGFACE_MODELS.get(model_type, [])
-
-
-@model_api.get('/list/<string:model_type>')
+@model_api.get("/list/<string:model_type>")
 def get_model_list(model_type):
-    types_list = {
-        "change_detection": "change_detector",
-        "classification": "classifier",
-        "image_restoration": "restorer",
-        "object_detection": "detector",
-        "semantic_segmentation": "segmenter",
-        "registration": "register",
-        "tracking": "tracker"
-    }
-    if model_type not in types_list:
+    if model_type not in MODEL_TYPES:
         return fail_api("模型类型不正确")
-    
-    expected_type = types_list[model_type]
-    model_list = []
-    
-    # 1. 获取 Paddle 模型
-    paddle_models = get_paddle_models(model_type, expected_type)
-    model_list.extend(paddle_models)
-    
-    # 2. 获取 HuggingFace 模型
-    hf_models = get_huggingface_models(model_type)
-    model_list.extend(hf_models)
-    
+
+    expected_type = MODEL_TYPES[model_type]
+    model_list = get_directory_models(model_type, expected_type)
     return success_api(data=model_list)
 
 
-@model_api.get('/huggingface/list')
+@model_api.get("/huggingface/list")
 def get_huggingface_model_list():
-    """获取所有可用的 HuggingFace 模型"""
-    return success_api(data=HUGGINGFACE_MODELS)
+    grouped = {}
+    for model_type, expected_type in MODEL_TYPES.items():
+        grouped[model_type] = [
+            item for item in get_directory_models(model_type, expected_type)
+            if item.get("backend") == "huggingface"
+        ]
+    return success_api(data=grouped)

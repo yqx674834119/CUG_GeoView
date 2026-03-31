@@ -120,12 +120,36 @@
             预览
           </el-button>
           <el-button
+            v-if="scope.row.type === '自动配准' && hasRegistrationAsset(scope.row, 'overlay_path')"
+            size="default"
+            type="primary"
+            @click="previewHistoryAsset(scope.row.data.overlay_path)"
+          >
+            叠加
+          </el-button>
+          <el-button
+            v-if="scope.row.type === '自动配准' && hasRegistrationAsset(scope.row, 'checkerboard_path')"
+            size="default"
+            type="primary"
+            @click="previewHistoryAsset(scope.row.data.checkerboard_path)"
+          >
+            棋盘
+          </el-button>
+          <el-button
             v-show="scope.row.type === '目标跟踪'"
             size="default"
             type="primary"
             @click="openTrackingVideo(scope.row)"
           >
             视频
+          </el-button>
+          <el-button
+            v-if="scope.row.type === '目标跟踪' && hasTrackingTrajectory(scope.row)"
+            size="default"
+            type="primary"
+            @click="openTrackingTrajectory(scope.row)"
+          >
+            轨迹
           </el-button>
           <el-button
             v-show="scope.row.type !== '场景分类'"
@@ -410,6 +434,19 @@ export default {
       link.download = filename;
       link.click();
     },
+    previewHistoryAsset(path) {
+      if (!path) {
+        this.$message.warning("未找到可预览的结果文件");
+        return;
+      }
+      this.previewOnePic(path);
+    },
+    hasRegistrationAsset(row, field) {
+      return Boolean(row && row.data && row.data[field]);
+    },
+    hasTrackingTrajectory(row) {
+      return Boolean(row && row.data && row.data.trajectory_path);
+    },
     downloadHistoryAsset(row) {
       if (row.type === "目标跟踪" && row.data && row.data.output_video_path) {
         this.downloadDirect(
@@ -423,6 +460,14 @@ export default {
         this.toAbsoluteUrl(row.after_img),
         `${row.type}结果图.png`,
       );
+    },
+    openTrackingTrajectory(row) {
+      const trajectoryPath = row.data && row.data.trajectory_path;
+      if (!trajectoryPath) {
+        this.$message.warning("当前记录没有轨迹 JSON");
+        return;
+      }
+      window.open(this.toAbsoluteUrl(trajectoryPath), "_blank");
     },
     openTrackingVideo(row) {
       const videoPath = row.data && row.data.output_video_path;

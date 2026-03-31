@@ -7,6 +7,7 @@ import paddlers as pdrs
 from paddlers.tasks.utils.visualize import get_color_map_list
 from skimage.io import imsave
 
+from applications.common.model_assets import infer_model_backend, resolve_model_dir
 from applications.common.path_global import md5_name, generate_url
 
 
@@ -17,7 +18,7 @@ def is_mmseg_model(model_path: str) -> bool:
     MMSegmentation 模型的标识:
     - model_path 以 "mmseg:" 前缀开头 (如 "mmseg:cc-ln/CUGRS")
     """
-    return model_path.startswith("mmseg:")
+    return infer_model_backend(model_path) == "mmsegmentation"
 
 
 def get_mmseg_model_id(model_path: str) -> str:
@@ -34,7 +35,8 @@ def get_mmseg_model_id(model_path: str) -> str:
 def execute_paddle(model_path, data_path, out_dir, test_names):
     """使用 PaddleRS 执行语义分割推理"""
     image_list = [osp.join(data_path, name) for name in test_names]
-    predictor = pdrs.deploy.Predictor(model_path, use_gpu=True)
+    predictor = pdrs.deploy.Predictor(str(resolve_model_dir(model_path)),
+                                      use_gpu=True)
     pred = predictor.predict(image_list)
     ims = [i['label_map'] for i in pred]
     temps = list()
@@ -51,10 +53,8 @@ def execute_mmseg(model_path, data_path, out_dir, test_names):
     """使用 MMSegmentation 执行语义分割推理（通过 subprocess 调用）"""
     from applications.interface import mmseg_inference_caller
     
-    model_id = get_mmseg_model_id(model_path)
-    
     return mmseg_inference_caller.execute(
-        model_id=model_id,
+        model_ref=model_path,
         data_path=data_path,
         out_dir=out_dir,
         names=test_names
@@ -75,7 +75,7 @@ def execute(model_path, data_path, out_dir, test_names):
     """
     if is_mmseg_model(model_path):
         model_id = get_mmseg_model_id(model_path)
-        print(f"[SemanticSegmentation] 使用 MMSegmentation 模型: {model_id}", flush=True)
+        print(f"[SemanticSegmentation] 使用 MMSegmentation 模型: {model_path}", flush=True)
         return execute_mmseg(model_path, data_path, out_dir, test_names)
     else:
         print(f"[SemanticSegmentation] 使用 Paddle 模型: {model_path}", flush=True)

@@ -1,5 +1,55 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+APP_IMAGE="cugrs:local-build"
+MYSQL_IMAGE="registry.openanolis.cn/openanolis/mysql:8.0.30-8.6"
+APP_PULL_IMAGE="${APP_PULL_IMAGE:-crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest}"
+MYSQL_PULL_IMAGE="${MYSQL_PULL_IMAGE:-registry.openanolis.cn/openanolis/mysql:8.0.30-8.6}"
+
+ensure_cache_writable() {
+    mkdir -p ./offline_cache
+    if command -v docker >/dev/null 2>&1; then
+        docker run --rm -v "${SCRIPT_DIR}/offline_cache:/work" alpine \
+            sh -c "chown -R $(id -u):$(id -g) /work" >/dev/null 2>&1 || true
+    fi
+}
+
+ensure_image() {
+    local label="$1"
+    local tar_path="$2"
+    local local_image="$3"
+    local pull_image="$4"
+
+    if [ -f "${tar_path}" ]; then
+        echo "加载 ${label} 镜像包 -> ${tar_path}"
+        docker load -i "${tar_path}"
+    fi
+
+    if docker image inspect "${local_image}" >/dev/null 2>&1; then
+        echo "✓ 已存在本地镜像 ${local_image}"
+        return 0
+    fi
+
+    if [ -n "${pull_image}" ]; then
+        echo "未发现本地镜像 ${local_image}，尝试拉取 ${pull_image}"
+        docker pull "${pull_image}"
+        if [ "${pull_image}" != "${local_image}" ]; then
+            docker tag "${pull_image}" "${local_image}"
+        fi
+    fi
+
+    if ! docker image inspect "${local_image}" >/dev/null 2>&1; then
+        echo "错误：未能准备好 ${label} 镜像。"
+        echo "请确认以下任一条件满足后重试："
+        echo "  1. 当前目录存在 ${tar_path}"
+        echo "  2. 已提前 docker pull ${pull_image}"
+        echo "  3. 已提前 docker tag 到 ${local_image}"
+        exit 1
+    fi
+}
 
 echo "=========================================="
 echo "    GeoView 离线环境一键部署脚本           "
@@ -10,25 +60,24 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-echo ">>> [1/2] 正在加载离线 Docker 镜像..."
-if [ -f "./offline_images/mysql.tar" ]; then
-    echo "加载 MySQL 镜像..."
-    docker load -i ./offline_images/mysql.tar
-else
-    echo "警告：未找到 ./offline_images/mysql.tar"
+if ! docker compose version >/dev/null 2>&1; then
+    echo "错误：当前环境缺少 docker compose 插件。"
+    exit 1
 fi
 
-if [ -f "./offline_images/cugrs_app.tar" ]; then
-    echo "加载 cugrs_app 应用镜像..."
-    docker load -i ./offline_images/cugrs_app.tar
-else
-    echo "警告：未找到 ./offline_images/cugrs_app.tar"
-fi
+mkdir -p ./offline_cache/huggingface ./offline_cache/torch ./offline_cache/paddle
+ensure_cache_writable
+python3 ./sync_model_assets.py --quiet
+python3 ./audit_offline_assets.py --strict
+
+echo ">>> [1/2] 正在加载离线 Docker 镜像..."
+ensure_image "MySQL" "./offline_images/mysql.tar" "${MYSQL_IMAGE}" "${MYSQL_PULL_IMAGE}"
+ensure_image "GeoView 应用" "./offline_images/cugrs_app.tar" "${APP_IMAGE}" "${APP_PULL_IMAGE}"
 echo "✓ 镜像加载完毕!"
 
 echo ">>> [2/2] 正在拉起服务容器..."
-# 由于 docker-compose 已经指向了 ./offline_cache，无需再特殊处理模型。
-docker compose up -d
+# 使用 --no-build，避免在中转机或离线机上误触发本地构建。
+docker compose up -d --no-build
 
 echo "=========================================="
 echo "✓ 部署成功！项目正在后台启动..."

@@ -7,7 +7,7 @@ sys.path.append("/home/livablecity/GeoView/backend")
 from applications.interface.mmseg_inference_caller import call_mmseg_inference
 
 def test_inference():
-    model_id = "cc-ln/CUGRS"
+    model_ref = "backend/model/semantic_segmentation/mmseg_cugrs"
     data_path = "/home/livablecity/GeoView/TestData/Seg"
     out_dir = "/home/livablecity/GeoView/TestData/Seg/output"
     
@@ -26,7 +26,7 @@ def test_inference():
     try:
         print("Starting inference...")
         results = call_mmseg_inference(
-            model_id=model_id,
+            model_ref=model_ref,
             data_path=data_path,
             out_dir=out_dir,
             names=files,

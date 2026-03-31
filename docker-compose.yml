@@ -21,9 +21,14 @@ services:
       FLASK_CONFIG: production
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      HF_HOME: /root/.cache/huggingface
+      HF_HUB_CACHE: /root/.cache/huggingface/hub
       TRANSFORMERS_OFFLINE: "1"
       HF_DATASETS_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
+      TORCH_HOME: /root/.cache/torch
+      PADDLE_HOME: /root/.paddle
+      GEOVIEW_MODEL_ROOT: /app/backend/model
     depends_on:
       - mysql
     volumes:
@@ -38,6 +43,7 @@ services:
       - ./offline_cache/huggingface:/root/.cache/huggingface
       - ./offline_cache/torch:/root/.cache/torch
       - ./offline_cache/paddle:/root/.paddle
+      - ./offline_cache/paddle:/root/.cache/paddle
 
     restart: unless-stopped
     deploy:

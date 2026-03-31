@@ -1,92 +1,262 @@
-# GeoView 完全离线部署操作指南 (面向小白版)
+# GeoView Offline Deployment Guide
 
-这份指南将指导您如何把 `GeoView_Offline_Thin_*.tar.gz` 轻量代码缓存包，通过一台“有网且空间大”的中转电脑，最终生成一个能在完全无网环境下运行的全量离线包。
+这份文档给交付同事使用，目标是保持现有 Thin/Full 离线交付流程不变，同时说明新的模型真源已经统一到 `backend/model/<页面>/<模型名>/`。
 
----
+## 先记住当前交付链路
 
-## 阶段一：在“有网络且存储空间大”的电脑上的操作
+1. 源机器导出 Thin 包  
+   使用 `./export_offline.sh 2`，只打包代码和模型资产，不保存本地镜像 tar。
 
-**目的：把别人给的微弱代码包，跟云端的巨大运行环境系统（Docker 镜像）合并成一个完整的“超级终点离线包”。**
+2. 中转机器补全并验证  
+   解压 Thin 包后执行 `./deploy_offline.sh` 启动服务，再执行 `./export_offline.sh 1` 导出 Full 包。
 
-### 1. 准备材料
-将第一台电脑发给您的压缩包（名字类似：`GeoView_Offline_Thin_20260311.tar.gz`）拷贝到这台电脑任意文件夹（例如您的用户目录 `~` 或桌面下）。
+3. 最终离线机器部署  
+   解压 Full 包后执行 `./deploy_offline.sh`，直接离线启动。
 
-### 2. 解压项目包
-打开终端 (Terminal)，进入压缩包所在的目录（比如您把它放到了桌面：`cd ~/Desktop`）。
-输入以下解压命令：
+这条操作顺序没有变，变化的是模型目录和缓存生成方式。
+
+## 新的模型真源目录
+
+所有页面可选模型现在都显式落在：
+
+- `backend/model/change_detection/<model_name>/`
+- `backend/model/object_detection/<model_name>/`
+- `backend/model/semantic_segmentation/<model_name>/`
+- `backend/model/classification/<model_name>/`
+- `backend/model/image_restoration/<model_name>/`
+- `backend/model/registration/<model_name>/`
+- `backend/model/tracking/<model_name>/`
+
+当前关键模型对应关系如下：
+
+- `backend/model/change_detection/bit_256x256`
+- `backend/model/classification/resnet50`
+- `backend/model/object_detection/paddle_yolo`
+- `backend/model/object_detection/hf_detr_resnet50`
+- `backend/model/object_detection/hf_conditional_detr_resnet50`
+- `backend/model/object_detection/hf_waldo30`
+- `backend/model/object_detection/mmrotate_oriented_rcnn_r50_fpn_1x_dota_le90`
+- `backend/model/semantic_segmentation/paddle_deeplabv3p`
+- `backend/model/semantic_segmentation/mmseg_cugrs`
+- `backend/model/image_restoration/hf_swin2sr_x2`
+- `backend/model/image_restoration/hf_swin2sr_x4`
+- `backend/model/registration/auto`
+- `backend/model/registration/opencv`
+- `backend/model/registration/loftr_outdoor`
+- `backend/model/tracking/auto`
+- `backend/model/tracking/csrt`
+- `backend/model/tracking/kcf`
+
+说明：
+
+- Paddle 模型直接存放在各自目录中
+- HuggingFace 模型目录内带 `hf_config.json` 和本地 Hub 快照
+- MMSeg/MMRotate 目录内带 `config.py` 和 `checkpoint.pth`
+- 注册/跟踪中的工程基线目录使用 `model_manifest.json` 描述运行方式
+
+## `offline_cache/` 现在是什么
+
+`offline_cache/` 仍然保留，但它不再是模型真源，而是运行期兼容缓存。
+
+- `offline_cache/huggingface/`
+- `offline_cache/torch/`
+- `offline_cache/paddle/`
+
+脚本会在打包和部署时自动执行：
+
+```bash
+python3 ./sync_model_assets.py
+```
+
+把 `backend/model/` 中的 HF / LoFTR 资产同步到 `offline_cache/`，然后继续沿用原有 Docker 挂载关系：
+
+- `offline_cache/huggingface -> /root/.cache/huggingface`
+- `offline_cache/torch -> /root/.cache/torch`
+- `offline_cache/paddle -> /root/.paddle`
+- `offline_cache/paddle -> /root/.cache/paddle`
+
+## 阶段一：源机器导出 Thin 包
+
+### 1. 先确认镜像已存在
+
+```bash
+docker image inspect cugrs:local-build >/dev/null
+```
+
+如果失败，先在联网环境准备镜像。
+
+### 2. 执行轻量导出
+
+```bash
+./export_offline.sh 2
+```
+
+这一步会做 4 件事：
+
+1. 不保存本地 Docker 镜像 tar。
+2. 先把 `backend/model/` 同步到 `offline_cache/`。
+3. 再从运行中容器或历史卷补充可能存在的旧缓存。
+4. 执行 `python3 ./audit_offline_assets.py --strict` 做严格校验。
+
+完成后会在上一级目录生成类似：
+
+```bash
+GeoView_Offline_Thin_20260331.tar.gz
+```
+
+### 3. 推送应用镜像到镜像仓库
+
+`export_offline.sh 2` 结束后，按脚本提示执行：
+
+- `docker login`
+- `docker tag`
+- `docker push`
+
+Thin 包本身仍然不包含 `offline_images/*.tar`。
+
+## 阶段二：中转机器补全并导出 Full 包
+
+### 1. 解压 Thin 包
+
 ```bash
 tar -xzf GeoView_Offline_Thin_*.tar.gz
-```
-解压完成后，您当前目录下会多出一个名为 `GeoView` 的文件夹。请进入它：
-```bash
 cd GeoView
 ```
 
-### 3. 拉取最新的系统镜像
-我们需要连网，把打包好的庞大环境系统拉下来：
-*请在终端中逐条复制并运行以下命令（如果在拉取过程中需要密码，密码是之前告知您的 `Yqx123123123`）：*
-```bash
-docker login --username=13997543646yqx crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com
-docker pull crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
-docker pull crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/mysql:8.0.30-8.6
-```
-*(注意：拉取这两项比较大，需要几分钟的时间，请耐心等待直到两个都显示 Pull complete。)*
-
-为了让刚才拖下来的系统兼容咱们的代码脚本，执行一下改名：
-```bash
-docker tag crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest cugrs:local-build
-docker tag crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/mysql:8.0.30-8.6 registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
-```
-
-### 4. 生成“超级终极包”
-此时您还在 `GeoView` 文件夹中。请直接运行里面的自动打包脚本：
-```bash
-./export_offline.sh
-```
-屏幕上会弹出以下选项：
-```text
-[1] 完整离线打包：镜像(.tar) + 模型缓存 + 代码一起打包 (适合磁盘空间宽裕的机器)
-[2] 轻量空间中转打包：跳过镜像保存，仅提取模型及代码，并将镜像推送到阿里云 (适合当前机器磁盘不足)
-```
-因为这台机器空间够，所以此处**敲击键盘输入 1 并回车**。
-
-这时候电脑可能需要响十分钟在努力将镜像导出封进压缩包里。直到看见屏幕显示`✓ 全部完成！`，恭喜您，在上级目录中已经诞生了一个名字带有 `GeoView_Offline_Full...tar.gz` 的巨大压缩包（通常得十几二十个G）！
-
-这就是需要交付给最终离线电脑的神奇大包！请把它拷进超大容量的 U 盘或者移动硬盘里带走。
-
----
-<br>
-
-## 阶段二：在完全没网络的“离线电脑”部署
-
-**目的：在这个绝对的孤岛上，不用一滴网络，直接拉起咱们的系统！**前提是：这台机器也同样需要事先安装好了 `Docker` 并且配置带有 NVIDIA 显卡驱动。
-
-### 1. 解压终极安装包
-将 U 盘里那个硕大的 `GeoView_Offline_Full...tar.gz` 拖到离线电脑的合适目录里。（比如 `~/`）。打开终端并解压它（可能要十分钟以上）
-```bash
-tar -xzf GeoView_Offline_Full_*.tar.gz
-```
-解压后，进入解压出的目录：
-```bash
-cd GeoView
-```
-
-### 2. 一键魔法开机！
-由于我们之前配置了超完美的完全断网设定，您此时不用做任何关于网络的操作。
-在当前目录中直接使用这行终极魔法脚本（**千万记得要以最高管理员或者加入 docker 用户组的高权限人员执行**）：
+### 2. 执行部署脚本
 
 ```bash
 ./deploy_offline.sh
 ```
 
-**此时背后会自动发生的事：**
-1. 脚本会把 `GeoView` 内部自带的环境系统 `cugrs_app.tar` 以及 `mysql.tar` 直接加载 (`docker load`) 唤醒。
-2. 脚本会自动启动 (`docker compose up -d`) 这个服务。
+现在的部署脚本会先做以下预处理，再启动容器：
 
-只要终端里没有报满屏的红字或 Error，而是显示部署成功并且 `Started`，那么就代表服务大功告成被召唤出来了！
+1. 修正 `offline_cache/` 目录权限
+2. 从 `backend/model/` 生成运行期缓存
+3. 执行 `audit_offline_assets.py --strict`
+4. 加载本地镜像 tar 或按原逻辑拉取镜像
+5. 执行 `docker compose up -d --no-build`
 
-### 3. 一切结束 🎉
-只需静等二三十秒即可用浏览器访问本机相应的系统入口进行使用了！
-您可以随时在这台机器的任意终端中敲击 `docker logs -f cugrs-app` 观察它在后台努力干活输出的字幕以排查隐患。
+### 3. 验证服务是否正常
 
-如果在途中报错什么缺失功能，很大可能是当初在第一台机器抽出来环境（也就是 Thin 包里所谓的缓存）的时候不全面，需要重新从上游补齐再往下传。
+```bash
+docker compose ps
+docker logs -f cugrs-app
+```
+
+### 4. 导出 Full 包
+
+确认服务可用后执行：
+
+```bash
+./export_offline.sh 1
+```
+
+这一步会把以下内容一起打包：
+
+- 项目代码
+- `backend/model/` 下的统一模型资产
+- `offline_cache/` 下生成好的运行期缓存
+- `offline_images/cugrs_app.tar`
+- `offline_images/mysql.tar`
+
+生成结果类似：
+
+```bash
+GeoView_Offline_Full_20260331.tar.gz
+```
+
+## 阶段三：最终离线机器部署
+
+### 1. 解压 Full 包
+
+```bash
+tar -xzf GeoView_Offline_Full_*.tar.gz
+cd GeoView
+```
+
+### 2. 直接部署
+
+```bash
+./deploy_offline.sh
+```
+
+离线机器不需要联网。脚本会自动：
+
+1. 从 `backend/model/` 生成运行期缓存
+2. 从 `offline_images/` 加载镜像
+3. 使用 `docker compose up -d --no-build` 启动服务
+
+### 3. 查看状态
+
+```bash
+docker compose ps
+docker logs -f cugrs-app
+```
+
+### 4. 访问系统
+
+- GeoView 前端：`3000`
+- GeoView 后端：`5008`
+- Miner 前端：`4000`
+- Miner 后端：`8000`
+- MySQL：`3307`
+
+本机通常直接访问：
+
+```text
+http://127.0.0.1:3000
+```
+
+## 最常见的排查方法
+
+### 1. 校验模型资产
+
+```bash
+python3 ./audit_offline_assets.py --strict
+```
+
+### 2. 确认真源目录完整
+
+```bash
+du -sh backend/model/change_detection
+du -sh backend/model/object_detection
+du -sh backend/model/semantic_segmentation
+du -sh backend/model/image_restoration
+du -sh backend/model/registration
+du -sh backend/model/tracking
+```
+
+### 3. 确认兼容缓存已经生成
+
+```bash
+du -sh offline_cache/huggingface
+du -sh offline_cache/torch
+du -sh offline_cache/paddle
+```
+
+### 4. 重新生成缓存
+
+如果怀疑 `offline_cache/` 过旧，可以手动执行：
+
+```bash
+python3 ./sync_model_assets.py
+```
+
+## 推荐的完整交付顺序
+
+```bash
+# 源机器
+./export_offline.sh 2
+
+# 中转机器
+tar -xzf GeoView_Offline_Thin_*.tar.gz
+cd GeoView
+./deploy_offline.sh
+./export_offline.sh 1
+
+# 最终离线机器
+tar -xzf GeoView_Offline_Full_*.tar.gz
+cd GeoView
+./deploy_offline.sh
+```

@@ -79,6 +79,8 @@ else
   echo "[entrypoint] Detected ${GPU_COUNT} GPU(s)."
 fi
 
+python /app/sync_model_assets.py --quiet || true
+
 python - <<'PY'
 import os
 import sys

@@ -18,6 +18,10 @@ import kornia.feature as KF
 import numpy as np
 import torch
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOFTR_CHECKPOINT = os.path.abspath(
+    os.path.join(SCRIPT_DIR, "..", "..", "model", "registration",
+                 "loftr_outdoor", "loftr_outdoor.ckpt"))
 
 _MATCHER_CACHE = {}
 
@@ -73,7 +77,13 @@ def _get_matcher(device):
     if matcher is not None:
         return matcher
 
-    matcher = KF.LoFTR(pretrained='outdoor').to(device)
+    if os.path.exists(LOFTR_CHECKPOINT):
+        matcher = KF.LoFTR(pretrained=None).to(device)
+        state = torch.load(LOFTR_CHECKPOINT, map_location=device)
+        state_dict = state.get("state_dict", state)
+        matcher.load_state_dict(state_dict, strict=False)
+    else:
+        matcher = KF.LoFTR(pretrained='outdoor').to(device)
     matcher.eval()
     _MATCHER_CACHE[device] = matcher
     return matcher

@@ -4,8 +4,10 @@ import paddlers.utils.logging as logging
 import yaml
 from paddlers.transforms import build_transforms
 
+from applications.common.model_assets import resolve_model_dir
 
 def get_model_info(model_dir):
+    model_dir = str(resolve_model_dir(model_dir))
     if not osp.exists(model_dir):
         logging.error("Directory '{}' does not exist!".format(model_dir))
     if not osp.exists(osp.join(model_dir, "model.yml")):

@@ -14,6 +14,9 @@ import subprocess
 import sys
 from typing import List
 
+from applications.common.model_assets import (legacy_model_path,
+                                              load_model_manifest,
+                                              resolve_model_dir)
 from applications.common.path_global import generate_url
 
 # MMSegmentation conda 环境名称
@@ -23,34 +26,32 @@ MMSEG_CONDA_ENV = "MMSeg310"
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 MMSEG_SCRIPT = os.path.join(_curr_dir, "mmseg_segmentation.py")
 
-# 模型配置 - CUGRS 模型
-CUGRS_CONFIG = {
-    "model_id": "cc-ln/CUGRS",
-    "config_path": os.path.join(_curr_dir, "..", "..", "model", "mmseg_config", "dinov3_swinV1.py"),
-    "checkpoint_path": os.path.join(_curr_dir, "..", "..", "model", "mmseg_config", "model.pth"),
-}
-
-
-def get_model_paths(model_id: str) -> tuple:
+def get_model_paths(model_ref: str) -> tuple:
     """
-    根据模型 ID 获取配置文件和权重文件路径
-    
+    根据模型引用获取配置文件和权重文件路径
+
     Args:
-        model_id: 模型 ID，如 "cc-ln/CUGRS"
-    
+        model_ref: 模型目录或兼容旧模型 ID
+
     Returns:
         (config_path, checkpoint_path)
     """
-    if model_id == "cc-ln/CUGRS":
-        config = os.path.abspath(CUGRS_CONFIG["config_path"])
-        checkpoint = os.path.abspath(CUGRS_CONFIG["checkpoint_path"])
-        return config, checkpoint
-    else:
-        raise ValueError(f"Unknown MMSeg model: {model_id}")
+    if model_ref == "cc-ln/CUGRS":
+        model_ref = "mmseg:cc-ln/CUGRS"
+
+    resolved_legacy = legacy_model_path(model_ref)
+    model_dir = resolve_model_dir(resolved_legacy or model_ref)
+    manifest = load_model_manifest(model_dir) or {}
+
+    config = os.path.abspath(
+        os.path.join(model_dir, manifest.get("config_file", "config.py")))
+    checkpoint = os.path.abspath(
+        os.path.join(model_dir, manifest.get("checkpoint_file", "checkpoint.pth")))
+    return config, checkpoint
 
 
 def call_mmseg_inference(
-    model_id: str,
+    model_ref: str,
     data_path: str,
     out_dir: str,
     names: List[str],
@@ -60,7 +61,7 @@ def call_mmseg_inference(
     """
     调用 MMSegmentation 模型进行语义分割推理
     
-    :param model_id: 模型 ID, 如 "cc-ln/CUGRS"
+    :param model_ref: 模型目录或兼容旧模型 ID
     :param data_path: 输入图片文件夹路径
     :param out_dir: 结果保存路径
     :param names: 待处理文件名列表
@@ -72,7 +73,7 @@ def call_mmseg_inference(
         return []
     
     # 获取模型路径
-    config_path, checkpoint_path = get_model_paths(model_id)
+    config_path, checkpoint_path = get_model_paths(model_ref)
     
     # 检查模型文件是否存在
     if not os.path.exists(config_path):
@@ -193,7 +194,7 @@ def call_mmseg_inference(
 
 
 def execute(
-    model_id: str,
+    model_ref: str,
     data_path: str,
     out_dir: str,
     names: List[str],
@@ -202,14 +203,14 @@ def execute(
     """
     统一的执行接口，与 Paddle 推理模块保持一致
     
-    :param model_id: MMSegmentation 模型 ID
+    :param model_ref: MMSegmentation 模型目录或兼容旧模型 ID
     :param data_path: 数据文件夹路径
     :param out_dir: 结果保存路径
     :param names: 待处理文件名列表
     :return: 生成的图片 URL 列表
     """
     return call_mmseg_inference(
-        model_id=model_id,
+        model_ref=model_ref,
         data_path=data_path,
         out_dir=out_dir,
         names=names,
@@ -229,8 +230,14 @@ SUPPORTED_MODELS = {
 # MMRotate Inference Script Constant
 MMROTATE_SCRIPT = os.path.join(_curr_dir, "mmrotate_inference.py")
 
+def get_mmrotate_model_dir(model_ref: str) -> str:
+    if model_ref == "oriented_rcnn_r50_fpn_1x_dota_le90":
+        model_ref = "mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90"
+    return str(resolve_model_dir(legacy_model_path(model_ref) or model_ref))
+
+
 def call_mmrotate_inference(
-    config_name: str,
+    model_ref: str,
     data_path: str,
     out_dir: str,
     names: List[str],
@@ -260,7 +267,7 @@ def call_mmrotate_inference(
     if python_executable:
         cmd = [
             python_executable, MMROTATE_SCRIPT,
-            "--config", config_name,
+            "--model_dir", get_mmrotate_model_dir(model_ref),
             "--input_dir", abs_data_path,
             "--output_dir", abs_out_dir,
             "--file_names", file_names_str,
@@ -270,7 +277,7 @@ def call_mmrotate_inference(
         cmd = [
             "conda", "run", "-n", MMSEG_CONDA_ENV,
             "python", MMROTATE_SCRIPT,
-            "--config", config_name,
+            "--model_dir", get_mmrotate_model_dir(model_ref),
             "--input_dir", abs_data_path,
             "--output_dir", abs_out_dir,
             "--file_names", file_names_str,

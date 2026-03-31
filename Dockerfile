@@ -114,7 +114,10 @@ RUN conda run -n HFPyTorch310 pip install \
     kornia==0.7.1 \
     kornia_moons \
     "opencv-python-headless<4.11" \
-    matplotlib
+    matplotlib && \
+    conda run -n HFPyTorch310 pip install --force-reinstall \
+    "numpy<2" && \
+    conda run -n HFPyTorch310 pip cache purge
 
 
 # Install Node.js 18 (system default, used by GeoView frontend)
@@ -132,6 +135,7 @@ RUN set -eux; \
 
 # ----------- APP CODE START -----------
 WORKDIR /app
+COPY sync_model_assets.py /app/sync_model_assets.py
 
 # Copy backend
 # Copy backend requirements first for caching
@@ -193,11 +197,13 @@ COPY miner /app/miner
 WORKDIR /app
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chmod +x /app/sync_model_assets.py
 
 ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
     CONDA_DEFAULT_ENV=PaddleRS37 \
     PYTHONUNBUFFERED=1 \
-    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH}
+    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH} \
+    GEOVIEW_MODEL_ROOT=/app/backend/model
 
 EXPOSE 5008 3000 4000 8000
 

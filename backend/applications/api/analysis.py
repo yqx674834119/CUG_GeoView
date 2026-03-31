@@ -6,6 +6,7 @@ from flask import Blueprint, request
 from sqlalchemy import desc
 
 from applications.common.curd import model_to_dicts
+from applications.common.model_assets import infer_model_backend
 from applications.common.path_global import up_dir, generate_dir, fun_type_1, fun_type_4, fun_type_5, fun_type_3, \
     fun_type_2, generate_url
 from applications.common.utils import type_utils
@@ -94,14 +95,12 @@ def change_detection_api():
 def object_detection_api():
     req_json = request.json
     model_path = req_json["model_path"]
-    req_json = request.json
-    model_path = req_json["model_path"]
-    
-    # 检查是否为 HuggingFace 模型
-    is_hf_model = model_path.startswith("hf:")
-    is_mmrotate_model = model_path.startswith("mmrotate:")
-    
-    if not is_hf_model and not is_mmrotate_model:
+    model_backend = infer_model_backend(model_path)
+
+    if model_backend is None:
+        return fail_api("模型不存在，请检查")
+
+    if model_backend not in ("huggingface", "mmrotate"):
         try:
             model_info = get_model_info(model_path)
             if model_info["_Attributes"]["model_type"] != "detector":
@@ -136,7 +135,7 @@ def semantic_segmentation_api():
     
     支持两种模型:
     - Paddle 模型: model_path 为本地目录路径
-    - MMSegmentation 模型: model_path 以 "mmseg:" 开头 (如 "mmseg:cc-ln/CUGRS")
+    - MMSegmentation 模型: model_path 为显式本地目录路径
     """
     req_json = request.json
     model_path = req_json.get("model_path")
@@ -144,10 +143,11 @@ def semantic_segmentation_api():
     if not model_path:
         return fail_api("请指定模型路径")
     
-    # 判断是否为 MMSegmentation 模型
-    is_mmseg_model = model_path.startswith("mmseg:")
-    
-    if not is_mmseg_model:
+    model_backend = infer_model_backend(model_path)
+    if model_backend is None:
+        return fail_api("模型不存在，请检查")
+
+    if model_backend != "mmsegmentation":
         # Paddle 模型 - 验证模型信息
         try:
             model_info = get_model_info(model_path)
@@ -208,8 +208,8 @@ def image_restoration_api():
     图像还原/超分辨率推理接口
     
     支持两种模型:
-    - Paddle 模型: model_path 为本地目录路径 (如 "model/image_restoration/DRNet")
-    - HuggingFace 模型: model_path 以 "hf:" 开头 (如 "hf:caidas/swin2SR-classical-sr-x2-64")
+    - Paddle 模型: model_path 为本地目录路径
+    - HuggingFace 模型: model_path 为显式本地目录路径
     """
     req_json = request.json
     model_path = req_json.get("model_path")
@@ -221,10 +221,11 @@ def image_restoration_api():
     if not img_list:
         return fail_api("请上传图片")
     
-    # 判断是否为 HuggingFace 模型
-    is_hf_model = model_path.startswith("hf:")
-    
-    if not is_hf_model:
+    model_backend = infer_model_backend(model_path)
+    if model_backend is None:
+        return fail_api("模型不存在，请检查")
+
+    if model_backend != "huggingface":
         # Paddle 模型 - 验证模型信息
         try:
             model_info = get_model_info(model_path)
@@ -251,7 +252,8 @@ def image_restoration_api():
 def registration_api():
     req_json = request.json
     list_ = req_json.get("list")
-    model_path = req_json.get("model_path", "builtin:registration:auto")
+    model_path = req_json.get("model_path",
+                              "backend/model/registration/auto")
     
     if not list_:
         return fail_api("请上传图片")
@@ -288,7 +290,7 @@ def registration_api():
 @analysis_api.post('/tracking')
 def tracking_api():
     req_json = request.json
-    model_path = req_json.get("model_path", "builtin:tracking:auto")
+    model_path = req_json.get("model_path", "backend/model/tracking/auto")
     list_ = req_json.get("list")
     rect = req_json.get("rect")
 

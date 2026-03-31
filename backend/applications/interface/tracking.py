@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
+from applications.common.model_assets import load_model_manifest
 from applications.common.path_global import generate_url, md5_name, up_url
 from applications.common.utils.upload import img_url_handle
 
@@ -201,6 +202,9 @@ def _normalize_model_path(model_path: Optional[str]) -> str:
         return "csrt"
     if model_path == "builtin:tracking:kcf":
         return "kcf"
+    manifest = load_model_manifest(model_path)
+    if manifest and manifest.get("backend") == "tracking":
+        return manifest.get("runtime", "auto")
     raise TrackingError(f"不支持的跟踪模型: {model_path}")
 
 

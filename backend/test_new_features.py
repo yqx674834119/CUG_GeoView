@@ -64,7 +64,7 @@ class TestNewFeatures(unittest.TestCase):
         # but we can check the error message to see if it reached the routing logic.
         
         payload = {
-            "model_path": "mmrotate:oriented_rcnn_r50_fpn_1x_dota_le90",
+            "model_path": "backend/model/object_detection/mmrotate_oriented_rcnn_r50_fpn_1x_dota_le90",
             "list": ["test.jpg"],
             "prehandle": 0,
             "denoise": 0

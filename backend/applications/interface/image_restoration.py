@@ -3,6 +3,9 @@ import os.path as osp
 
 from skimage.io import imsave
 
+from applications.common.model_assets import (infer_model_backend,
+                                              load_hf_config,
+                                              resolve_model_dir)
 from applications.common.path_global import generate_url
 
 
@@ -14,16 +17,7 @@ def is_huggingface_model(model_path):
     - model_path 以 "hf:" 前缀开头 (如 "hf:caidas/swin2SR-classical-sr-x2-64")
     - 或者 model_path 目录下存在 hf_config.json 文件
     """
-    if model_path.startswith("hf:"):
-        return True
-    
-    # 检查是否有 HuggingFace 配置文件
-    if os.path.isdir(model_path):
-        hf_config_path = osp.join(model_path, "hf_config.json")
-        if os.path.exists(hf_config_path):
-            return True
-    
-    return False
+    return infer_model_backend(model_path) == "huggingface"
 
 
 def get_huggingface_model_id(model_path):
@@ -34,18 +28,13 @@ def get_huggingface_model_id(model_path):
     - "hf:caidas/swin2SR-classical-sr-x2-64" -> "caidas/swin2SR-classical-sr-x2-64"
     - 本地目录包含 hf_config.json -> 从配置中读取
     """
-    import json
-    
     if model_path.startswith("hf:"):
         return model_path[3:]  # 去掉 "hf:" 前缀
-    
-    # 从本地配置读取
-    hf_config_path = osp.join(model_path, "hf_config.json")
-    if os.path.exists(hf_config_path):
-        with open(hf_config_path, 'r') as f:
-            config = json.load(f)
-            return config.get("model_id", "")
-    
+
+    config = load_hf_config(model_path)
+    if config:
+        return config.get("model_id", "")
+
     return ""
 
 
@@ -55,7 +44,8 @@ def execute_paddle(model_path, data_path, out_dir, names):
     
     temps = list()
     image_list = [osp.join(data_path, name) for name in names]
-    predictor = pdrs.deploy.Predictor(model_dir=model_path, use_gpu=True)
+    predictor = pdrs.deploy.Predictor(model_dir=str(resolve_model_dir(model_path)),
+                                      use_gpu=True)
     pred = predictor.predict(image_list)
     imgs = [im['res_map'] for im in pred]
     for name, im in zip(names, imgs):

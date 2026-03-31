@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 import rasterio
 
+from applications.common.model_assets import (load_model_manifest,
+                                              resolve_model_dir)
 from applications.common.path_global import generate_url, md5_name, up_url
 
 try:
@@ -22,6 +24,8 @@ except Exception:
 
 
 _LOFTR_CACHE: Dict[str, object] = {}
+LOFTR_CHECKPOINT = resolve_model_dir(
+    "backend/model/registration/loftr_outdoor") / "loftr_outdoor.ckpt"
 
 
 @dataclass
@@ -308,6 +312,9 @@ def _normalize_model_path(model_path: str) -> str:
         return "auto"
     if model_path == "builtin:registration:opencv":
         return "opencv"
+    manifest = load_model_manifest(model_path)
+    if manifest and manifest.get("backend") == "registration":
+        return manifest.get("runtime", "auto")
     raise RegistrationError(f"不支持的配准模型: {model_path}")
 
 
@@ -449,7 +456,13 @@ def _get_loftr_matcher(device: str):
     if matcher is not None:
         return matcher
 
-    matcher = KF.LoFTR(pretrained="outdoor").to(device)
+    if LOFTR_CHECKPOINT.exists():
+        matcher = KF.LoFTR(pretrained=None).to(device)
+        state = torch.load(str(LOFTR_CHECKPOINT), map_location=device)
+        state_dict = state.get("state_dict", state)
+        matcher.load_state_dict(state_dict, strict=False)
+    else:
+        matcher = KF.LoFTR(pretrained="outdoor").to(device)
     matcher.eval()
     _LOFTR_CACHE[device] = matcher
     return matcher

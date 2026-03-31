@@ -7,6 +7,7 @@ from skimage.io import imsave
 import paddlers as pdrs
 from paddlers.transforms import decode_image
 
+from applications.common.model_assets import resolve_model_dir
 from applications.common.path_global import generate_url
 
 
@@ -16,7 +17,8 @@ def execute(model_path, data_path, out_dir, names, window_size=256, stride=128):
                   for name in names]
     temps = list()  # 存储查看链接
     temps1 = list()  # 存储生成的图片名
-    predictor = pdrs.deploy.Predictor(model_path, use_gpu=True)
+    predictor = pdrs.deploy.Predictor(str(resolve_model_dir(model_path)),
+                                      use_gpu=True)
     for image in image_list:
         predictor.slider_predict(
             image,
