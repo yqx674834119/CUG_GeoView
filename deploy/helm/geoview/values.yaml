@@ -1,0 +1,104 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+app:
+  replicaCount: 1
+  image:
+    repository: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs
+    tag: latest
+    pullPolicy: IfNotPresent
+  config:
+    debug: false
+    baiduMapAccessKey: "<ACCESS_KEY>"
+    host:
+      backend: "0.0.0.0"
+      frontend: "0.0.0.0"
+    port:
+      backend: 5008
+      frontend: 3000
+    miner:
+      enabled: true
+      frontendPort: 4000
+      backendPort: 8000
+  env: []
+  gpu:
+    enabled: false
+    count: 1
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+  service:
+    type: ClusterIP
+    ports:
+      frontend: 3000
+      backend: 5008
+      minerFrontend: 4000
+      minerBackend: 8000
+    nodePorts:
+      frontend: null
+      backend: null
+      minerFrontend: null
+      minerBackend: null
+  persistence:
+    enabled: true
+    storageClass: csi-sc
+    accessModes:
+      - ReadWriteOnce
+    size: 50Gi
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: geoview.local
+        paths:
+          - path: /
+            pathType: Prefix
+            servicePort: frontend
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+mysql:
+  enabled: true
+  image:
+    repository: registry.openanolis.cn/openanolis/mysql
+    tag: 8.0.30-8.6
+    pullPolicy: IfNotPresent
+  auth:
+    rootPassword: "root"
+    username: "paddle_rs"
+    password: "Yqx090315."
+    database: "paddle_rs"
+  service:
+    port: 3306
+  persistence:
+    enabled: true
+    storageClass: csi-sc
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalMySQL:
+  host: ""
+  port: 3306
+  username: "paddle_rs"
+  password: ""
+  database: "paddle_rs"
+

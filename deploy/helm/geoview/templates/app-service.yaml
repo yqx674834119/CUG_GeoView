@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "geoview.appName" . }}
+  labels:
+    {{- include "geoview.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  type: {{ .Values.app.service.type }}
+  selector:
+    {{- include "geoview.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+  ports:
+    - name: frontend
+      port: {{ .Values.app.service.ports.frontend }}
+      targetPort: frontend
+      protocol: TCP
+      {{- if and (eq .Values.app.service.type "NodePort") .Values.app.service.nodePorts.frontend }}
+      nodePort: {{ .Values.app.service.nodePorts.frontend }}
+      {{- end }}
+    - name: backend
+      port: {{ .Values.app.service.ports.backend }}
+      targetPort: backend
+      protocol: TCP
+      {{- if and (eq .Values.app.service.type "NodePort") .Values.app.service.nodePorts.backend }}
+      nodePort: {{ .Values.app.service.nodePorts.backend }}
+      {{- end }}
+    - name: miner-front
+      port: {{ .Values.app.service.ports.minerFrontend }}
+      targetPort: miner-front
+      protocol: TCP
+      {{- if and (eq .Values.app.service.type "NodePort") .Values.app.service.nodePorts.minerFrontend }}
+      nodePort: {{ .Values.app.service.nodePorts.minerFrontend }}
+      {{- end }}
+    - name: miner-back
+      port: {{ .Values.app.service.ports.minerBackend }}
+      targetPort: miner-back
+      protocol: TCP
+      {{- if and (eq .Values.app.service.type "NodePort") .Values.app.service.nodePorts.minerBackend }}
+      nodePort: {{ .Values.app.service.nodePorts.minerBackend }}
+      {{- end }}
+
