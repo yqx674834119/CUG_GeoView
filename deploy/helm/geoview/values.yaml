@@ -9,6 +9,11 @@ app:
     repository: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs
     tag: latest
     pullPolicy: IfNotPresent
+  init:
+    image:
+      repository: ""
+      tag: ""
+      pullPolicy: IfNotPresent
   config:
     debug: false
     baiduMapAccessKey: "<ACCESS_KEY>"
@@ -19,12 +24,12 @@ app:
       backend: 5008
       frontend: 3000
     miner:
-      enabled: true
+      enabled: false
       frontendPort: 4000
       backendPort: 8000
   env: []
   gpu:
-    enabled: false
+    enabled: true
     count: 1
   resources:
     requests:
@@ -47,7 +52,7 @@ app:
       minerBackend: null
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     accessModes:
       - ReadWriteOnce
     size: 50Gi
@@ -80,7 +85,7 @@ mysql:
     port: 3306
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     accessModes:
       - ReadWriteOnce
     size: 20Gi
@@ -101,4 +106,3 @@ externalMySQL:
   username: "paddle_rs"
   password: ""
   database: "paddle_rs"
-

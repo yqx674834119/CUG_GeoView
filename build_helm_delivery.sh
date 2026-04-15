@@ -31,9 +31,8 @@ trap cleanup EXIT
 
 mkdir -p "${TMP_DIR}/GeoView_Helm_Thin"
 cp "${CHART_PACKAGE}" "${TMP_DIR}/GeoView_Helm_Thin/"
-cp "${DOC_DIR}/Helm_K8s_部署入门与迁移说明.md" "${TMP_DIR}/GeoView_Helm_Thin/"
-cp "${DOC_DIR}/Helm_两步交付与平台部署说明.md" "${TMP_DIR}/GeoView_Helm_Thin/"
-cp "${DOC_DIR}/GeoView_Helm_最终交付手册.md" "${TMP_DIR}/GeoView_Helm_Thin/"
+cp "${DOC_DIR}/Full包转Helm部署操作手册.md" "${TMP_DIR}/GeoView_Helm_Thin/"
+cp "${DOC_DIR}/offline_deployment_guide.md" "${TMP_DIR}/GeoView_Helm_Thin/"
 cp "${CHART_DIR}/values-harbor-example.yaml" "${TMP_DIR}/GeoView_Helm_Thin/"
 cp "${SCRIPT_DIR}/deploy/helm/image-manifest.txt" "${TMP_DIR}/GeoView_Helm_Thin/"
 cp "${SCRIPT_DIR}/deploy/helm/push_harbor_with_nerdctl_example.sh" "${TMP_DIR}/GeoView_Helm_Thin/"

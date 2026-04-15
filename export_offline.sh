@@ -153,10 +153,8 @@ if [ "$mode" == "1" ]; then
         echo "未找到镜像 mysql。请确保您已经拉取过它。"
         exit 1
     fi
-    echo "保存基础应用镜像 -> offline_images/cugrs_app.tar"
-    docker save -o ./offline_images/cugrs_app.tar "${APP_IMAGE}"
-    echo "保存 MySQL 镜像 -> offline_images/mysql.tar"
-    docker save -o ./offline_images/mysql.tar "${MYSQL_IMAGE}"
+    echo "保存离线镜像合集 -> offline_images/geoview_images.tar"
+    docker save -o ./offline_images/geoview_images.tar "${APP_IMAGE}" "${MYSQL_IMAGE}"
     echo "✓ 镜像保存完成！"
 else
     echo ">>> [1/3] 已跳过镜像体积硕大的本地保存环节！"

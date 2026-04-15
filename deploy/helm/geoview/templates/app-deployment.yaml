@@ -27,9 +27,9 @@ spec:
       {{- end }}
       initContainers:
         - name: init-app-data
-          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
-          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
-          command: ["/bin/bash", "-lc"]
+          image: "{{ default .Values.mysql.image.repository .Values.app.init.image.repository }}:{{ default .Values.mysql.image.tag .Values.app.init.image.tag }}"
+          imagePullPolicy: {{ default .Values.mysql.image.pullPolicy .Values.app.init.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
           args:
             - >
               mkdir -p
@@ -152,4 +152,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-

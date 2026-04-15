@@ -8,6 +8,7 @@ APP_IMAGE="crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/c
 MYSQL_IMAGE="registry.openanolis.cn/openanolis/mysql:8.0.30-8.6"
 APP_PULL_IMAGE="${APP_PULL_IMAGE:-crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest}"
 MYSQL_PULL_IMAGE="${MYSQL_PULL_IMAGE:-registry.openanolis.cn/openanolis/mysql:8.0.30-8.6}"
+IMAGE_BUNDLE_TAR="${IMAGE_BUNDLE_TAR:-./offline_images/geoview_images.tar}"
 
 ensure_cache_writable() {
     mkdir -p ./offline_cache
@@ -51,6 +52,15 @@ ensure_image() {
     fi
 }
 
+load_bundle_image_if_exists() {
+    local tar_path="$1"
+
+    if [ -f "${tar_path}" ]; then
+        echo "加载离线镜像合集 -> ${tar_path}"
+        docker load -i "${tar_path}"
+    fi
+}
+
 echo "=========================================="
 echo "    GeoView 离线环境一键部署脚本           "
 echo "=========================================="
@@ -71,6 +81,7 @@ python3 ./sync_model_assets.py --quiet
 python3 ./audit_offline_assets.py --strict
 
 echo ">>> [1/2] 正在加载离线 Docker 镜像..."
+load_bundle_image_if_exists "${IMAGE_BUNDLE_TAR}"
 ensure_image "MySQL" "./offline_images/mysql.tar" "${MYSQL_IMAGE}" "${MYSQL_PULL_IMAGE}"
 ensure_image "GeoView 应用" "./offline_images/cugrs_app.tar" "${APP_IMAGE}" "${APP_PULL_IMAGE}"
 echo "✓ 镜像加载完毕!"

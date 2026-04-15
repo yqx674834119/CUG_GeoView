@@ -1,7 +1,12 @@
 app:
   image:
-    repository: 172.20.20.243:8443/your-project/geoview-app
-    tag: "20260401"
+    repository: 172.20.20.107:8443/your-project/geoview-app
+    tag: "20260416"
+  init:
+    image:
+      repository: 172.20.20.107:8443/your-project/mysql
+      tag: "8.0.30-8.6"
+      pullPolicy: IfNotPresent
   gpu:
     enabled: true
     count: 1
@@ -14,20 +19,22 @@ app:
       memory: "32Gi"
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     size: 80Gi
   service:
     type: ClusterIP
+  config:
+    miner:
+      enabled: false
 
 mysql:
   enabled: true
   image:
-    repository: 172.20.20.243:8443/your-project/mysql
+    repository: 172.20.20.107:8443/your-project/mysql
     tag: "8.0.30-8.6"
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     size: 20Gi
 
 imagePullSecrets: []
-

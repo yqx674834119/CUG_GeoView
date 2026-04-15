@@ -4,12 +4,12 @@ set -euo pipefail
 # This script is a template for the relay/server-side environment.
 # Adjust PROJECT and APP_VERSION before running.
 
-HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.243:8443}"
+HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.107:8443}"
 HARBOR_USER="${HARBOR_USER:-admin}"
-HARBOR_PASSWORD="${HARBOR_PASSWORD:-Hc@Cloud01}"
+HARBOR_PASSWORD="${HARBOR_PASSWORD:-Harbor12345}"
 
 PROJECT="${PROJECT:-your-project}"
-APP_VERSION="${APP_VERSION:-20260401}"
+APP_VERSION="${APP_VERSION:-20260416}"
 
 APP_SOURCE_IMAGE="${APP_SOURCE_IMAGE:-crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest}"
 MYSQL_SOURCE_IMAGE="${MYSQL_SOURCE_IMAGE:-registry.openanolis.cn/openanolis/mysql:8.0.30-8.6}"
@@ -35,4 +35,3 @@ nerdctl push "${MYSQL_TARGET_IMAGE}"
 echo "==> Done"
 echo "APP_TARGET_IMAGE=${APP_TARGET_IMAGE}"
 echo "MYSQL_TARGET_IMAGE=${MYSQL_TARGET_IMAGE}"
-

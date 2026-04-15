@@ -4,9 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.243:8443}"
+HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.107:8443}"
 HARBOR_USER="${HARBOR_USER:-admin}"
-HARBOR_PASSWORD="${HARBOR_PASSWORD:-Hc@Cloud01}"
+HARBOR_PASSWORD="${HARBOR_PASSWORD:-Harbor12345}"
 
 PROJECT="${PROJECT:-}"
 APP_VERSION="${APP_VERSION:-$(date +%Y%m%d)}"
@@ -14,6 +14,7 @@ APP_VERSION="${APP_VERSION:-$(date +%Y%m%d)}"
 APP_SOURCE_IMAGE="${APP_SOURCE_IMAGE:-crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest}"
 MYSQL_SOURCE_IMAGE="${MYSQL_SOURCE_IMAGE:-registry.openanolis.cn/openanolis/mysql:8.0.30-8.6}"
 
+IMAGE_BUNDLE_TAR="${IMAGE_BUNDLE_TAR:-${SCRIPT_DIR}/offline_images/geoview_images.tar}"
 APP_IMAGE_TAR="${APP_IMAGE_TAR:-${SCRIPT_DIR}/offline_images/cugrs_app.tar}"
 MYSQL_IMAGE_TAR="${MYSQL_IMAGE_TAR:-${SCRIPT_DIR}/offline_images/mysql.tar}"
 
@@ -35,7 +36,7 @@ choose_container_cli() {
 
 validate_server_storage_path() {
     case "${SCRIPT_DIR}" in
-        /var/lib/kubelet/*|/nfs/data/*)
+        /var/lib/kubelet/*|/nfs/data/*|/other/document/*)
             return 0
             ;;
         *)
@@ -47,6 +48,7 @@ validate_server_storage_path() {
             echo "请将文件放在以下任一位置后重试："
             echo "  1. /var/lib/kubelet/<你的专属目录>"
             echo "  2. /nfs/data/<你的专属目录>"
+            echo "  3. /other/document/<你的专属目录>"
             echo "严禁在根目录或其他路径下存储和运行。"
             exit 1
             ;;
@@ -96,6 +98,15 @@ ensure_image() {
     fi
 }
 
+load_bundle_image_if_exists() {
+    local tar_path="$1"
+
+    if [ -f "${tar_path}" ]; then
+        echo "加载离线镜像合集 -> ${tar_path}"
+        run_cli load -i "${tar_path}"
+    fi
+}
+
 package_chart() {
     local chart_version
     local chart_package
@@ -120,6 +131,11 @@ app:
   image:
     repository: ${APP_TARGET_REPOSITORY}
     tag: "${APP_VERSION}"
+  init:
+    image:
+      repository: ${MYSQL_TARGET_REPOSITORY}
+      tag: "8.0.30-8.6"
+      pullPolicy: IfNotPresent
   gpu:
     enabled: true
     count: 1
@@ -132,10 +148,13 @@ app:
       memory: "32Gi"
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     size: 80Gi
   service:
     type: ClusterIP
+  config:
+    miner:
+      enabled: false
 
 mysql:
   enabled: true
@@ -144,7 +163,7 @@ mysql:
     tag: "8.0.30-8.6"
   persistence:
     enabled: true
-    storageClass: csi-sc
+    storageClass: csi-block-sc2
     size: 20Gi
 
 imagePullSecrets: []
@@ -161,9 +180,8 @@ build_ready_bundle() {
     mkdir -p "${ready_dir}/GeoView_Helm_Ready"
     cp "${CHART_PACKAGE}" "${ready_dir}/GeoView_Helm_Ready/"
     cp "${GENERATED_VALUES_FILE}" "${ready_dir}/GeoView_Helm_Ready/"
-    cp "${DOC_DIR}/GeoView_Helm_最终交付手册.md" "${ready_dir}/GeoView_Helm_Ready/"
-    cp "${DOC_DIR}/Helm_两步交付与平台部署说明.md" "${ready_dir}/GeoView_Helm_Ready/"
-    cp "${DOC_DIR}/Helm_K8s_部署入门与迁移说明.md" "${ready_dir}/GeoView_Helm_Ready/"
+    cp "${DOC_DIR}/Full包转Helm部署操作手册.md" "${ready_dir}/GeoView_Helm_Ready/"
+    cp "${DOC_DIR}/offline_deployment_guide.md" "${ready_dir}/GeoView_Helm_Ready/"
     cp "${SCRIPT_DIR}/deploy/helm/image-manifest.txt" "${ready_dir}/GeoView_Helm_Ready/"
 
     tar -czf "${ready_bundle}" -C "${ready_dir}" GeoView_Helm_Ready
@@ -199,6 +217,7 @@ GENERATED_VALUES_FILE="${DIST_DIR}/values-harbor-${PROJECT}-${APP_VERSION}.yaml"
 mkdir -p "${DIST_DIR}"
 
 echo ">>> [1/4] 准备本地镜像"
+load_bundle_image_if_exists "${IMAGE_BUNDLE_TAR}"
 ensure_image "GeoView 应用" "${APP_IMAGE_TAR}" "${APP_SOURCE_IMAGE}"
 ensure_image "MySQL" "${MYSQL_IMAGE_TAR}" "${MYSQL_SOURCE_IMAGE}"
 

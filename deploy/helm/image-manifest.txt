@@ -8,12 +8,11 @@ MYSQL_IMAGE=registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
 
 Example target images in Harbor
 -------------------------------
-APP_HARBOR_IMAGE=172.20.20.243:8443/<your-project>/geoview-app:<your-version>
-MYSQL_HARBOR_IMAGE=172.20.20.243:8443/<your-project>/mysql:8.0.30-8.6
+APP_HARBOR_IMAGE=172.20.20.107:8443/<your-project>/geoview-app:<your-version>
+MYSQL_HARBOR_IMAGE=172.20.20.107:8443/<your-project>/mysql:8.0.30-8.6
 
 Important
 ---------
 1. Never push images without a version tag.
 2. Update deploy/helm/geoview/values-harbor-example.yaml before deployment.
 3. The Helm chart defaults are only examples. Platform deployment should use Harbor image addresses.
-
