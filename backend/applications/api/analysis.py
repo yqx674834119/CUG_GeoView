@@ -295,17 +295,25 @@ def tracking_api():
     rect = req_json.get("rect")
 
     if not list_:
-        return fail_api("请提供上传后的图像序列")
-    if not rect or len(rect) != 4:
-        return fail_api("请提供初始跟踪框")
+        return fail_api("请提供上传后的图像序列或单个视频文件")
+    from applications.interface.tracking import requires_initial_rect
 
-    try:
-        rect = [int(value) for value in rect]
-    except Exception:
-        return fail_api("初始跟踪框格式错误")
+    if requires_initial_rect(model_path):
+        if not rect or len(rect) != 4:
+            return fail_api("请提供初始跟踪框")
 
-    if rect[2] <= 0 or rect[3] <= 0:
-        return fail_api("初始跟踪框宽高必须大于0")
+        try:
+            rect = [int(value) for value in rect]
+        except Exception:
+            return fail_api("初始跟踪框格式错误")
+
+        if rect[2] <= 0 or rect[3] <= 0:
+            return fail_api("初始跟踪框宽高必须大于0")
+    elif rect:
+        try:
+            rect = [int(value) for value in rect]
+        except Exception:
+            rect = None
 
     try:
         res = tracking(model_path, up_dir, generate_dir, list_, rect, type_=7)

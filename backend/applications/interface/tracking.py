@@ -1,13 +1,15 @@
 import json
 import os
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
 
-from applications.common.model_assets import load_model_manifest
+from applications.common.model_assets import load_model_manifest, resolve_model_dir
 from applications.common.path_global import generate_url, md5_name, up_url
 from applications.common.utils.upload import img_url_handle
 
@@ -24,147 +26,255 @@ class FrameItem:
     absolute_path: str
 
 
+@dataclass
+class TrackingInputBundle:
+    frames: List[FrameItem]
+    input_mode: str
+    first_frame_input: str
+    source_input_path: str
+    source_input_name: str
+    temp_dir: str = ""
+
+
 class TrackingError(RuntimeError):
     pass
 
 
+VIDEO_EXTENSIONS = {
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".mkv",
+    ".m4v",
+    ".webm",
+    ".mpg",
+    ".mpeg",
+}
+
+IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
+
+
+def requires_initial_rect(model_path: Optional[str]) -> bool:
+    return _resolve_tracking_runtime(model_path) not in {
+        "botsort",
+        "botsort_engineering",
+        "botsort_official",
+    }
+
+
 def execute(model_path: str, data_path: str, out_dir: str, names: List[dict],
-            rect: Sequence[int]) -> dict:
+            rect: Optional[Sequence[int]]) -> dict:
     os.makedirs(out_dir, exist_ok=True)
 
-    frames = _normalize_frames(names, data_path)
+    input_bundle = _prepare_tracking_input(names, data_path, out_dir)
+    frames = input_bundle.frames
     if len(frames) < 2:
-        raise TrackingError("至少需要上传 2 帧图像序列")
+        raise TrackingError("至少需要上传 2 帧图像，或 1 个包含至少 2 帧的有效视频")
 
-    tracker_mode = _normalize_model_path(model_path)
-    first_frame_bgr = _load_bgr_image(frames[0].absolute_path)
-    tracking_scale = _tracking_scale(first_frame_bgr.shape[1], first_frame_bgr.shape[0])
+    try:
+        tracker_mode = _resolve_tracking_runtime(model_path)
+        if tracker_mode in {"botsort", "botsort_engineering"}:
+            return _execute_botsort_engineering(model_path, out_dir, frames, input_bundle)
+        if tracker_mode == "botsort_official":
+            return _execute_botsort_official(model_path, out_dir, frames, input_bundle)
 
-    first_tracking_frame = _resize_for_tracking(first_frame_bgr, tracking_scale)
-    init_bbox = _scale_bbox(rect, tracking_scale)
-    init_bbox = _clip_bbox(init_bbox, first_tracking_frame.shape[1],
-                           first_tracking_frame.shape[0])
-    if init_bbox[2] < 6 or init_bbox[3] < 6:
-        raise TrackingError("初始框过小，无法稳定跟踪")
+        if rect is None or len(rect) != 4:
+            raise TrackingError("当前跟踪模型需要提供初始跟踪框")
 
-    tracker, method_used = _create_tracker(tracker_mode)
-    if tracker is not None:
-        tracker.init(first_tracking_frame, tuple(init_bbox))
+        first_frame_bgr = _load_bgr_image(frames[0].absolute_path)
+        tracking_scale = _tracking_scale(first_frame_bgr.shape[1], first_frame_bgr.shape[0])
 
-    template = _extract_template(_build_feature_gray(first_tracking_frame), init_bbox)
-    if template is None:
-        raise TrackingError("无法从首帧提取目标模板")
+        first_tracking_frame = _resize_for_tracking(first_frame_bgr, tracking_scale)
+        init_bbox = _scale_bbox(rect, tracking_scale)
+        init_bbox = _clip_bbox(init_bbox, first_tracking_frame.shape[1],
+                               first_tracking_frame.shape[0])
+        if init_bbox[2] < 6 or init_bbox[3] < 6:
+            raise TrackingError("初始框过小，无法稳定跟踪")
 
-    video_name = md5_name(f"tracking_{frames[0].filename}_sequence.mp4")
-    preview_name = md5_name(f"tracking_{frames[0].filename}_preview.png")
-    trajectory_name = md5_name(f"tracking_{frames[0].filename}_trajectory.json")
+        tracker, method_used = _create_tracker(tracker_mode)
+        if tracker is not None:
+            tracker.init(first_tracking_frame, tuple(init_bbox))
+
+        template = _extract_template(_build_feature_gray(first_tracking_frame), init_bbox)
+        if template is None:
+            raise TrackingError("无法从首帧提取目标模板")
+
+        video_name = md5_name(f"tracking_{frames[0].filename}_sequence.mp4")
+        preview_name = md5_name(f"tracking_{frames[0].filename}_preview.png")
+        trajectory_name = md5_name(f"tracking_{frames[0].filename}_trajectory.json")
+
+        video_path = os.path.join(out_dir, video_name)
+        preview_path = os.path.join(out_dir, preview_name)
+        trajectory_path = os.path.join(out_dir, trajectory_name)
+
+        writer = _create_video_writer(video_path, first_tracking_frame.shape[1],
+                                      first_tracking_frame.shape[0])
+
+        trajectory = []
+        preview_frames = []
+        success_frames = 0
+        confidence_values = []
+        last_valid_bbox = init_bbox
+
+        try:
+            for index, frame_item in enumerate(frames):
+                frame_bgr = _load_bgr_image(frame_item.absolute_path)
+                tracking_frame = _resize_for_tracking(frame_bgr, tracking_scale)
+                feature_gray = _build_feature_gray(tracking_frame)
+
+                if index == 0:
+                    current_bbox = init_bbox
+                    confidence = 1.0
+                    ok = True
+                else:
+                    ok, current_bbox, confidence, tracker, method_used = _track_next_frame(
+                        tracker=tracker,
+                        tracker_mode=tracker_mode,
+                        method_used=method_used,
+                        tracking_frame=tracking_frame,
+                        feature_gray=feature_gray,
+                        template=template,
+                        last_valid_bbox=last_valid_bbox,
+                    )
+
+                    if ok and confidence >= 0.45:
+                        new_template = _extract_template(feature_gray, current_bbox)
+                        if new_template is not None:
+                            template = _blend_template(template, new_template)
+
+                current_bbox = _clip_bbox(current_bbox, tracking_frame.shape[1],
+                                          tracking_frame.shape[0])
+                last_valid_bbox = current_bbox
+
+                bbox_original = _restore_bbox(current_bbox, tracking_scale)
+                tracked = bool(ok and confidence >= 0.2)
+                if tracked:
+                    success_frames += 1
+                confidence_values.append(float(confidence))
+
+                trajectory.append({
+                    "frame_index": index,
+                    "filename": frame_item.filename,
+                    "bbox": [int(value) for value in bbox_original],
+                    "confidence": round(float(confidence), 4),
+                    "tracked": tracked,
+                })
+
+                annotated = _draw_tracking_overlay(
+                    tracking_frame=tracking_frame,
+                    bbox=current_bbox,
+                    frame_index=index,
+                    confidence=confidence,
+                    tracked=tracked,
+                )
+                writer.write(annotated)
+
+                if index in {0, len(frames) // 2, len(frames) - 1}:
+                    preview_frames.append(annotated.copy())
+        finally:
+            writer.release()
+
+        preview_image = _build_preview_strip(preview_frames)
+        if not cv2.imwrite(preview_path, preview_image):
+            raise TrackingError("预览图写入失败")
+
+        summary = _build_summary(
+            model_path=model_path,
+            method_used=method_used,
+            trajectory=trajectory,
+            confidence_values=confidence_values,
+            sequence_length=len(frames),
+        )
+        with open(trajectory_path, "w", encoding="utf-8") as file:
+            json.dump({
+                "model_path": model_path,
+                "method_used": method_used,
+                "summary": summary,
+                "frames": trajectory,
+            }, file, ensure_ascii=False, indent=2)
+
+        return {
+            "status": "success",
+            "method_used": method_used,
+            "model_path": model_path,
+            "first_frame_input": input_bundle.first_frame_input,
+            "source_input_path": input_bundle.source_input_path,
+            "source_input_name": input_bundle.source_input_name,
+            "input_mode": input_bundle.input_mode,
+            "preview_path": generate_url + preview_name,
+            "output_video_path": generate_url + video_name,
+            "trajectory_path": generate_url + trajectory_name,
+            "summary": summary,
+            "tracked_frame_count": success_frames,
+            "total_frame_count": len(frames),
+        }
+    finally:
+        _cleanup_tracking_input(input_bundle)
+
+
+def _execute_botsort_engineering(model_path: str, out_dir: str,
+                                 frames: Sequence[FrameItem],
+                                 input_bundle: TrackingInputBundle) -> dict:
+    from applications.interface.hf_inference_caller import call_hf_botsort_tracking
+
+    manifest = load_model_manifest(model_path) or {}
+    model_dir = resolve_model_dir(model_path)
+
+    video_name = md5_name(f"tracking_{frames[0].filename}_botsort_sequence.mp4")
+    preview_name = md5_name(f"tracking_{frames[0].filename}_botsort_preview.png")
+    trajectory_name = md5_name(f"tracking_{frames[0].filename}_botsort_trajectory.json")
 
     video_path = os.path.join(out_dir, video_name)
     preview_path = os.path.join(out_dir, preview_name)
     trajectory_path = os.path.join(out_dir, trajectory_name)
 
-    writer = _create_video_writer(video_path, first_tracking_frame.shape[1],
-                                  first_tracking_frame.shape[0])
+    detector_model_id = manifest.get("detector_model_id", "StephanST/WALDO30")
+    detector_weight_file = manifest.get("detector_weight_file",
+                                        "WALDO30_yolov8l-p2_1024x1024.pt")
+    tracker_config_name = manifest.get("tracker_config", "botsort.yaml")
+    tracker_config_path = str(model_dir / tracker_config_name)
 
-    trajectory = []
-    preview_frames = []
-    success_frames = 0
-    confidence_values = []
-    last_valid_bbox = init_bbox
-
-    try:
-        for index, frame_item in enumerate(frames):
-            frame_bgr = _load_bgr_image(frame_item.absolute_path)
-            tracking_frame = _resize_for_tracking(frame_bgr, tracking_scale)
-            feature_gray = _build_feature_gray(tracking_frame)
-
-            if index == 0:
-                current_bbox = init_bbox
-                confidence = 1.0
-                ok = True
-            else:
-                ok, current_bbox, confidence, tracker, method_used = _track_next_frame(
-                    tracker=tracker,
-                    tracker_mode=tracker_mode,
-                    method_used=method_used,
-                    tracking_frame=tracking_frame,
-                    feature_gray=feature_gray,
-                    template=template,
-                    last_valid_bbox=last_valid_bbox,
-                )
-
-                if ok and confidence >= 0.45:
-                    new_template = _extract_template(feature_gray, current_bbox)
-                    if new_template is not None:
-                        template = _blend_template(template, new_template)
-
-            current_bbox = _clip_bbox(current_bbox, tracking_frame.shape[1],
-                                      tracking_frame.shape[0])
-            last_valid_bbox = current_bbox
-
-            bbox_original = _restore_bbox(current_bbox, tracking_scale)
-            tracked = bool(ok and confidence >= 0.2)
-            if tracked:
-                success_frames += 1
-            confidence_values.append(float(confidence))
-
-            trajectory.append({
-                "frame_index": index,
-                "filename": frame_item.filename,
-                "bbox": [int(value) for value in bbox_original],
-                "confidence": round(float(confidence), 4),
-                "tracked": tracked,
-            })
-
-            annotated = _draw_tracking_overlay(
-                tracking_frame=tracking_frame,
-                bbox=current_bbox,
-                frame_index=index,
-                confidence=confidence,
-                tracked=tracked,
-            )
-            writer.write(annotated)
-
-            if index in {0, len(frames) // 2, len(frames) - 1}:
-                preview_frames.append(annotated.copy())
-    finally:
-        writer.release()
-
-    preview_image = _build_preview_strip(preview_frames)
-    if not cv2.imwrite(preview_path, preview_image):
-        raise TrackingError("预览图写入失败")
-
-    summary = _build_summary(
-        model_path=model_path,
-        method_used=method_used,
-        trajectory=trajectory,
-        confidence_values=confidence_values,
-        sequence_length=len(frames),
+    output_data = call_hf_botsort_tracking(
+        input_dir=os.path.dirname(frames[0].absolute_path),
+        file_names=[frame.relative_path for frame in frames],
+        output_video_path=video_path,
+        output_preview_path=preview_path,
+        output_trajectory_path=trajectory_path,
+        model_id=detector_model_id,
+        model_file=detector_weight_file,
+        tracker_config=tracker_config_path,
     )
-    with open(trajectory_path, "w", encoding="utf-8") as file:
-        json.dump({
-            "model_path": model_path,
-            "method_used": method_used,
-            "summary": summary,
-            "frames": trajectory,
-        }, file, ensure_ascii=False, indent=2)
 
+    summary = output_data.get("summary") or {}
+    tracked_frames = int(summary.get("tracked_frames", 0))
     return {
         "status": "success",
-        "method_used": method_used,
+        "runtime_variant": "engineering",
+        "method_used": output_data.get("method_used", "ultralytics_botsort"),
         "model_path": model_path,
-        "first_frame_input": up_url + frames[0].relative_path,
+        "first_frame_input": input_bundle.first_frame_input,
+        "source_input_path": input_bundle.source_input_path,
+        "source_input_name": input_bundle.source_input_name,
+        "input_mode": input_bundle.input_mode,
         "preview_path": generate_url + preview_name,
         "output_video_path": generate_url + video_name,
         "trajectory_path": generate_url + trajectory_name,
         "summary": summary,
-        "tracked_frame_count": success_frames,
+        "tracked_frame_count": tracked_frames,
         "total_frame_count": len(frames),
     }
 
 
-def _normalize_frames(names: List[dict], data_path: str) -> List[FrameItem]:
-    frames = []
+def _resolve_input_items(names: List[dict], data_path: str) -> List[FrameItem]:
+    items = []
     for item in names:
         if isinstance(item, dict):
             relative_path = item.get("src") or item.get("path") or item.get("name")
@@ -179,25 +289,198 @@ def _normalize_frames(names: List[dict], data_path: str) -> List[FrameItem]:
         relative_name = img_url_handle(relative_path)
         absolute_path = os.path.join(data_path, relative_name)
         if not os.path.exists(absolute_path):
-            raise TrackingError(f"图像不存在: {relative_name}")
+            raise TrackingError(f"输入文件不存在: {relative_name}")
 
-        frames.append(
+        items.append(
             FrameItem(
                 filename=filename or relative_name,
                 relative_path=relative_name,
                 absolute_path=absolute_path,
             ))
 
-    if not frames:
-        raise TrackingError("未找到可用的图像序列")
+    if not items:
+        raise TrackingError("未找到可用的跟踪输入")
+
+    return items
+
+
+def _normalize_frames(names: List[dict], data_path: str) -> List[FrameItem]:
+    frames = _resolve_input_items(names, data_path)
+    for item in frames:
+        ext = os.path.splitext(item.filename)[1].lower()
+        if ext not in IMAGE_EXTENSIONS:
+            raise TrackingError("当前输入包含非图像文件，请上传图像序列或单个视频文件")
 
     frames.sort(key=lambda item: _natural_key(item.filename))
     return frames
 
 
-def _normalize_model_path(model_path: Optional[str]) -> str:
+def _execute_botsort_official(model_path: str, out_dir: str,
+                              frames: Sequence[FrameItem],
+                              input_bundle: TrackingInputBundle) -> dict:
+    from applications.interface.hf_inference_caller import call_botsort_official_tracking
+
+    manifest = load_model_manifest(model_path) or {}
+
+    video_name = md5_name(f"tracking_{frames[0].filename}_botsort_official_sequence.mp4")
+    preview_name = md5_name(f"tracking_{frames[0].filename}_botsort_official_preview.png")
+    trajectory_name = md5_name(
+        f"tracking_{frames[0].filename}_botsort_official_trajectory.json")
+    mot_name = md5_name(f"tracking_{frames[0].filename}_botsort_official_tracks.txt")
+
+    video_path = os.path.join(out_dir, video_name)
+    preview_path = os.path.join(out_dir, preview_name)
+    trajectory_path = os.path.join(out_dir, trajectory_name)
+    mot_path = os.path.join(out_dir, mot_name)
+
+    output_data = call_botsort_official_tracking(
+        input_dir=os.path.dirname(frames[0].absolute_path),
+        file_names=[frame.relative_path for frame in frames],
+        output_video_path=video_path,
+        output_preview_path=preview_path,
+        output_trajectory_path=trajectory_path,
+        output_mot_path=mot_path,
+        repo_dir=str(manifest.get("official_repo_dir",
+                                  "/home/livablecity/geoview_runtime/BoT-SORT")),
+        exp_file=str(manifest.get("exp_file",
+                                  "yolox/exps/example/mot/yolox_x_mix_det.py")),
+        detector_ckpt=str(manifest.get("detector_ckpt_file",
+                                       "bytetrack_x_mot17.pth.tar")),
+        with_reid=bool(manifest.get("with_reid", True)),
+        fast_reid_config=str(manifest.get("fast_reid_config",
+                                          "fast_reid/configs/MOT17/sbs_S50.yml")),
+        fast_reid_weights=str(manifest.get("fast_reid_weights_file",
+                                           "mot17_sbs_S50.pth")),
+        cmc_method=str(manifest.get("cmc_method", "orb")),
+        track_high_thresh=float(manifest.get("track_high_thresh", 0.6)),
+        track_low_thresh=float(manifest.get("track_low_thresh", 0.1)),
+        new_track_thresh=float(manifest.get("new_track_thresh", 0.7)),
+        track_buffer=int(manifest.get("track_buffer", 30)),
+        match_thresh=float(manifest.get("match_thresh", 0.8)),
+        min_box_area=float(manifest.get("min_box_area", 10)),
+        aspect_ratio_thresh=float(manifest.get("aspect_ratio_thresh", 1.6)),
+        proximity_thresh=float(manifest.get("proximity_thresh", 0.5)),
+        appearance_thresh=float(manifest.get("appearance_thresh", 0.25)),
+    )
+
+    summary = output_data.get("summary") or {}
+    tracked_frames = int(summary.get("tracked_frames", 0))
+    return {
+        "status": "success",
+        "runtime_variant": "official",
+        "method_used": output_data.get("method_used", "botsort_official_reid"),
+        "model_path": model_path,
+        "first_frame_input": input_bundle.first_frame_input,
+        "source_input_path": input_bundle.source_input_path,
+        "source_input_name": input_bundle.source_input_name,
+        "input_mode": input_bundle.input_mode,
+        "preview_path": generate_url + preview_name,
+        "output_video_path": generate_url + video_name,
+        "trajectory_path": generate_url + trajectory_name,
+        "mot_result_path": generate_url + mot_name,
+        "summary": summary,
+        "tracked_frame_count": tracked_frames,
+        "total_frame_count": len(frames),
+    }
+
+
+def _prepare_tracking_input(names: List[dict], data_path: str,
+                            out_dir: str) -> TrackingInputBundle:
+    items = _resolve_input_items(names, data_path)
+    extensions = {os.path.splitext(item.filename)[1].lower() for item in items}
+    has_video = any(ext in VIDEO_EXTENSIONS for ext in extensions)
+    has_image = any(ext in IMAGE_EXTENSIONS for ext in extensions)
+
+    if has_video and has_image:
+        raise TrackingError("请上传单个视频文件，或多帧图像序列，暂不支持混合输入")
+    if has_video:
+        if len(items) != 1:
+            raise TrackingError("视频跟踪当前仅支持上传 1 个视频文件")
+        return _extract_video_frames(items[0], out_dir)
+
+    if not has_image:
+        raise TrackingError("当前跟踪仅支持图像序列或常见视频文件")
+
+    items.sort(key=lambda item: _natural_key(item.filename))
+    return TrackingInputBundle(
+        frames=items,
+        input_mode="image_sequence",
+        first_frame_input=up_url + items[0].relative_path,
+        source_input_path="",
+        source_input_name=f"{len(items)} frame sequence",
+    )
+
+
+def _extract_video_frames(video_item: FrameItem,
+                          out_dir: str) -> TrackingInputBundle:
+    capture = cv2.VideoCapture(video_item.absolute_path)
+    if not capture.isOpened():
+        raise TrackingError(f"无法读取视频: {video_item.filename}")
+
+    temp_dir = tempfile.mkdtemp(prefix="tracking_video_", dir=out_dir)
+    frames: List[FrameItem] = []
+    first_frame_bgr = None
+    frame_index = 0
+
+    try:
+        while True:
+            ok, frame = capture.read()
+            if not ok or frame is None:
+                break
+
+            if first_frame_bgr is None:
+                first_frame_bgr = frame.copy()
+
+            frame_name = f"{frame_index:06d}.jpg"
+            frame_path = os.path.join(temp_dir, frame_name)
+            if not cv2.imwrite(frame_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95]):
+                raise TrackingError("视频解帧失败，无法写入临时帧图像")
+
+            frames.append(
+                FrameItem(
+                    filename=frame_name,
+                    relative_path=frame_name,
+                    absolute_path=frame_path,
+                ))
+            frame_index += 1
+    finally:
+        capture.release()
+
+    if len(frames) < 2 or first_frame_bgr is None:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise TrackingError("视频帧数不足，至少需要 2 帧有效内容")
+
+    preview_base = os.path.splitext(os.path.basename(video_item.filename))[0]
+    preview_name = md5_name(f"tracking_{preview_base[:48]}_input_preview.png")
+    preview_path = os.path.join(out_dir, preview_name)
+    if not cv2.imwrite(preview_path, first_frame_bgr):
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise TrackingError("视频首帧预览图写入失败")
+
+    return TrackingInputBundle(
+        frames=frames,
+        input_mode="video",
+        first_frame_input=generate_url + preview_name,
+        source_input_path=up_url + video_item.relative_path,
+        source_input_name=video_item.filename,
+        temp_dir=temp_dir,
+    )
+
+
+def _cleanup_tracking_input(bundle: TrackingInputBundle):
+    if bundle.temp_dir:
+        shutil.rmtree(bundle.temp_dir, ignore_errors=True)
+
+
+def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
     if model_path in ("builtin:tracking:auto", None, ""):
         return "auto"
+    if model_path == "builtin:tracking:botsort":
+        return "botsort"
+    if model_path == "builtin:tracking:botsort_engineering":
+        return "botsort_engineering"
+    if model_path == "builtin:tracking:botsort_official":
+        return "botsort_official"
     if model_path == "builtin:tracking:csrt":
         return "csrt"
     if model_path == "builtin:tracking:kcf":

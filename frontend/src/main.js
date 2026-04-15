@@ -17,6 +17,22 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 initializeTheme()
 
+const RESIZE_OBSERVER_NOISE = "ResizeObserver loop completed with undelivered notifications."
+
+window.addEventListener("error", (event) => {
+  if (event?.message === RESIZE_OBSERVER_NOISE) {
+    event.stopImmediatePropagation()
+  }
+})
+
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event?.reason
+  const message = typeof reason === "string" ? reason : reason?.message
+  if (message === RESIZE_OBSERVER_NOISE) {
+    event.preventDefault()
+  }
+})
+
 const app = createApp(App)
 app.use(router).use(ElementPlus,{locale: zhCn}).use(JSZIP).mount('#app')
 app.directive('drag',{

@@ -57,6 +57,62 @@ class TestNewFeatures(unittest.TestCase):
         data = json.loads(response.data)
         self.assertIn("请提供", data['msg'])
 
+    def test_tracking_api_botsort_without_rect(self):
+        """BoT-SORT should not require a manual init bbox."""
+        payload = {
+            "model_path": "backend/model/tracking/botsort",
+            "list": [
+                {"src": "/_uploads/photos/test_1.jpg", "filename": "test_1.jpg"},
+                {"src": "/_uploads/photos/test_2.jpg", "filename": "test_2.jpg"},
+            ],
+        }
+        from unittest.mock import patch
+
+        mocked = {
+            "status": "success",
+            "runtime_variant": "engineering",
+            "method_used": "ultralytics_botsort",
+            "preview_path": "/_uploads/photos/res/preview.png",
+            "output_video_path": "/_uploads/photos/res/result.mp4",
+            "trajectory_path": "/_uploads/photos/res/trajectory.json",
+            "summary": {"total_frames": 2, "tracked_frames": 1, "lost_frames": 1},
+            "first_frame_input": "/_uploads/photos/test_1.jpg",
+        }
+        with patch('applications.interface.analysis.tracking', return_value=mocked):
+            response = self.client.post('/api/analysis/tracking', json=payload)
+            data = json.loads(response.data)
+            self.assertEqual(data['code'], 0)
+            self.assertEqual(data['data']['method_used'], 'ultralytics_botsort')
+            self.assertEqual(data['data']['runtime_variant'], 'engineering')
+
+    def test_tracking_api_botsort_official_without_rect(self):
+        """Official BoT-SORT should also skip manual init bbox."""
+        payload = {
+            "model_path": "backend/model/tracking/botsort_official",
+            "list": [
+                {"src": "/_uploads/photos/test_1.jpg", "filename": "test_1.jpg"},
+                {"src": "/_uploads/photos/test_2.jpg", "filename": "test_2.jpg"},
+            ],
+        }
+        from unittest.mock import patch
+
+        mocked = {
+            "status": "success",
+            "runtime_variant": "official",
+            "method_used": "botsort_official_reid",
+            "preview_path": "/_uploads/photos/res/preview.png",
+            "output_video_path": "/_uploads/photos/res/result.mp4",
+            "trajectory_path": "/_uploads/photos/res/trajectory.json",
+            "summary": {"total_frames": 2, "tracked_frames": 1, "lost_frames": 1},
+            "first_frame_input": "/_uploads/photos/test_1.jpg",
+        }
+        with patch('applications.interface.analysis.tracking', return_value=mocked):
+            response = self.client.post('/api/analysis/tracking', json=payload)
+            data = json.loads(response.data)
+            self.assertEqual(data['code'], 0)
+            self.assertEqual(data['data']['method_used'], 'botsort_official_reid')
+            self.assertEqual(data['data']['runtime_variant'], 'official')
+
     def test_object_detection_mmrotate_routing(self):
         """Test Object Detection API routing for MMRotate"""
         # We just want to ensure the endpoint accepts the request.

@@ -9,7 +9,7 @@
     </Tabinfor>
     <el-divider />
     <p class="intro-text">
-      上传按时间顺序命名的遥感图像序列，并在首帧框选目标，系统会输出跟踪预览图、结果视频与轨迹 JSON。
+      上传按时间顺序命名的时序图像序列，或单个视频文件，系统会自动完成多目标发现、关联与轨迹输出，并生成预览图、结果视频与轨迹 JSON。
     </p>
 
     <el-card class="upload-panel upload-panel--single">
@@ -31,16 +31,16 @@
           drag
           action="#"
           multiple
-          accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.webp"
+          :accept="acceptString"
           :auto-upload="false"
           @change="checkFile"
         >
           <i class="iconfont icon-yunduanshangchuan" />
           <div class="el-upload__text">
-            拖拽序列帧到此处
+            拖拽图像序列或单个视频到此处
           </div>
           <div class="el-upload__tip">
-            或点击下方按钮上传文件夹
+            可上传图像序列，或 1 个常见视频文件
           </div>
         </el-upload>
         <div class="upload-action-row">
@@ -57,11 +57,11 @@
           <i
             class="iconfont icon-wenjianshangchuan upload-folder-action"
             @click="folderClick"
-          >上传文件夹</i>
+          >上传图像文件夹</i>
         </div>
       </div>
 
-      <div v-if="sortedNames.length" class="sequence-summary">
+      <div v-if="sortedNames.length && !isVideoInput" class="sequence-summary">
         <div class="summary-head">
           <div>
             <div class="summary-title">序列概览</div>
@@ -86,6 +86,19 @@
           </span>
         </div>
       </div>
+      <div v-else-if="sortedNames.length && isVideoInput" class="sequence-summary">
+        <div class="summary-head">
+          <div>
+            <div class="summary-title">视频概览</div>
+            <div class="summary-meta">
+              已选择视频 {{ sortedNames[0] }}
+            </div>
+          </div>
+          <el-tag type="warning" effect="dark">
+            单视频输入
+          </el-tag>
+        </div>
+      </div>
 
       <el-row justify="center" class="model-row">
         <div class="custom-model">
@@ -96,6 +109,7 @@
             v-model="uploadSrc.model_path"
             class="choose-item"
             :label="item.model_path"
+            :disabled="item.disabled"
           >
             <el-tooltip
               effect="dark"
@@ -110,7 +124,7 @@
         </div>
       </el-row>
 
-      <div v-if="firstFrame" class="frame-selector">
+      <div v-if="firstFrame && requiresInitialRect && !isVideoInput" class="frame-selector">
         <p class="frame-selector__hint">请在首帧图像中框选初始目标：</p>
         <div class="frame-selector__canvas">
           <img
@@ -137,6 +151,22 @@
           初始框：x={{ Math.round(rect.x) }}，y={{ Math.round(rect.y) }}，
           w={{ Math.round(rect.w) }}，h={{ Math.round(rect.h) }}
         </div>
+      </div>
+      <div v-else-if="firstFrame && isVideoInput" class="frame-selector frame-selector--hintonly">
+        <p class="frame-selector__hint">
+          当前输入为单个视频文件，系统会自动解帧并执行全图多目标跟踪，无需手工框选。
+        </p>
+        <video
+          controls
+          preload="metadata"
+          class="input-video"
+          :src="firstFrame"
+        />
+      </div>
+      <div v-else-if="firstFrame" class="frame-selector frame-selector--hintonly">
+        <p class="frame-selector__hint">
+          当前模型为全图多目标跟踪，无需手工框选初始目标，系统会自动完成目标发现与轨迹关联。
+        </p>
       </div>
 
       <div class="handle-button">
@@ -172,6 +202,39 @@
           <el-card class="result-card">
             <template #header>
               <div class="result-card__head">
+                <span>输入预览</span>
+                <el-tag effect="dark" :type="result.input_mode === 'video' ? 'warning' : 'info'">
+                  {{ result.input_mode === "video" ? "视频输入" : "图像序列" }}
+                </el-tag>
+              </div>
+            </template>
+            <video
+              v-if="result.input_mode === 'video' && result.source_input_full_url"
+              controls
+              preload="metadata"
+              class="result-video"
+              :src="result.source_input_full_url"
+            />
+            <el-image
+              v-else
+              :src="result.first_frame_full_url"
+              :preview-src-list="[result.first_frame_full_url]"
+              :preview-teleported="true"
+              fit="cover"
+              class="result-preview"
+            />
+            <div class="metric-grid">
+              <span>运行时：{{ result.runtime_variant || "默认" }}</span>
+              <span>模型：{{ result.method_used }}</span>
+              <span v-if="result.source_input_name">输入名：{{ result.source_input_name }}</span>
+            </div>
+          </el-card>
+        </el-col>
+
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-card class="result-card">
+            <template #header>
+              <div class="result-card__head">
                 <span>跟踪预览图</span>
                 <el-tag type="success" effect="dark">
                   {{ result.method_used }}
@@ -193,8 +256,10 @@
             </div>
           </el-card>
         </el-col>
+      </el-row>
 
-        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+      <el-row :gutter="20">
+        <el-col :xs="24" :sm="24" :md="24" :lg="24">
           <el-card class="result-card">
             <template #header>
               <div class="result-card__head">
@@ -226,6 +291,14 @@
                 下载轨迹 JSON
               </el-button>
               <el-button
+                v-if="result.source_input_full_url"
+                type="primary"
+                link
+                @click="openAsset(result.input_mode === 'video' ? result.source_input_full_url : result.first_frame_full_url)"
+              >
+                查看输入
+              </el-button>
+              <el-button
                 type="primary"
                 link
                 @click="downloadFile(result.preview_full_url, 'tracking_preview.png')"
@@ -246,7 +319,7 @@ import Tabinfor from "@/components/Tabinfor";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
 
-const SUPPORTED_SUFFIXES = [
+const IMAGE_SUFFIXES = [
   "jpg",
   "jpeg",
   "png",
@@ -262,6 +335,24 @@ const SUPPORTED_SUFFIXES = [
   "TIFF",
   "WEBP",
 ];
+const VIDEO_SUFFIXES = [
+  "mp4",
+  "avi",
+  "mov",
+  "mkv",
+  "m4v",
+  "webm",
+  "MP4",
+  "AVI",
+  "MOV",
+  "MKV",
+  "M4V",
+  "WEBM",
+];
+const ACCEPT_SUFFIXES = [
+  ...IMAGE_SUFFIXES.map((suffix) => `.${suffix.toLowerCase()}`),
+  ...VIDEO_SUFFIXES.map((suffix) => `.${suffix.toLowerCase()}`),
+];
 
 export default {
   name: "Tracking",
@@ -272,7 +363,7 @@ export default {
       sortedNames: [],
       modelPathArr: [],
       uploadSrc: {
-        model_path: "builtin:tracking:auto",
+        model_path: "",
       },
       firstFrame: null,
       rect: { x: 0, y: 0, w: 0, h: 0 },
@@ -284,14 +375,35 @@ export default {
       global: {
         BASEURL: global.BASEURL,
       },
+      inputMode: "image_sequence",
     };
   },
   computed: {
+    acceptString() {
+      return ACCEPT_SUFFIXES.join(",");
+    },
+    isVideoInput() {
+      return this.inputMode === "video";
+    },
     canStart() {
-      return this.fileList.length >= 2 && this.rect.w > 0 && this.rect.h > 0;
+      const hasValidInput = this.isVideoInput ? this.fileList.length === 1 : this.fileList.length >= 2;
+      return hasValidInput && (!this.requiresInitialRect || (this.rect.w > 0 && this.rect.h > 0));
     },
     resultSummary() {
       return (this.result && this.result.summary) || null;
+    },
+    selectedModel() {
+      return this.modelPathArr.find((item) => item.model_path === this.uploadSrc.model_path) || null;
+    },
+    requiresInitialRect() {
+      const modelPath = (this.selectedModel && this.selectedModel.model_path) || "";
+      return !(
+        modelPath.includes("/tracking/botsort")
+        || modelPath.includes("/tracking/botsort_official")
+        || modelPath.endsWith(":botsort")
+        || modelPath.endsWith(":botsort_official")
+        || modelPath.endsWith(":botsort_engineering")
+      );
     },
   },
   created() {
@@ -303,7 +415,15 @@ export default {
   methods: {
     fetchModels() {
       getCustomModel("tracking").then((res) => {
-        this.modelPathArr = res.data.data || [];
+        const currentModels = res.data.data || [];
+        this.modelPathArr = currentModels.filter((item) => {
+          const path = item.model_path || "";
+          return path.includes("/tracking/botsort") || path.includes("/tracking/botsort_official");
+        }).sort((a, b) => {
+          const aOfficial = (a.model_path || "").includes("/tracking/botsort_official");
+          const bOfficial = (b.model_path || "").includes("/tracking/botsort_official");
+          return Number(bOfficial) - Number(aOfficial);
+        });
         if (this.modelPathArr.length > 0) {
           this.uploadSrc.model_path = this.modelPathArr[0].model_path;
         }
@@ -314,6 +434,7 @@ export default {
       this.fileList = [];
       this.sortedNames = [];
       this.firstFrame = null;
+      this.inputMode = "image_sequence";
       this.rect = { x: 0, y: 0, w: 0, h: 0 };
       this.result = null;
       if (this.$refs.upload) {
@@ -328,21 +449,38 @@ export default {
       this.$refs.refFolder.click();
     },
     checkFile(file, fileList) {
-      this.fileList = this.normalizeElUploadList(fileList);
-      this.refreshSequencePreview();
+      const normalized = this.normalizeInputItems(fileList);
+      this.fileList = normalized.items;
+      this.inputMode = normalized.mode;
+      this.refreshInputPreview();
     },
     uploadFolder() {
-      this.fileList = this.mergeFileList(
+      const normalized = this.mergeFileList(
         this.fileList,
         Array.from(this.$refs.refFolder.files || []),
       );
-      this.refreshSequencePreview();
+      this.fileList = normalized.items;
+      this.inputMode = normalized.mode;
+      this.refreshInputPreview();
     },
-    normalizeElUploadList(fileList) {
+    normalizeInputItems(fileList) {
       const accepted = [];
+      let mode = "";
       for (const item of fileList) {
         const raw = item.raw || item;
-        if (!this.isSupportedFile(raw)) {
+        const fileKind = this.getSupportedKind(raw);
+        if (!fileKind) {
+          continue;
+        }
+        if (!mode) {
+          mode = fileKind;
+        }
+        if (fileKind !== mode) {
+          this.$message.warning("目标跟踪仅支持上传图像序列或单个视频文件，请勿混合上传");
+          continue;
+        }
+        if (mode === "video" && accepted.length >= 1) {
+          this.$message.warning("目标跟踪当前仅支持上传 1 个视频文件");
           continue;
         }
         accepted.push({
@@ -353,12 +491,15 @@ export default {
           uid: item.uid || `${Date.now()}_${Math.random()}`,
         });
       }
-      return accepted;
+      return {
+        items: accepted,
+        mode: mode === "video" ? "video" : "image_sequence",
+      };
     },
     mergeFileList(existingList, incomingFiles) {
       const merged = [...existingList];
       for (const file of incomingFiles) {
-        if (!this.isSupportedFile(file)) {
+        if (!this.getSupportedKind(file)) {
           continue;
         }
         merged.push({
@@ -368,17 +509,20 @@ export default {
           uid: `${Date.now()}_${Math.random()}`,
         });
       }
-      return merged;
+      return this.normalizeInputItems(merged);
     },
-    isSupportedFile(file) {
+    getSupportedKind(file) {
       const suffix = file.name.substring(file.name.lastIndexOf(".") + 1);
-      if (!SUPPORTED_SUFFIXES.includes(suffix)) {
-        this.$message.error(`文件 ${file.name} 格式不支持，请上传常见影像格式`);
-        return false;
+      if (IMAGE_SUFFIXES.includes(suffix)) {
+        return "image";
       }
-      return true;
+      if (VIDEO_SUFFIXES.includes(suffix)) {
+        return "video";
+      }
+      this.$message.error(`文件 ${file.name} 格式不支持，请上传常见影像或视频格式`);
+      return "";
     },
-    refreshSequencePreview() {
+    refreshInputPreview() {
       const ordered = [...this.fileList].sort((a, b) => (
         (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" })
       ));
@@ -441,7 +585,9 @@ export default {
     },
     async startTracking() {
       if (!this.canStart) {
-        this.$message.error("请先上传至少 2 帧图像并框选目标");
+        this.$message.error(this.requiresInitialRect
+          ? "请先上传有效输入并框选目标"
+          : "请先上传至少 2 帧图像，或 1 个视频文件");
         return;
       }
       if (!this.uploadSrc.model_path) {
@@ -452,30 +598,32 @@ export default {
       this.running = true;
       try {
         const uploaded = await this.uploadSequence(this.fileList);
-        if (uploaded.length < 2) {
-          throw new Error("上传结果不足 2 帧，无法执行目标跟踪");
+        if ((!this.isVideoInput && uploaded.length < 2) || (this.isVideoInput && uploaded.length < 1)) {
+          throw new Error(this.isVideoInput
+            ? "上传结果缺少有效视频文件，无法执行目标跟踪"
+            : "上传结果不足 2 帧，无法执行目标跟踪");
         }
-        const ordered = [...uploaded].sort((a, b) => (
+        const ordered = this.isVideoInput ? [...uploaded] : [...uploaded].sort((a, b) => (
           (a.filename || "").localeCompare(b.filename || "", undefined, { numeric: true, sensitivity: "base" })
         ));
-        const img = this.$refs.firstFrameImg;
-        const scaleX = img.naturalWidth / img.clientWidth;
-        const scaleY = img.naturalHeight / img.clientHeight;
-        const rect = [
-          Math.round(this.rect.x * scaleX),
-          Math.round(this.rect.y * scaleY),
-          Math.round(this.rect.w * scaleX),
-          Math.round(this.rect.h * scaleY),
-        ];
-
         const payload = {
           model_path: this.uploadSrc.model_path,
           list: ordered.map((item) => ({
             src: item.src,
             filename: item.filename,
           })),
-          rect,
         };
+        if (this.requiresInitialRect) {
+          const img = this.$refs.firstFrameImg;
+          const scaleX = img.naturalWidth / img.clientWidth;
+          const scaleY = img.naturalHeight / img.clientHeight;
+          payload.rect = [
+            Math.round(this.rect.x * scaleX),
+            Math.round(this.rect.y * scaleY),
+            Math.round(this.rect.w * scaleX),
+            Math.round(this.rect.h * scaleY),
+          ];
+        }
         const response = await imgUpload(payload, "tracking");
         const data = response.data.data || {};
         if (!data.preview_path || !data.output_video_path) {
@@ -484,6 +632,7 @@ export default {
         this.result = {
           ...data,
           first_frame_full_url: this.prefixUrl(data.first_frame_input),
+          source_input_full_url: this.prefixUrl(data.source_input_path),
           preview_full_url: this.prefixUrl(data.preview_path),
           output_video_full_url: this.prefixUrl(data.output_video_path),
           trajectory_full_url: this.prefixUrl(data.trajectory_path),
@@ -511,6 +660,12 @@ export default {
       link.href = url;
       link.download = filename;
       link.click();
+    },
+    openAsset(url) {
+      if (!url) {
+        return;
+      }
+      window.open(url, "_blank", "noopener");
     },
     formatRatio(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -614,12 +769,33 @@ export default {
   gap: 10px;
 }
 
+.model-plan-tip {
+  width: 100%;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .frame-selector {
   margin-top: 24px;
 }
 
+.frame-selector--hintonly {
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--theme-surface-secondary);
+  border: 1px solid var(--theme-border-color);
+}
+
 .frame-selector__hint {
   color: var(--text-secondary);
+}
+
+.input-video {
+  width: min(100%, 960px);
+  margin-top: 12px;
+  border-radius: 16px;
+  background: #000;
 }
 
 .frame-selector__canvas {

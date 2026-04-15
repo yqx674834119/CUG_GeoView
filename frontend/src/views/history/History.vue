@@ -44,7 +44,21 @@
       </el-table-column>
       <el-table-column label="原图">
         <template #default="scope">
+          <div
+            v-if="isTrackingVideoInput(scope.row)"
+            class="history-thumb history-thumb--video"
+            @click="openTrackingSource(scope.row)"
+          >
+            <img
+              :src="toAbsoluteUrl(scope.row.before_img)"
+              min-width="70"
+              height="70"
+              alt="视频封面"
+            >
+            <span class="history-thumb__badge">视频输入</span>
+          </div>
           <img
+            v-else
             :src="global.BASEURL + scope.row.before_img"
             min-width="70"
             height="70"
@@ -93,7 +107,7 @@
             v-show="scope.row.type !== '变化检测'&&scope.row.type !=='场景分类'&&scope.row.type !== '自动配准'"
             size="default"
             type="primary"
-            @click="previewTwoPic(scope.row.before_img, scope.row.after_img)"
+            @click="previewHistoryRow(scope.row)"
           >
             预览
           </el-button>
@@ -134,6 +148,14 @@
             @click="previewHistoryAsset(scope.row.data.checkerboard_path)"
           >
             棋盘
+          </el-button>
+          <el-button
+            v-if="isTrackingVideoInput(scope.row)"
+            size="default"
+            type="primary"
+            @click="openTrackingSource(scope.row)"
+          >
+            原视频
           </el-button>
           <el-button
             v-show="scope.row.type === '目标跟踪'"
@@ -434,6 +456,13 @@ export default {
       link.download = filename;
       link.click();
     },
+    openExternalAsset(path) {
+      if (!path) {
+        this.$message.warning("未找到可预览的文件");
+        return;
+      }
+      window.open(this.toAbsoluteUrl(path), "_blank", "noopener");
+    },
     previewHistoryAsset(path) {
       if (!path) {
         this.$message.warning("未找到可预览的结果文件");
@@ -441,8 +470,20 @@ export default {
       }
       this.previewOnePic(path);
     },
+    previewHistoryRow(row) {
+      this.previewTwoPic(row.before_img, row.after_img);
+    },
     hasRegistrationAsset(row, field) {
       return Boolean(row && row.data && row.data[field]);
+    },
+    isTrackingVideoInput(row) {
+      return Boolean(
+        row
+        && row.type === "目标跟踪"
+        && row.data
+        && row.data.input_mode === "video"
+        && row.data.source_input_path,
+      );
     },
     hasTrackingTrajectory(row) {
       return Boolean(row && row.data && row.data.trajectory_path);
@@ -472,10 +513,18 @@ export default {
     openTrackingVideo(row) {
       const videoPath = row.data && row.data.output_video_path;
       if (!videoPath) {
-        this.previewTwoPic(row.before_img, row.after_img);
+        this.previewHistoryRow(row);
         return;
       }
-      window.open(this.toAbsoluteUrl(videoPath), "_blank");
+      this.openExternalAsset(videoPath);
+    },
+    openTrackingSource(row) {
+      const sourcePath = row.data && row.data.source_input_path;
+      if (!sourcePath) {
+        this.previewOnePic(row.before_img);
+        return;
+      }
+      this.openExternalAsset(sourcePath);
     },
     handleDelete(index, row) {
       this.$confirm("此操作将永久删除, 是否继续?", "提示", {
@@ -610,6 +659,24 @@ export default {
   right: 0%;
   width: 100%;
 }
+
+.history-thumb {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.history-thumb__badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+}
+
 .select-fun-drawer {
   position: fixed;
   z-index: 100;

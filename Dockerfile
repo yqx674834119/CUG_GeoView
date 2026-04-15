@@ -64,6 +64,11 @@ RUN conda create -y -n PaddleRS37 \
 RUN conda create -y -n HFPyTorch310 python=3.10 && \
     conda clean -afy
 
+# Create official BoT-SORT conda env (Python 3.7)
+# This environment is used for the original NirAharon/BoT-SORT + FastReID stack.
+RUN conda create -y -n BoTSORTOfficial37 python=3.7 && \
+    conda clean -afy
+
 # Install PyTorch 2.1+ with CUDA 11.8 support in HFPyTorch310
 # Using cu118 for better compatibility with transformers
 RUN conda run -n HFPyTorch310 pip install \
@@ -72,12 +77,21 @@ RUN conda run -n HFPyTorch310 pip install \
     numpy==1.26.4 pillow>=9.0.0 && \
     conda run -n HFPyTorch310 pip install \
     transformers==4.36.2 huggingface_hub \
-    timm scipy "numpy<2" ultralytics && \
+    timm scipy "numpy<2" ultralytics lapx gdown && \
     conda run -n HFPyTorch310 pip install --force-reinstall \
     "numpy<2" \
     "opencv-python<4.11" \
     "opencv-python-headless<4.11" && \
     conda run -n HFPyTorch310 pip cache purge
+
+# Install the baseline package set required by the official BoT-SORT runtime.
+# The BoT-SORT repo itself is downloaded later by setup scripts, but the image
+# keeps a dedicated env ready for YOLOX/FastReID style dependencies.
+RUN conda run -n BoTSORTOfficial37 pip install \
+    torch==1.11.0+cu113 torchvision==0.12.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113 && \
+    conda run -n BoTSORTOfficial37 pip install \
+    numpy "opencv-python<4.11" "opencv-contrib-python<4.11" loguru scikit-image scikit-learn tqdm Pillow thop ninja tabulate tensorboard lap motmetrics filterpy h5py matplotlib scipy prettytable easydict pyyaml yacs termcolor gdown cython cython_bbox faiss-cpu pycocotools && \
+    conda run -n BoTSORTOfficial37 pip cache purge
 
 # Set HuggingFace mirror for China (optional, helps with network issues)
 ENV HF_ENDPOINT=https://hf-mirror.com

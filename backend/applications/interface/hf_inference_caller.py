@@ -19,6 +19,7 @@ from applications.common.path_global import generate_url
 
 # HuggingFace conda 环境名称
 HF_CONDA_ENV = "HFPyTorch310"
+OFFICIAL_BOTSORT_CONDA_ENV = "BoTSORTOfficial37"
 
 # HuggingFace 推理脚本路径
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
@@ -77,15 +78,7 @@ def call_hf_super_resolution(
     abs_out_dir = os.path.abspath(out_dir)
     
     file_names_str = ",".join(names)
-    candidate_paths = [
-        "/opt/conda/envs/HFPyTorch310/bin/python",
-        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
-    ]
-    python_executable = None
-    for path in candidate_paths:
-        if os.path.exists(path):
-            python_executable = path
-            break
+    python_executable = _find_env_python(HF_CONDA_ENV)
 
     if python_executable:
         cmd = [
@@ -217,15 +210,7 @@ def call_hf_object_detection(
     abs_out_dir = os.path.abspath(out_dir)
     
     file_names_str = ",".join(names)
-    candidate_paths = [
-        "/opt/conda/envs/HFPyTorch310/bin/python",
-        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
-    ]
-    python_executable = None
-    for path in candidate_paths:
-        if os.path.exists(path):
-            python_executable = path
-            break
+    python_executable = _find_env_python(HF_CONDA_ENV)
 
     if python_executable:
         cmd = [
@@ -316,15 +301,7 @@ def call_hf_registration(
     # Serialize pairs to JSON string for CLI argument
     pairs_json = json.dumps(pairs)
     
-    candidate_paths = [
-        "/opt/conda/envs/HFPyTorch310/bin/python",
-        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
-    ]
-    python_executable = None
-    for path in candidate_paths:
-        if os.path.exists(path):
-            python_executable = path
-            break
+    python_executable = _find_env_python(HF_CONDA_ENV)
 
     if python_executable:
         cmd = [
@@ -392,6 +369,19 @@ def call_hf_registration(
 
 # HuggingFace Tracking Script Path
 HF_TRACK_SCRIPT = os.path.join(_curr_dir, "hf_tracking.py")
+HF_BOTSORT_SCRIPT = os.path.join(_curr_dir, "hf_tracking_botsort.py")
+HF_BOTSORT_OFFICIAL_SCRIPT = os.path.join(_curr_dir, "hf_tracking_botsort_official.py")
+
+
+def _find_env_python(env_name: str):
+    candidate_paths = [
+        f"/opt/conda/envs/{env_name}/bin/python",
+        f"/home/livablecity/miniconda3/envs/{env_name}/bin/python",
+    ]
+    for path in candidate_paths:
+        if os.path.exists(path):
+            return path
+    return None
 
 def call_hf_tracking(
     input_path: str,
@@ -461,6 +451,208 @@ def call_hf_tracking(
     except json.JSONDecodeError as e:
         print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
         raise RuntimeError(f"Failed to parse inference output: {e}")
+
+
+def call_hf_botsort_tracking(
+    input_dir: str,
+    file_names: List[str],
+    output_video_path: str,
+    output_preview_path: str,
+    output_trajectory_path: str,
+    model_id: str,
+    model_file: str,
+    tracker_config: str,
+    output_mot_path: Optional[str] = None,
+    threshold: float = 0.25,
+    iou: float = 0.45,
+    imgsz: int = 1280,
+    device: str = "auto",
+    timeout: int = 3600,
+) -> dict:
+    abs_input_dir = os.path.abspath(input_dir)
+    abs_output_video = os.path.abspath(output_video_path)
+    abs_output_preview = os.path.abspath(output_preview_path)
+    abs_output_trajectory = os.path.abspath(output_trajectory_path)
+    abs_tracker_config = os.path.abspath(tracker_config)
+    file_arg = ",".join(file_names)
+    python_executable = _find_env_python(HF_CONDA_ENV)
+
+    common_args = [
+        HF_BOTSORT_SCRIPT,
+        "--input_dir",
+        abs_input_dir,
+        "--file_names",
+        file_arg,
+        "--output_video",
+        abs_output_video,
+        "--output_preview",
+        abs_output_preview,
+        "--output_trajectory",
+        abs_output_trajectory,
+        "--model_id",
+        model_id,
+        "--model_file",
+        model_file,
+        "--tracker_config",
+        abs_tracker_config,
+        "--threshold",
+        str(threshold),
+        "--iou",
+        str(iou),
+        "--imgsz",
+        str(imgsz),
+        "--device",
+        device,
+    ]
+    if output_mot_path:
+        common_args.extend(["--output_mot", os.path.abspath(output_mot_path)])
+
+    if python_executable:
+        cmd = [python_executable, *common_args]
+    else:
+        cmd = ["conda", "run", "-n", HF_CONDA_ENV, "python", *common_args]
+
+    print(f"[HF-Caller] Executing BoT-SORT: {' '.join(cmd)}", flush=True)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir,
+        )
+        if result.returncode != 0:
+            print(f"[HF-Caller] BoT-SORT stderr: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"BoT-SORT inference failed: {result.stderr}")
+
+        output_data = _parse_json_from_stdout(result.stdout)
+        if output_data.get("status") != "completed":
+            raise RuntimeError(f"BoT-SORT inference incomplete: {output_data}")
+        return output_data
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"BoT-SORT inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse BoT-SORT output: {e}")
+
+
+def call_botsort_official_tracking(
+    input_dir: str,
+    file_names: List[str],
+    output_video_path: str,
+    output_preview_path: str,
+    output_trajectory_path: str,
+    output_mot_path: str,
+    repo_dir: str,
+    exp_file: str,
+    detector_ckpt: str,
+    with_reid: bool,
+    fast_reid_config: str,
+    fast_reid_weights: str,
+    cmc_method: str = "orb",
+    track_high_thresh: float = 0.6,
+    track_low_thresh: float = 0.1,
+    new_track_thresh: float = 0.7,
+    track_buffer: int = 30,
+    match_thresh: float = 0.8,
+    min_box_area: float = 10,
+    aspect_ratio_thresh: float = 1.6,
+    proximity_thresh: float = 0.5,
+    appearance_thresh: float = 0.25,
+    device: str = "auto",
+    fps: int = 6,
+    timeout: int = 3600,
+) -> dict:
+    abs_input_dir = os.path.abspath(input_dir)
+    abs_output_video = os.path.abspath(output_video_path)
+    abs_output_preview = os.path.abspath(output_preview_path)
+    abs_output_trajectory = os.path.abspath(output_trajectory_path)
+    abs_output_mot = os.path.abspath(output_mot_path)
+    abs_repo_dir = os.path.abspath(repo_dir)
+    file_arg = ",".join(file_names)
+    python_executable = _find_env_python(OFFICIAL_BOTSORT_CONDA_ENV)
+
+    common_args = [
+        HF_BOTSORT_OFFICIAL_SCRIPT,
+        "--input_dir",
+        abs_input_dir,
+        "--file_names",
+        file_arg,
+        "--output_video",
+        abs_output_video,
+        "--output_preview",
+        abs_output_preview,
+        "--output_trajectory",
+        abs_output_trajectory,
+        "--output_mot",
+        abs_output_mot,
+        "--repo_dir",
+        abs_repo_dir,
+        "--exp_file",
+        exp_file,
+        "--detector_ckpt",
+        detector_ckpt,
+        "--fast_reid_config",
+        fast_reid_config,
+        "--fast_reid_weights",
+        fast_reid_weights,
+        "--cmc_method",
+        cmc_method,
+        "--track_high_thresh",
+        str(track_high_thresh),
+        "--track_low_thresh",
+        str(track_low_thresh),
+        "--new_track_thresh",
+        str(new_track_thresh),
+        "--track_buffer",
+        str(track_buffer),
+        "--match_thresh",
+        str(match_thresh),
+        "--min_box_area",
+        str(min_box_area),
+        "--aspect_ratio_thresh",
+        str(aspect_ratio_thresh),
+        "--proximity_thresh",
+        str(proximity_thresh),
+        "--appearance_thresh",
+        str(appearance_thresh),
+        "--fps",
+        str(fps),
+        "--device",
+        device,
+        "--with_reid",
+        "1" if with_reid else "0",
+    ]
+
+    if python_executable:
+        cmd = [python_executable, *common_args]
+    else:
+        cmd = ["conda", "run", "-n", OFFICIAL_BOTSORT_CONDA_ENV, "python", *common_args]
+
+    print(f"[HF-Caller] Executing Official BoT-SORT: {' '.join(cmd)}", flush=True)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=_curr_dir,
+        )
+        if result.returncode != 0:
+            print(f"[HF-Caller] Official BoT-SORT stderr: {result.stderr}", file=sys.stderr)
+            raise RuntimeError(f"Official BoT-SORT inference failed: {result.stderr}")
+
+        output_data = _parse_json_from_stdout(result.stdout)
+        if output_data.get("status") != "completed":
+            raise RuntimeError(f"Official BoT-SORT inference incomplete: {output_data}")
+        return output_data
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"Official BoT-SORT inference timed out after {timeout}s")
+    except json.JSONDecodeError as e:
+        print(f"[HF-Caller] Failed to parse output: {result.stdout}", file=sys.stderr)
+        raise RuntimeError(f"Failed to parse Official BoT-SORT output: {e}")
 
 if __name__ == "__main__":
     pass

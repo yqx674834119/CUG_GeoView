@@ -413,10 +413,15 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
     preview_path = result.get("preview_path")
     metadata = {
         "rect": rect,
+        "input_mode": result.get("input_mode", "image_sequence"),
+        "source_input_path": result.get("source_input_path"),
+        "source_input_name": result.get("source_input_name"),
         "output_video_path": result.get("output_video_path"),
         "trajectory_path": result.get("trajectory_path"),
         "summary": result.get("summary"),
         "method_used": result.get("method_used"),
+        "runtime_variant": result.get("runtime_variant"),
+        "mot_result_path": result.get("mot_result_path"),
     }
     save_analysis(
         type_,

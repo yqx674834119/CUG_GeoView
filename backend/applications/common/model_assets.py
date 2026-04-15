@@ -33,6 +33,9 @@ LEGACY_MODEL_PATHS = {
     "builtin:registration:opencv": "backend/model/registration/opencv",
     "hf:kornia/loftr": "backend/model/registration/loftr_outdoor",
     "builtin:tracking:auto": "backend/model/tracking/auto",
+    "builtin:tracking:botsort": "backend/model/tracking/botsort",
+    "builtin:tracking:botsort_engineering": "backend/model/tracking/botsort",
+    "builtin:tracking:botsort_official": "backend/model/tracking/botsort_official",
     "builtin:tracking:csrt": "backend/model/tracking/csrt",
     "builtin:tracking:kcf": "backend/model/tracking/kcf",
 }

@@ -1,0 +1,1 @@
+window.__GEOVIEW_RUNTIME_CONFIG__ = window.__GEOVIEW_RUNTIME_CONFIG__ || {};

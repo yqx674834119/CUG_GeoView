@@ -14,3 +14,4 @@ miner/frontend/dist/*
 miner/frontend/build/*
 backend/applications/interface/checkpoints/*
 offline_cache/*
+static/*

@@ -30,6 +30,7 @@ import {
   getCurrentTheme,
   toggleTheme,
 } from "@/utils/theme";
+import global from "@/global";
 
 export default {
   name: 'HeaderComponent',
@@ -40,10 +41,10 @@ export default {
   },
   computed: {
     minerEnabled() {
-      return process.env.VUE_APP_MINER_ENABLED === 'true';
+      return global.MINER_ENABLED;
     },
     minerUrl() {
-      return process.env.VUE_APP_MINER_URL || 'http://localhost:4000';
+      return global.MINER_URL;
     },
     isDarkTheme() {
       return this.currentTheme === "dark";
