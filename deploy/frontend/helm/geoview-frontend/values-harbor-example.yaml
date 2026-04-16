@@ -1,0 +1,25 @@
+frontend:
+  image:
+    repository: 172.20.20.243:8443/your-project/geoview-frontend
+    tag: "20260416"
+    pullPolicy: IfNotPresent
+  runtimeConfig:
+    backendUrl: "http://your-backend-host:5008"
+    backendProtocol: http
+    backendHost: ""
+    backendPort: "5008"
+    minerEnabled: false
+    minerUrl: ""
+    baiduMapAccessKey: ""
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 80
+    nodePort: null

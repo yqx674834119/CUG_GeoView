@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "geoview-frontend.fullname" . }}
+  labels:
+    {{- include "geoview-frontend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "geoview-frontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "geoview-frontend.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          env:
+            - name: GEOVIEW_BACKEND_URL
+              value: {{ .Values.frontend.runtimeConfig.backendUrl | quote }}
+            - name: GEOVIEW_BACKEND_PROTOCOL
+              value: {{ .Values.frontend.runtimeConfig.backendProtocol | quote }}
+            - name: GEOVIEW_BACKEND_HOST
+              value: {{ .Values.frontend.runtimeConfig.backendHost | quote }}
+            - name: GEOVIEW_BACKEND_PORT
+              value: {{ .Values.frontend.runtimeConfig.backendPort | quote }}
+            - name: GEOVIEW_MINER_ENABLED
+              value: {{ .Values.frontend.runtimeConfig.minerEnabled | quote }}
+            - name: GEOVIEW_MINER_URL
+              value: {{ .Values.frontend.runtimeConfig.minerUrl | quote }}
+            - name: GEOVIEW_BAIDU_MAP_ACCESS_KEY
+              value: {{ .Values.frontend.runtimeConfig.baiduMapAccessKey | quote }}
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+      {{- with .Values.frontend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
