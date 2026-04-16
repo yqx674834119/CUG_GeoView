@@ -10,6 +10,8 @@ APP_CONTAINER="cugrs-app"
 HF_DEST="${SCRIPT_DIR}/offline_cache/huggingface"
 TORCH_DEST="${SCRIPT_DIR}/offline_cache/torch"
 PADDLE_DEST="${SCRIPT_DIR}/offline_cache/paddle"
+CHART_DIR="${SCRIPT_DIR}/deploy/helm/geoview"
+HELM_DIST_DIR="${SCRIPT_DIR}/deploy/helm/dist"
 
 mode="${1:-${OFFLINE_EXPORT_MODE:-}}"
 
@@ -118,6 +120,28 @@ sync_paddle_cache() {
     fi
 }
 
+package_helm_chart() {
+    local chart_version
+
+    mkdir -p "${HELM_DIST_DIR}"
+    chart_version="$(sed -n 's/^version: //p' "${CHART_DIR}/Chart.yaml" | head -n 1 | tr -d '\"')"
+    if [ -z "${chart_version}" ]; then
+        echo "错误：无法从 ${CHART_DIR}/Chart.yaml 读取 version"
+        exit 1
+    fi
+
+    CHART_PACKAGE="${HELM_DIST_DIR}/geoview-${chart_version}.tgz"
+    rm -f "${CHART_PACKAGE}"
+    tar -czf "${CHART_PACKAGE}" -C "${SCRIPT_DIR}/deploy/helm" geoview
+}
+
+export_helm_image_bundle() {
+    mkdir -p "${HELM_DIST_DIR}"
+    IMAGE_BUNDLE_OUTPUT="${HELM_DIST_DIR}/geoview_images.tar"
+    rm -f "${IMAGE_BUNDLE_OUTPUT}"
+    docker save -o "${IMAGE_BUNDLE_OUTPUT}" "${APP_IMAGE}" "${MYSQL_IMAGE}"
+}
+
 echo "=========================================="
 echo "    GeoView 离线部署包导出脚本 (阿里云中转版) "
 echo "=========================================="
@@ -126,11 +150,12 @@ if [ -z "${mode}" ]; then
     echo "请选择您的打包模式："
     echo "[1] 完整离线打包：镜像(.tar) + 模型缓存 + 代码一起打包 (适合磁盘空间宽裕的机器)"
     echo "[2] 轻量空间中转打包：跳过镜像保存，仅提取模型及代码，并将镜像推送到阿里云 (适合当前机器磁盘不足)"
-    read -r -p "请输入模式编号 [1 或 2]: " mode
+    echo "[3] 应用 Helm 双文件交付：只导出镜像合集 geoview_images.tar + Helm 包 geoview-*.tgz"
+    read -r -p "请输入模式编号 [1、2 或 3]: " mode
 fi
 
-if [ "${mode}" != "1" ] && [ "${mode}" != "2" ]; then
-    echo "错误：模式必须是 1 或 2。"
+if [ "${mode}" != "1" ] && [ "${mode}" != "2" ] && [ "${mode}" != "3" ]; then
+    echo "错误：模式必须是 1、2 或 3。"
     exit 1
 fi
 
@@ -156,7 +181,7 @@ if [ "$mode" == "1" ]; then
     echo "保存离线镜像合集 -> offline_images/geoview_images.tar"
     docker save -o ./offline_images/geoview_images.tar "${APP_IMAGE}" "${MYSQL_IMAGE}"
     echo "✓ 镜像保存完成！"
-else
+elif [ "$mode" == "2" ]; then
     echo ">>> [1/3] 已跳过镜像体积硕大的本地保存环节！"
     rm -f ./offline_images/*.tar
     echo "--------- 阿里云镜像推送提示 ---------"
@@ -166,6 +191,32 @@ else
     echo "  3. 推送应用镜像: docker push crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest"
     echo "  4. 将 MySQL 镜像同样打标并推送，或者让中转机器直接拉取官方版。"
     echo "--------------------------------------"
+fi
+
+if [ "$mode" == "3" ]; then
+    echo ">>> [1/3] 导出整项目离线镜像合集"
+    if ! docker image inspect "${MYSQL_IMAGE}" >/dev/null 2>&1; then
+        echo "未找到镜像 mysql。请确保您已经拉取过它。"
+        exit 1
+    fi
+    export_helm_image_bundle
+    echo "✓ 镜像合集已生成：${IMAGE_BUNDLE_OUTPUT}"
+
+    echo ">>> [2/3] 打包 Helm Chart"
+    package_helm_chart
+    echo "✓ Helm 包已生成：${CHART_PACKAGE}"
+
+    echo ">>> [3/3] 双文件交付已准备完成"
+    echo "=========================================="
+    echo "请将以下两个文件交给内网部署同事："
+    echo "  1. ${IMAGE_BUNDLE_OUTPUT}"
+    echo "  2. ${CHART_PACKAGE}"
+    echo
+    echo "说明："
+    echo "  - geoview_images.tar 用于 nerdctl/docker load 后推送到 Harbor"
+    echo "  - geoview-*.tgz 用于上传到服务运维平台 172.20.20.241"
+    echo "=========================================="
+    exit 0
 fi
 
 echo ">>> [2/3] 正在同步模型缓存到 ./offline_cache"

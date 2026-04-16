@@ -12,6 +12,9 @@ frontend/build/*
 deploy/frontend/dist/*.tar.gz
 deploy/frontend/helm/dist/*.tgz
 deploy/frontend/helm/dist/*.tar.gz
+deploy/helm/dist/*.tgz
+deploy/helm/dist/*.tar.gz
+deploy/helm/dist/*.tar
 __pycache__/
 miner/frontend/node_modules/*
 miner/frontend/dist/*

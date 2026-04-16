@@ -4,9 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
-HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.107:8443}"
+HARBOR_REGISTRY="${HARBOR_REGISTRY:-172.20.20.243:8443}"
 HARBOR_USER="${HARBOR_USER:-admin}"
-HARBOR_PASSWORD="${HARBOR_PASSWORD:-Harbor12345}"
+HARBOR_PASSWORD="${HARBOR_PASSWORD:-Hc@Cloud01}"
 
 PROJECT="${PROJECT:-}"
 APP_VERSION="${APP_VERSION:-$(date +%Y%m%d)}"
@@ -36,7 +36,7 @@ choose_container_cli() {
 
 validate_server_storage_path() {
     case "${SCRIPT_DIR}" in
-        /var/lib/kubelet/*|/nfs/data/*|/other/document/*)
+        /var/lib/kubelet/*|/nfs/data/*)
             return 0
             ;;
         *)
@@ -48,7 +48,6 @@ validate_server_storage_path() {
             echo "请将文件放在以下任一位置后重试："
             echo "  1. /var/lib/kubelet/<你的专属目录>"
             echo "  2. /nfs/data/<你的专属目录>"
-            echo "  3. /other/document/<你的专属目录>"
             echo "严禁在根目录或其他路径下存储和运行。"
             exit 1
             ;;
@@ -148,7 +147,7 @@ app:
       memory: "32Gi"
   persistence:
     enabled: true
-    storageClass: csi-block-sc2
+    storageClass: csi-sc
     size: 80Gi
   service:
     type: ClusterIP
@@ -163,7 +162,7 @@ mysql:
     tag: "8.0.30-8.6"
   persistence:
     enabled: true
-    storageClass: csi-block-sc2
+    storageClass: csi-sc
     size: 20Gi
 
 imagePullSecrets: []

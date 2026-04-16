@@ -52,7 +52,7 @@ app:
       minerBackend: null
   persistence:
     enabled: true
-    storageClass: csi-block-sc2
+    storageClass: csi-sc
     accessModes:
       - ReadWriteOnce
     size: 50Gi
@@ -85,7 +85,7 @@ mysql:
     port: 3306
   persistence:
     enabled: true
-    storageClass: csi-block-sc2
+    storageClass: csi-sc
     accessModes:
       - ReadWriteOnce
     size: 20Gi
