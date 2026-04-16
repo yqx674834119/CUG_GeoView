@@ -18,7 +18,15 @@ PADDLE_CACHE_ROOT = OFFLINE_CACHE_ROOT / "paddle"
 
 def sync_path(src: Path, dst: Path) -> None:
     if src.is_dir():
-        shutil.copytree(src, dst, dirs_exist_ok=True)
+        if dst.exists():
+            if not dst.is_dir():
+                dst.unlink()
+                shutil.copytree(src, dst)
+                return
+            for item in src.iterdir():
+                sync_path(item, dst / item.name)
+            return
+        shutil.copytree(src, dst)
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)

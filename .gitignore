@@ -9,6 +9,8 @@ dist/*
 frontend/node_modules/*
 frontend/dist/*
 frontend/build/*
+deploy/frontend/dist/*.tar.gz
+__pycache__/
 miner/frontend/node_modules/*
 miner/frontend/dist/*
 miner/frontend/build/*

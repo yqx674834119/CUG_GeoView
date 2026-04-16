@@ -13,10 +13,12 @@ BUNDLE_NAME="GeoView_Frontend_Offline_${DATE_TAG}.tar.gz"
 
 build_frontend_image_with_clean_config() {
     local clean_docker_config
+    local status=0
     clean_docker_config="$(mktemp -d)"
     printf '{"auths":{}}\n' > "${clean_docker_config}/config.json"
-    DOCKER_CONFIG="${clean_docker_config}" DOCKER_BUILDKIT=0 docker build -f Dockerfile.frontend -t "${FRONTEND_IMAGE}" .
+    DOCKER_CONFIG="${clean_docker_config}" DOCKER_BUILDKIT=0 docker build -f Dockerfile.frontend -t "${FRONTEND_IMAGE}" . || status=$?
     rm -rf "${clean_docker_config}"
+    return "${status}"
 }
 
 build_frontend_image_from_local_dist() {

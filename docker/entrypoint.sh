@@ -2,6 +2,8 @@
 set -euo pipefail
 
 CONFIG_PATH="${CONFIG_PATH:-/app/config.yaml}"
+REQUIRE_GPU="${REQUIRE_GPU:-true}"
+RUNTIME_LOG_DIR="${RUNTIME_LOG_DIR:-/tmp/geoview-logs}"
 
 source /opt/conda/etc/profile.d/conda.sh
 
@@ -48,6 +50,8 @@ PY
 
 eval "${CONFIG_EXPORTS}"
 
+mkdir -p "${RUNTIME_LOG_DIR}"
+
 # Write GeoView frontend .env (include Miner toggle)
 cat > /app/frontend/.env <<EOF
 VUE_APP_BACKEND_PORT = ${BACKEND_PORT}
@@ -72,8 +76,13 @@ PY
 )
 
 if [ "${GPU_COUNT:-0}" = "0" ]; then
-  export CUDA_VISIBLE_DEVICES=""
-  export FLAGS_selected_gpus=""
+  if [ "${REQUIRE_GPU}" = "true" ]; then
+    echo "[entrypoint] ERROR: GPU is required, but no usable GPU was detected inside the container." >&2
+    echo "[entrypoint] Check the host NVIDIA driver, container runtime, and docker compose GPU settings." >&2
+    exit 1
+  fi
+  unset CUDA_VISIBLE_DEVICES || true
+  unset FLAGS_selected_gpus || true
   echo "[entrypoint] No GPU detected, forcing Paddle to use CPU." >&2
 else
   echo "[entrypoint] Detected ${GPU_COUNT} GPU(s)."
@@ -113,8 +122,8 @@ python app.py &
 BACKEND_PID=$!
 
 cd /app/frontend
-npm install --no-audit --prefer-offline
-npm run serve -- --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" &
+npm install --no-audit --prefer-offline >"${RUNTIME_LOG_DIR}/frontend-npm.log" 2>&1
+npm run serve -- --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" >"${RUNTIME_LOG_DIR}/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 
 # --- Miner (矿山监测系统) conditional startup ---
@@ -131,13 +140,13 @@ MENV
 
   # Start Miner Express backend (using Node.js 20)
   cd /app/miner
-  PATH=/opt/node20/bin:$PATH PORT=${MINER_BACKEND_PORT} node server.js &
+  PATH=/opt/node20/bin:$PATH PORT=${MINER_BACKEND_PORT} node server.js >"${RUNTIME_LOG_DIR}/miner-backend.log" 2>&1 &
   MINER_BACKEND_PID=$!
 
   # Start Miner Vite dev server (using Node.js 20)
   cd /app/miner
-  PATH=/opt/node20/bin:$PATH npm install --no-audit --prefer-offline
-  PATH=/opt/node20/bin:$PATH npx vite --host 0.0.0.0 --port "${MINER_FRONTEND_PORT}" &
+  PATH=/opt/node20/bin:$PATH npm install --no-audit --prefer-offline >"${RUNTIME_LOG_DIR}/miner-npm.log" 2>&1
+  PATH=/opt/node20/bin:$PATH npx vite --host 0.0.0.0 --port "${MINER_FRONTEND_PORT}" >"${RUNTIME_LOG_DIR}/miner-frontend.log" 2>&1 &
   MINER_FRONTEND_PID=$!
 
   echo "[entrypoint] Miner backend PID=${MINER_BACKEND_PID}, frontend PID=${MINER_FRONTEND_PID}"

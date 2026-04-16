@@ -5,6 +5,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit
 
+COPY config.yaml /app/config.yaml
 COPY frontend/ ./
 RUN npm run build
 

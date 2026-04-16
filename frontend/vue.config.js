@@ -1,16 +1,24 @@
 const { defineConfig } = require('@vue/cli-service')
 const YAML = require('yaml')
-const fs = require("fs");
-const file = fs.readFileSync('../config.yaml', 'utf8')
-config = YAML.parse(file)
+const fs = require('fs')
+const path = require('path')
+
+const configPath = path.resolve(__dirname, '../config.yaml')
+let devServer
+
+if (fs.existsSync(configPath)) {
+  const file = fs.readFileSync(configPath, 'utf8')
+  const config = YAML.parse(file)
+
+  devServer = {
+    host: config.host.frontend,
+    port: config.port.frontend,
+  }
+}
 
 module.exports = defineConfig({
   transpileDependencies: true,
-  devServer: {
-    host: config["host"]["frontend"],
-    port: config["port"]["frontend"], // 端口
-  },
-  
+  ...(devServer ? { devServer } : {}),
+
   // transpileDependencies: ['@arcgis']
 })
-

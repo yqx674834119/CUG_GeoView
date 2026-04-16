@@ -16,6 +16,7 @@ services:
       MYSQL_PASSWORD: "Yqx090315."
       MYSQL_DATABASE: paddle_rs
       FLASK_CONFIG: production
+      REQUIRE_GPU: ${REQUIRE_GPU:-true}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       HF_HOME: /root/.cache/huggingface
@@ -43,6 +44,7 @@ services:
       - ./offline_cache/paddle:/root/.cache/paddle
 
     restart: unless-stopped
+    runtime: nvidia
     deploy:
       resources:
         reservations:

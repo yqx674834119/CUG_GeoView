@@ -104,5 +104,5 @@ externalMySQL:
   host: ""
   port: 3306
   username: "paddle_rs"
-  password: ""
+  password: "Yqx090315."
   database: "paddle_rs"
