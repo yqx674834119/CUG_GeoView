@@ -1,0 +1,21 @@
+{{- if and .Values.frontend.persistence.enabled (not .Values.frontend.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ printf "%s-data" (include "geoview-frontend.fullname" .) }}
+  labels:
+    {{- include "geoview-frontend.labels" . | nindent 4 }}
+  {{- with .Values.frontend.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.frontend.persistence.accessModes | nindent 4 }}
+  {{- with .Values.frontend.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.frontend.persistence.size | quote }}
+{{- end }}

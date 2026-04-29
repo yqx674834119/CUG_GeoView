@@ -6,14 +6,15 @@ imagePullSecrets: []
 frontend:
   replicaCount: 1
   image:
-    repository: 172.20.20.243:8443/your-project/geoview-frontend
+    repository: geoview-frontend
     tag: latest
     pullPolicy: IfNotPresent
   runtimeConfig:
-    backendUrl: ""
+    backendUrl: "http://172.20.20.240:31839/186/5008"
     backendProtocol: http
     backendHost: ""
-    backendPort: "5008"
+    backendPort: ""
+    backendAssetMode: buffered
     minerEnabled: false
     minerUrl: ""
     baiduMapAccessKey: ""
@@ -42,3 +43,12 @@ frontend:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  persistence:
+    enabled: true
+    existingClaim: ""
+    mountPath: /data
+    storageClassName: csi-block-sc2
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+    annotations: {}

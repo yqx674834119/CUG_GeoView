@@ -376,7 +376,8 @@ HF_BOTSORT_OFFICIAL_SCRIPT = os.path.join(_curr_dir, "hf_tracking_botsort_offici
 def _find_env_python(env_name: str):
     candidate_paths = [
         f"/opt/conda/envs/{env_name}/bin/python",
-        f"/home/livablecity/miniconda3/envs/{env_name}/bin/python",
+        os.path.join(os.path.expanduser("~"), "miniconda3", "envs", env_name,
+                     "bin", "python"),
     ]
     for path in candidate_paths:
         if os.path.exists(path):
@@ -400,7 +401,8 @@ def call_hf_tracking(
     
     candidate_paths = [
         "/opt/conda/envs/HFPyTorch310/bin/python",
-        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
+        os.path.join(os.path.expanduser("~"), "miniconda3", "envs",
+                     "HFPyTorch310", "bin", "python"),
     ]
     python_executable = None
     for path in candidate_paths:

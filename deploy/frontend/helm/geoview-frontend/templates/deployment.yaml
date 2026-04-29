@@ -35,14 +35,27 @@ spec:
               value: {{ .Values.frontend.runtimeConfig.backendHost | quote }}
             - name: GEOVIEW_BACKEND_PORT
               value: {{ .Values.frontend.runtimeConfig.backendPort | quote }}
+            - name: GEOVIEW_BACKEND_ASSET_MODE
+              value: {{ .Values.frontend.runtimeConfig.backendAssetMode | quote }}
             - name: GEOVIEW_MINER_ENABLED
               value: {{ .Values.frontend.runtimeConfig.minerEnabled | quote }}
             - name: GEOVIEW_MINER_URL
               value: {{ .Values.frontend.runtimeConfig.minerUrl | quote }}
             - name: GEOVIEW_BAIDU_MAP_ACCESS_KEY
               value: {{ .Values.frontend.runtimeConfig.baiduMapAccessKey | quote }}
+          {{- if .Values.frontend.persistence.enabled }}
+          volumeMounts:
+            - name: frontend-data
+              mountPath: {{ .Values.frontend.persistence.mountPath | quote }}
+          {{- end }}
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
+      {{- if .Values.frontend.persistence.enabled }}
+      volumes:
+        - name: frontend-data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" (include "geoview-frontend.fullname" .)) .Values.frontend.persistence.existingClaim }}
+      {{- end }}
       {{- with .Values.frontend.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

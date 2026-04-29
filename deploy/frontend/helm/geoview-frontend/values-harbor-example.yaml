@@ -1,13 +1,14 @@
 frontend:
   image:
-    repository: 172.20.20.243:8443/your-project/geoview-frontend
-    tag: "20260416"
+    repository: 172.20.20.107:8443/your-project/geoview-frontend
+    tag: "20260428-final"
     pullPolicy: IfNotPresent
   runtimeConfig:
-    backendUrl: "http://your-backend-host:5008"
+    backendUrl: "http://172.20.20.240:31839/186/5008"
     backendProtocol: http
     backendHost: ""
-    backendPort: "5008"
+    backendPort: ""
+    backendAssetMode: buffered
     minerEnabled: false
     minerUrl: ""
     baiduMapAccessKey: ""
@@ -23,3 +24,12 @@ frontend:
     port: 3000
     targetPort: 80
     nodePort: null
+  persistence:
+    enabled: true
+    existingClaim: ""
+    mountPath: /data
+    storageClassName: csi-block-sc2
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+    annotations: {}

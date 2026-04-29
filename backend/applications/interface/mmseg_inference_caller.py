@@ -12,6 +12,7 @@ import os
 import os.path as osp
 import subprocess
 import sys
+from pathlib import Path
 from typing import List
 
 from applications.common.model_assets import (legacy_model_path,
@@ -25,6 +26,19 @@ MMSEG_CONDA_ENV = "MMSeg310"
 # MMSegmentation 推理脚本路径
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 MMSEG_SCRIPT = os.path.join(_curr_dir, "mmseg_segmentation.py")
+
+
+def _find_mmseg_python() -> str:
+    """Resolve the MMSeg310 python binary without relying on a fixed username."""
+    candidate_paths = [
+        "/opt/conda/envs/MMSeg310/bin/python",
+        str(Path.home() / "miniconda3/envs/MMSeg310/bin/python"),
+    ]
+
+    for path in candidate_paths:
+        if os.path.exists(path):
+            return path
+    return ""
 
 def get_model_paths(model_ref: str) -> tuple:
     """
@@ -88,16 +102,7 @@ def call_mmseg_inference(
     file_names_str = ",".join(names)
 
     # 动态检查 Python 解释器路径
-    candidate_paths = [
-        "/opt/conda/envs/MMSeg310/bin/python",              # Default Docker path
-        "/home/livablecity/miniconda3/envs/MMSeg310/bin/python", # Dev environment path
-    ]
-    
-    python_executable = None
-    for path in candidate_paths:
-        if os.path.exists(path):
-            python_executable = path
-            break
+    python_executable = _find_mmseg_python()
             
     # 如果找不到特定路径，回退到 conda run (虽然可能在某些 Docker 中有问题，但作为最后的 fallback)
     if python_executable:
@@ -258,15 +263,7 @@ def call_mmrotate_inference(
     abs_out_dir = os.path.abspath(out_dir)
     file_names_str = ",".join(names)
 
-    candidate_paths = [
-        "/opt/conda/envs/MMSeg310/bin/python",
-        "/home/livablecity/miniconda3/envs/MMSeg310/bin/python",
-    ]
-    python_executable = None
-    for path in candidate_paths:
-        if os.path.exists(path):
-            python_executable = path
-            break
+    python_executable = _find_mmseg_python()
 
     if python_executable:
         cmd = [

@@ -16,6 +16,7 @@ from paddlers.tasks.utils.visualize import visualize_detection
 
 from applications.common.model_assets import (infer_model_backend,
                                               load_hf_config,
+                                              load_model_manifest,
                                               resolve_model_dir)
 from applications.common.path_global import md5_name, generate_url
 
@@ -38,7 +39,8 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
             model_id = model_path[3:]
         else:
             hf_config = load_hf_config(model_path) or {}
-            model_id = hf_config.get("model_id", "")
+            manifest = load_model_manifest(model_path) or {}
+            model_id = hf_config.get("model_id") or manifest.get("model_id", "")
         if not model_id:
             raise ValueError(f"无法解析 HuggingFace 模型 ID: {model_path}")
         print(f"[OD-DEBUG] Routing to HuggingFace inference: {model_id}")

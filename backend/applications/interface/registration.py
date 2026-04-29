@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -415,7 +416,7 @@ def _build_external_loftr_cmd(script_path: str, fixed_path: str,
 
     candidate_paths = [
         "/opt/conda/envs/HFPyTorch310/bin/python",
-        "/home/livablecity/miniconda3/envs/HFPyTorch310/bin/python",
+        str(Path.home() / "miniconda3/envs/HFPyTorch310/bin/python"),
     ]
 
     for python_path in candidate_paths:

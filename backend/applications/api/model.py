@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from flask import Blueprint
 
 from applications.common.model_assets import (MODEL_ROOT, load_model_manifest,
+                                              resolve_repo_path,
                                               to_public_model_path)
 from applications.common.utils.http import fail_api, success_api
 from applications.interface.utils import get_model_info
@@ -88,6 +90,22 @@ PADDLE_MODEL_METADATA = {
 }
 
 
+def official_botsort_available(manifest: dict) -> bool:
+    repo_dir = resolve_repo_path(
+        manifest.get("official_repo_dir")
+        or "backend/runtime/BoT-SORT"
+    )
+    return Path(repo_dir).is_dir()
+
+
+def manifest_entry_enabled(manifest: dict) -> bool:
+    if manifest.get("disabled") is True:
+        return False
+    if manifest.get("backend") == "tracking" and manifest.get("runtime") == "botsort_official":
+        return official_botsort_available(manifest)
+    return True
+
+
 def iter_model_dirs(model_type: str):
     model_dir = MODEL_ROOT / model_type
     if not model_dir.exists():
@@ -98,6 +116,8 @@ def iter_model_dirs(model_type: str):
 def build_manifest_entry(model_dir: Path, expected_type: str):
     manifest = load_model_manifest(model_dir)
     if manifest is None or manifest.get("model_type") != expected_type:
+        return None
+    if not manifest_entry_enabled(manifest):
         return None
     return {
         "model_path": to_public_model_path(model_dir),

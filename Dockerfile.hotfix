@@ -1,9 +1,0 @@
-ARG BASE_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
-FROM ${BASE_IMAGE}
-
-WORKDIR /app
-
-COPY sync_model_assets.py /app/sync_model_assets.py
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-
-RUN chmod +x /app/sync_model_assets.py /usr/local/bin/entrypoint.sh

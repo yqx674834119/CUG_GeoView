@@ -113,11 +113,10 @@ def change_detection(model_path,
         second_ = pair['second']
         retPic = retPics[i]
         mask, count, areas = draw_masks(os.path.join(out_dir, filenames[i]))
+        mask_name = os.path.splitext(filenames[i])[0] + "_mask.png"
         cv2.imwrite(
-            os.path.join(out_dir,
-                         os.path.splitext(filenames[i])[0] + "_mask.png"), mask)
-        res[i]["mask"] = out_dir + os.path.splitext(filenames[i])[
-            0] + "_mask.png"
+            os.path.join(out_dir, mask_name), mask)
+        res[i]["mask"] = generate_url + mask_name
         res[i]["count"] = count
         
         # Calculate statistics
@@ -154,7 +153,7 @@ def change_detection(model_path,
                 out_dir + "hole/",
                 os.path.splitext(os.path.basename(after_img))[0] + "_mask.png"),
             mask)
-        res[i]["mask_hole"] = out_dir + "hole/" + os.path.splitext(
+        res[i]["mask_hole"] = generate_url + "hole/" + os.path.splitext(
             os.path.basename(after_img))[0] + "_mask.png"
         res[i]["count_hole"] = count
         

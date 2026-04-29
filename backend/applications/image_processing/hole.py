@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 
 import cv2
@@ -7,6 +8,7 @@ from applications.common.path_global import md5_name
 
 
 def hole_fill(src_dir, save_dir, names):  # src_dir为待处理文件夹名称，save_dir为储存结果的文件夹名称
+    os.makedirs(save_dir, exist_ok=True)
     temps = list()
     for name in names:
         img = cv2.imread(osp.join(src_dir, name))
@@ -25,6 +27,8 @@ def hole_fill(src_dir, save_dir, names):  # src_dir为待处理文件夹名称�
         stage2 = stage2.astype('uint8')
         stage2 = cv2.cvtColor(stage2 * 255, cv2.COLOR_GRAY2RGB)
         new_name = md5_name(name)
-        cv2.imwrite(osp.join(save_dir, new_name), stage2)
+        output_path = osp.join(save_dir, new_name)
+        if not cv2.imwrite(output_path, stage2):
+            raise RuntimeError(f"孔洞填充结果写入失败: {output_path}")
         temps.append(new_name)
     return temps

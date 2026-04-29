@@ -1,1 +1,13 @@
-window.__GEOVIEW_RUNTIME_CONFIG__ = window.__GEOVIEW_RUNTIME_CONFIG__ || {};
+window.__GEOVIEW_RUNTIME_CONFIG__ = Object.assign(
+  {
+    backendUrl: "",
+    backendProtocol: "http",
+    backendHost: "",
+    backendPort: "5008",
+    backendAssetMode: "buffered",
+    minerEnabled: "false",
+    minerUrl: "",
+    baiduMapAccessKey: "",
+  },
+  window.__GEOVIEW_RUNTIME_CONFIG__ || {}
+);

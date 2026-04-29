@@ -1,234 +1,40 @@
-FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
-
-ARG MMENGINE_VERSION=0.10.4
-ARG MMCV_VERSION=2.2.0
-ARG MMSEG_VERSION=1.2.2
-ARG MMDET_VERSION=3.0.0
-ARG MMROTATE_VERSION=1.0.0rc1
-
-ARG USER_HOME=/root
-ENV DEBIAN_FRONTEND=noninteractive \
-    TZ=Asia/Shanghai \
-    MAMBA_DOCKERFILE_ACTIVATE=1
-
-# 替换 Ubuntu 源 + 删除自带的 NVIDIA CUDA 源
-RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
-    && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
-    && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    curl \
-    git \
-    build-essential \
-    wget \
-    bzip2 \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Miniconda
-RUN wget -O /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-    && bash /tmp/miniconda.sh -b -p /opt/conda \
-    && rm /tmp/miniconda.sh
-
-ENV PATH=/opt/conda/bin:${PATH}
-
-# Conda config
-RUN echo "channels:" > /opt/conda/.condarc && \
-    echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle" >> /opt/conda/.condarc && \
-    echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge" >> /opt/conda/.condarc && \
-    echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main" >> /opt/conda/.condarc && \
-    echo "  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r" >> /opt/conda/.condarc && \
-    echo "show_channel_urls: true" >> /opt/conda/.condarc && \
-    echo "channel_priority: strict" >> /opt/conda/.condarc && \
-    conda update -n base -y conda && \
-    conda clean -afy
-
-# Create conda env
-RUN conda create -y -n PaddleRS37 \
-    python=3.7 \
-    paddlepaddle-gpu=2.4.2 \
-    cudatoolkit=11.7 \
-    cudnn=8.4 \
-    gdal && \
-    conda clean -afy
-
-# Create HuggingFace/PyTorch conda env (Python 3.10)
-# This environment is used for HuggingFace transformers models (e.g., Swin2SR)
-RUN conda create -y -n HFPyTorch310 python=3.10 && \
-    conda clean -afy
-
-# Create official BoT-SORT conda env (Python 3.7)
-# This environment is used for the original NirAharon/BoT-SORT + FastReID stack.
-RUN conda create -y -n BoTSORTOfficial37 python=3.7 && \
-    conda clean -afy
-
-# Install PyTorch 2.1+ with CUDA 11.8 support in HFPyTorch310
-# Using cu118 for better compatibility with transformers
-RUN conda run -n HFPyTorch310 pip install \
-    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118 && \
-    conda run -n HFPyTorch310 pip install \
-    numpy==1.26.4 pillow>=9.0.0 && \
-    conda run -n HFPyTorch310 pip install \
-    transformers==4.36.2 huggingface_hub \
-    timm scipy "numpy<2" ultralytics lapx gdown && \
-    conda run -n HFPyTorch310 pip install --force-reinstall \
-    "numpy<2" \
-    "opencv-python<4.11" \
-    "opencv-python-headless<4.11" && \
-    conda run -n HFPyTorch310 pip cache purge
-
-# Install the baseline package set required by the official BoT-SORT runtime.
-# The BoT-SORT repo itself is downloaded later by setup scripts, but the image
-# keeps a dedicated env ready for YOLOX/FastReID style dependencies.
-RUN conda run -n BoTSORTOfficial37 pip install \
-    torch==1.11.0+cu113 torchvision==0.12.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113 && \
-    conda run -n BoTSORTOfficial37 pip install \
-    numpy "opencv-python<4.11" "opencv-contrib-python<4.11" loguru scikit-image scikit-learn tqdm Pillow thop ninja tabulate tensorboard lap motmetrics filterpy h5py matplotlib scipy prettytable easydict pyyaml yacs termcolor gdown cython cython_bbox faiss-cpu pycocotools && \
-    conda run -n BoTSORTOfficial37 pip cache purge
-
-# Set HuggingFace mirror for China (optional, helps with network issues)
-ENV HF_ENDPOINT=https://hf-mirror.com
-
-# Create MMSegmentation conda env (Python 3.10)
-# This environment is used for MMSegmentation models (e.g., CUGRS DinoV3+Swin)
-RUN conda create -y -n MMSeg310 python=3.10 gdal && \
-    conda clean -afy
-
-# Install a PyTorch release with broad OpenMMLab wheel support in MMSeg310
-RUN conda run -n MMSeg310 pip install \
-    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
-
-# Install OpenMMLab dependencies in MMSeg310
-RUN conda run -n MMSeg310 pip install \
-    openmim==0.3.9 && \
-    conda run -n MMSeg310 pip uninstall -y mmdet || true && \
-    conda run -n MMSeg310 mim install "mmengine==${MMENGINE_VERSION}" && \
-    conda run -n MMSeg310 mim install "mmcv==${MMCV_VERSION}"
-
-# Install MMSegmentation / MMRotate with mutually compatible OpenMMLab versions
-RUN conda run -n MMSeg310 pip install \
-    "mmsegmentation==${MMSEG_VERSION}" \
-    transformers==4.36.2 \
-    huggingface_hub \
-    numpy==1.26.4 \
-    "opencv-python-headless<4.11" \
-    pillow>=9.0.0 \
-    ftfy \
-    regex \
-    "scipy<1.14" && \
-    conda run -n MMSeg310 mim install "mmdet==${MMDET_VERSION}" && \
-    conda run -n MMSeg310 mim install "mmrotate==${MMROTATE_VERSION}" && \
-    conda run -n MMSeg310 pip install --force-reinstall \
-    "numpy<2" \
-    "opencv-python<4.11"
-
-RUN conda run -n MMSeg310 python -c "import mmcv, mmengine, mmdet, mmrotate, mmseg; print('mmcv', mmcv.__version__); print('mmengine', mmengine.__version__); print('mmdet', mmdet.__version__); print('mmrotate', mmrotate.__version__); print('mmseg', mmseg.__version__)"
-
-RUN conda run -n MMSeg310 pip cache purge
-
-# Install Kornia and dependencies for Registration/Tracking in HFPyTorch310
-RUN conda run -n HFPyTorch310 pip install \
-    kornia==0.7.1 \
-    kornia_moons \
-    "opencv-python-headless<4.11" \
-    matplotlib && \
-    conda run -n HFPyTorch310 pip install --force-reinstall \
-    "numpy<2" && \
-    conda run -n HFPyTorch310 pip cache purge
-
-
-# Install Node.js 18 (system default, used by GeoView frontend)
-RUN set -eux; \
-    ARCH="linux-x64"; \
-    NODE_VERSION="v18.20.3"; \
-    curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o node.tar.xz; \
-    tar -xJf node.tar.xz -C /usr/local --strip-components=1; \
-    rm node.tar.xz; \
-    ln -sf /usr/local/bin/node /usr/bin/node; \
-    ln -sf /usr/local/bin/npm /usr/bin/npm; \
-    ln -sf /usr/local/bin/npx /usr/bin/npx
-
-
+ARG BASE_IMAGE=geoview-base:latest
+FROM ${BASE_IMAGE}
 
 # ----------- APP CODE START -----------
+RUN sed -i 's|mirrors.aliyun.com|archive.ubuntu.com|g' /etc/apt/sources.list && \
+    sed -i 's|archive.ubuntu.com/ubuntu focal-security|security.ubuntu.com/ubuntu focal-security|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY sync_model_assets.py /app/sync_model_assets.py
-
-# Copy backend
-# Copy backend requirements first for caching
-COPY backend/requirements.txt /app/backend/requirements.txt
-
-# pip config (Restore missing config)
-RUN mkdir -p /root/.pip && \
-    echo "[global]" > /root/.pip/pip.conf && \
-    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip.conf && \
-    echo "trusted-host = pypi.tuna.tsinghua.edu.cn" >> /root/.pip/pip.conf
-
-# Install backend deps
-RUN conda run -n PaddleRS37 python -m pip install --upgrade pip && \
-    conda run -n PaddleRS37 pip install "setuptools<=65.5.0"
-
-RUN conda run -n PaddleRS37 pip install -r backend/requirements.txt
-
-# Copy backend source code (frequently changing)
+COPY config.yaml /app/config.yaml
 COPY backend /app/backend
-
-# Copy PaddleRS requirements first
-COPY PaddleRS/requirements.txt /app/PaddleRS/requirements.txt
-
-# Install PaddleRS deps
-RUN conda run -n PaddleRS37 pip install -r PaddleRS/requirements.txt
-
-# Copy PaddleRS source
+COPY docker/patches/mmseg_cugrs_ms_deform_attn.py /app/backend/model/semantic_segmentation/mmseg_cugrs/support/dinov3/dinov3/eval/segmentation/models/utils/ms_deform_attn.py
 COPY PaddleRS /app/PaddleRS
 
-# Install PaddleRS package
-RUN conda run -n PaddleRS37 pip install -e PaddleRS
-RUN conda run -n PaddleRS37 pip install cryptography gunicorn
-RUN conda run -n PaddleRS37 pip check
+RUN conda run -n PaddleRS37 pip install -e /app/PaddleRS && \
+    conda run -n PaddleRS37 pip install cryptography gunicorn && \
+    conda run -n PaddleRS37 pip check
 
 # ----------- FRONTEND -----------
 WORKDIR /app/frontend
 COPY frontend /app/frontend
-RUN npm install --no-audit --prefer-offline
-RUN npm run build || true   # 不失败（开发模式可 serve）
+RUN npm run build || true
 
 # ----------- MINER (矿山监测系统) -----------
-# Miner uses Vite 7.x which requires Node.js >=20.19.0
-# Install Node.js 20 to /opt/node20 (separate from system Node.js 18)
-RUN set -eux; \
-    ARCH="linux-x64"; \
-    NODE_VERSION="v20.19.0"; \
-    mkdir -p /opt/node20; \
-    (curl -fsSL --retry 3 https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz || \
-    curl -fsSL --retry 3 https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz); \
-    tar -xJf /tmp/node20.tar.xz -C /opt/node20 --strip-components=1; \
-    rm /tmp/node20.tar.xz
-
 WORKDIR /app/miner
-COPY miner/package.json miner/package-lock.json /app/miner/
-RUN PATH=/opt/node20/bin:$PATH npm install --no-audit --prefer-offline
 COPY miner /app/miner
 
 # ----------- ENTRYPOINT -----------
 WORKDIR /app
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-RUN chmod +x /app/sync_model_assets.py
+COPY docker/backend_startup_diagnostics.py /usr/local/bin/backend_startup_diagnostics.py
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/backend_startup_diagnostics.py && \
+    chmod +x /app/sync_model_assets.py
 
-ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
-    CONDA_DEFAULT_ENV=PaddleRS37 \
-    PYTHONUNBUFFERED=1 \
-    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH} \
-    GEOVIEW_MODEL_ROOT=/app/backend/model
-
-EXPOSE 5008 3000 4000 8000
+EXPOSE 5008 3000
 
 CMD ["entrypoint.sh"]

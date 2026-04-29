@@ -1,13 +1,27 @@
 import hashlib
+import os
 import random
 
+
+def _with_trailing_slash(value):
+    return value if value.endswith("/") else value + "/"
+
+
+STATIC_ROOT = os.getenv("GEOVIEW_STATIC_ROOT", "/app/backend/static")
+UPLOADED_PHOTOS_DEST = os.getenv(
+    "UPLOADED_PHOTOS_DEST",
+    os.path.join(STATIC_ROOT, "upload"),
+)
+FILE_ASSET_API_PREFIX = "/api/file/assets/photos/"
+LEGACY_FILE_ASSET_PREFIX = "/_uploads/photos/"
+
 # 上传文件地址
-up_dir = "static/upload/"
+up_dir = _with_trailing_slash(UPLOADED_PHOTOS_DEST)
 # 生成的文件地址
-generate_dir = "static/upload/res/"
+generate_dir = _with_trailing_slash(os.path.join(UPLOADED_PHOTOS_DEST, "res"))
 # 网络地址
-generate_url = "/_uploads/photos/res/"
-up_url = "/_uploads/photos/"
+generate_url = FILE_ASSET_API_PREFIX + "res/"
+up_url = FILE_ASSET_API_PREFIX
 
 
 def md5_name(name):

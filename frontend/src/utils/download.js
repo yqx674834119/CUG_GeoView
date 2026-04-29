@@ -2,8 +2,8 @@
 import JSZIP from "jszip"
 import FileSaver from 'file-saver'
 
-import global from '@/global'
 import {hideFullScreenLoading} from "@/utils/loading";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 function downloadimgWithWords(index, src, funtype) {
   fetch(src)
     .then((response) => response.blob())//链式编程
@@ -31,7 +31,7 @@ function getImgArrayBuffer(url) {
   return new Promise((resolve, reject) => {
     //通过请求获取文件blob格式
     let xmlhttp = new XMLHttpRequest();
-    xmlhttp.open("GET",global.BASEURL+url, true);
+    xmlhttp.open("GET", toBackendAssetUrl(url), true);
     xmlhttp.responseType = "blob";
     xmlhttp.onload = function () {
       if (this.status === 200) {

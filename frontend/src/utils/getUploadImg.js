@@ -1,12 +1,12 @@
 import { historyGetPage } from "@/api/history"
-import global from '@/global'
 import { showFullScreenLoading } from "@/utils/loading";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 function getUploadImg(type) {
   historyGetPage(1, 20, type).then((res) => {
     this.imgArr = res.data.data.forEach((item) => {
-      item['before_img'] = global.BASEURL + item.before_img
-      item['after_img'] = global.BASEURL + item.after_img
+      item['before_img'] = toBackendAssetUrl(item.before_img)
+      item['after_img'] = toBackendAssetUrl(item.after_img)
     })
     this.imgArr = res.data.data
     this.isUpload = this.imgArr.length !== 0;

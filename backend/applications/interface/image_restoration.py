@@ -5,6 +5,7 @@ from skimage.io import imsave
 
 from applications.common.model_assets import (infer_model_backend,
                                               load_hf_config,
+                                              load_model_manifest,
                                               resolve_model_dir)
 from applications.common.path_global import generate_url
 
@@ -34,6 +35,10 @@ def get_huggingface_model_id(model_path):
     config = load_hf_config(model_path)
     if config:
         return config.get("model_id", "")
+
+    manifest = load_model_manifest(model_path)
+    if manifest:
+        return manifest.get("model_id", "")
 
     return ""
 

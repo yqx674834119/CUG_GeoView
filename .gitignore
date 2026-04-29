@@ -22,3 +22,9 @@ miner/frontend/build/*
 backend/applications/interface/checkpoints/*
 offline_cache/*
 static/*
+.codex/
+backend/runtime/
+config.local.yaml
+docker/__pycache__/
+tmp/
+武汉环境服务和应用部署步骤260413.txt

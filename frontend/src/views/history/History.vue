@@ -59,7 +59,7 @@
           </div>
           <img
             v-else
-            :src="global.BASEURL + scope.row.before_img"
+            :src="toAbsoluteUrl(scope.row.before_img)"
             min-width="70"
             height="70"
             alt="原图"
@@ -68,7 +68,7 @@
 
           <img
             v-if="scope.row.type === '变化检测' || scope.row.type === '自动配准'"
-            :src="global.BASEURL + scope.row.before_img1"
+            :src="toAbsoluteUrl(scope.row.before_img1)"
             min-width="70"
             height="70"
             style="margin-left: 20px"
@@ -81,7 +81,7 @@
         <template #default="scope">
           <img
             v-show="scope.row.type !== '场景分类'"
-            :src="global.BASEURL + scope.row.after_img"
+            :src="toAbsoluteUrl(scope.row.after_img)"
             min-width="70"
             height="70"
             alt="结果图"
@@ -398,6 +398,7 @@ import {
   previewThreePic,
 } from "@/utils/preview.js";
 import { downloadimgWithWords } from "@/utils/download.js";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 import global from "@/global.vue";
 export default {
@@ -448,7 +449,7 @@ export default {
       if (path.startsWith("http://") || path.startsWith("https://")) {
         return path;
       }
-      return `${global.BASEURL}${path.replace(/^\//, "")}`;
+      return toBackendAssetUrl(path);
     },
     downloadDirect(url, filename) {
       const link = document.createElement("a");

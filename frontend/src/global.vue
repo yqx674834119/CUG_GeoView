@@ -30,16 +30,21 @@ function resolveBackendBaseUrl(runtimeConfig) {
   const runtimeProtocol = hasText(runtimeConfig.backendProtocol)
     ? runtimeConfig.backendProtocol.trim()
     : "http";
+  const fallbackPort = "5008";
 
   if (hasText(runtimeHost) && hasText(runtimePort)) {
     return `${runtimeProtocol}://${runtimeHost}:${runtimePort}/`;
+  }
+
+  if (hasText(runtimeHost)) {
+    return `${runtimeProtocol}://${runtimeHost}:${fallbackPort}/`;
   }
 
   if (hasText(envHost) && hasText(envPort)) {
     return `http://${envHost}:${envPort}/`;
   }
 
-  return "/";
+  return `http://127.0.0.1:${fallbackPort}/`;
 }
 
 function resolveMinerEnabled(runtimeConfig) {
@@ -56,6 +61,13 @@ function resolveMinerUrl(runtimeConfig) {
   return process.env.VUE_APP_MINER_URL || "http://localhost:4000";
 }
 
+function resolveBackendAssetMode(runtimeConfig) {
+  if (hasText(runtimeConfig.backendAssetMode)) {
+    return runtimeConfig.backendAssetMode.trim();
+  }
+  return "buffered";
+}
+
 function resolveBaiduMapAccessKey(runtimeConfig) {
   if (hasText(runtimeConfig.baiduMapAccessKey)) {
     return runtimeConfig.baiduMapAccessKey.trim();
@@ -65,12 +77,14 @@ function resolveBaiduMapAccessKey(runtimeConfig) {
 
 const runtimeConfig = getRuntimeConfig();
 const BASEURL = resolveBackendBaseUrl(runtimeConfig);
+const BACKEND_ASSET_MODE = resolveBackendAssetMode(runtimeConfig);
 const MINER_ENABLED = resolveMinerEnabled(runtimeConfig);
 const MINER_URL = resolveMinerUrl(runtimeConfig);
 const BAIDU_MAP_ACCESS_KEY = resolveBaiduMapAccessKey(runtimeConfig);
 
 export default {
   BASEURL,
+  BACKEND_ASSET_MODE,
   MINER_ENABLED,
   MINER_URL,
   BAIDU_MAP_ACCESS_KEY,

@@ -14,6 +14,20 @@ export function createSrc(formdata) {
         }
     })
 }
+export function createVideoPreview(formdata) {
+    return requestfile({
+        method: 'POST',
+        url: '/api/file/upload-video-preview',
+        data: formdata,
+        transformRequest: [function(data, headers) {
+            delete headers.post['Content-Type']
+            return data
+        }],
+        headers:{
+            'Content-Type':'multipart/form-data'
+        }
+    })
+}
 export function imgUpload(data,funUrl){
     return request({
         method:'POST',

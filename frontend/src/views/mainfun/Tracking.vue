@@ -156,12 +156,23 @@
         <p class="frame-selector__hint">
           当前输入为单个视频文件，系统会自动解帧并执行全图多目标跟踪，无需手工框选。
         </p>
+        <div v-if="videoPreviewLoading" class="video-preview-fallback">
+          正在生成标准化视频预览，请稍候。
+        </div>
         <video
+          v-if="inputPreviewUrl && !videoPreviewErrors.input"
           controls
           preload="metadata"
           class="input-video"
-          :src="firstFrame"
+          :key="`input_${inputPreviewUrl}`"
+          playsinline
+          @loadeddata="clearVideoPreviewError('input')"
+          @error="handleVideoPreviewError('input')"
+          :src="inputPreviewUrl"
         />
+        <div v-else class="video-preview-fallback">
+          当前视频预览加载失败。任务仍可继续执行，处理完成后结果区仍会提供标准化 MP4 结果视频。
+        </div>
       </div>
       <div v-else-if="firstFrame" class="frame-selector frame-selector--hintonly">
         <p class="frame-selector__hint">
@@ -210,11 +221,22 @@
             </template>
             <video
               v-if="result.input_mode === 'video' && result.source_input_full_url"
+              v-show="!videoPreviewErrors.source"
               controls
               preload="metadata"
               class="result-video"
+              :key="`source_${result.source_input_full_url}`"
+              playsinline
+              @loadeddata="clearVideoPreviewError('source')"
+              @error="handleVideoPreviewError('source')"
               :src="result.source_input_full_url"
             />
+            <div
+              v-if="result.input_mode === 'video' && result.source_input_full_url && videoPreviewErrors.source"
+              class="video-preview-fallback"
+            >
+              输入视频预览失败，请使用“查看输入”直接打开视频文件。
+            </div>
             <el-image
               v-else
               :src="result.first_frame_full_url"
@@ -270,11 +292,22 @@
               </div>
             </template>
             <video
+              v-show="!videoPreviewErrors.output"
               controls
               preload="metadata"
               class="result-video"
+              :key="`output_${result.output_video_full_url}`"
+              playsinline
+              @loadeddata="clearVideoPreviewError('output')"
+              @error="handleVideoPreviewError('output')"
               :src="result.output_video_full_url"
             />
+            <div
+              v-if="result.output_video_full_url && videoPreviewErrors.output"
+              class="video-preview-fallback"
+            >
+              结果视频预览失败，请点击“下载结果视频”获取文件。
+            </div>
             <div class="result-actions">
               <el-button
                 type="primary"
@@ -316,8 +349,9 @@
 
 <script>
 import Tabinfor from "@/components/Tabinfor";
-import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
+import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 const IMAGE_SUFFIXES = [
   "jpg",
@@ -353,6 +387,7 @@ const ACCEPT_SUFFIXES = [
   ...IMAGE_SUFFIXES.map((suffix) => `.${suffix.toLowerCase()}`),
   ...VIDEO_SUFFIXES.map((suffix) => `.${suffix.toLowerCase()}`),
 ];
+const LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES = ["mp4", "webm", "m4v"];
 
 export default {
   name: "Tracking",
@@ -376,6 +411,16 @@ export default {
         BASEURL: global.BASEURL,
       },
       inputMode: "image_sequence",
+      videoPreviewLoading: false,
+      videoPreviewPromise: null,
+      videoPreviewTicket: 0,
+      preparedVideoUpload: null,
+      remoteInputVideoUrl: "",
+      videoPreviewErrors: {
+        input: false,
+        source: false,
+        output: false,
+      },
     };
   },
   computed: {
@@ -384,6 +429,9 @@ export default {
     },
     isVideoInput() {
       return this.inputMode === "video";
+    },
+    inputPreviewUrl() {
+      return this.remoteInputVideoUrl || this.firstFrame || "";
     },
     canStart() {
       const hasValidInput = this.isVideoInput ? this.fileList.length === 1 : this.fileList.length >= 2;
@@ -437,6 +485,16 @@ export default {
       this.inputMode = "image_sequence";
       this.rect = { x: 0, y: 0, w: 0, h: 0 };
       this.result = null;
+      this.preparedVideoUpload = null;
+      this.remoteInputVideoUrl = "";
+      this.videoPreviewLoading = false;
+      this.videoPreviewPromise = null;
+      this.videoPreviewTicket += 1;
+      this.videoPreviewErrors = {
+        input: false,
+        source: false,
+        output: false,
+      };
       if (this.$refs.upload) {
         this.$refs.upload.clearFiles();
       }
@@ -517,6 +575,9 @@ export default {
         return "image";
       }
       if (VIDEO_SUFFIXES.includes(suffix)) {
+        if (!LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES.includes(suffix.toLowerCase())) {
+          this.$message.warning("当前浏览器对该视频格式的本地预览兼容性有限，处理完成后将优先提供标准化 MP4 预览");
+        }
         return "video";
       }
       this.$message.error(`文件 ${file.name} 格式不支持，请上传常见影像或视频格式`);
@@ -531,12 +592,69 @@ export default {
       this.sortedNames = ordered.map((item) => item.name);
       this.rect = { x: 0, y: 0, w: 0, h: 0 };
       this.result = null;
+      this.preparedVideoUpload = null;
+      this.remoteInputVideoUrl = "";
+      this.videoPreviewLoading = false;
+      this.videoPreviewPromise = null;
+      this.videoPreviewTicket += 1;
+      this.videoPreviewErrors = {
+        input: false,
+        source: false,
+        output: false,
+      };
       this.firstFrame = ordered.length ? URL.createObjectURL(ordered[0].raw) : null;
+      if (this.inputMode === "video" && ordered.length === 1) {
+        this.prepareVideoPreview(ordered[0]);
+      }
     },
     revokeFirstFrameUrl() {
       if (this.firstFrame && this.firstFrame.startsWith("blob:")) {
         URL.revokeObjectURL(this.firstFrame);
       }
+    },
+    prepareVideoPreview(fileItem) {
+      if (!fileItem || !fileItem.raw || this.inputMode !== "video") {
+        return null;
+      }
+      const ticket = ++this.videoPreviewTicket;
+      this.videoPreviewLoading = true;
+      this.remoteInputVideoUrl = "";
+      this.preparedVideoUpload = null;
+      this.videoPreviewErrors.input = false;
+      this.videoPreviewPromise = (async () => {
+        const formData = new FormData();
+        formData.append("file", fileItem.raw);
+        formData.append("type", "目标跟踪");
+        const response = await createVideoPreview(formData);
+        if (ticket !== this.videoPreviewTicket) {
+          return null;
+        }
+        const data = response?.data?.data || null;
+        if (!data?.src || !data?.preview_video_path) {
+          throw new Error(response?.data?.msg || "视频预览生成失败");
+        }
+        this.preparedVideoUpload = [{
+          src: data.src,
+          filename: data.filename,
+          photo_id: data.photo_id,
+        }];
+        this.remoteInputVideoUrl = this.prefixUrl(data.preview_video_path);
+        this.videoPreviewErrors.input = false;
+        return data;
+      })().catch((error) => {
+        if (ticket !== this.videoPreviewTicket) {
+          return null;
+        }
+        this.remoteInputVideoUrl = "";
+        this.preparedVideoUpload = null;
+        console.error(error);
+        return null;
+      }).finally(() => {
+        if (ticket === this.videoPreviewTicket) {
+          this.videoPreviewLoading = false;
+        }
+      });
+      return this.videoPreviewPromise;
     },
     startDraw(event) {
       if (!this.firstFrame) {
@@ -596,8 +714,15 @@ export default {
       }
 
       this.running = true;
+      this.videoPreviewErrors.source = false;
+      this.videoPreviewErrors.output = false;
       try {
-        const uploaded = await this.uploadSequence(this.fileList);
+        if (this.isVideoInput && this.videoPreviewPromise) {
+          await this.videoPreviewPromise;
+        }
+        const uploaded = (this.isVideoInput && this.preparedVideoUpload?.length)
+          ? this.preparedVideoUpload
+          : await this.uploadSequence(this.fileList);
         if ((!this.isVideoInput && uploaded.length < 2) || (this.isVideoInput && uploaded.length < 1)) {
           throw new Error(this.isVideoInput
             ? "上传结果缺少有效视频文件，无法执行目标跟踪"
@@ -650,10 +775,7 @@ export default {
       if (!path) {
         return "";
       }
-      if (path.startsWith("http://") || path.startsWith("https://")) {
-        return path;
-      }
-      return `${this.global.BASEURL}${path.replace(/^\//, "")}`;
+      return toBackendAssetUrl(path);
     },
     downloadFile(url, filename) {
       const link = document.createElement("a");
@@ -666,6 +788,12 @@ export default {
         return;
       }
       window.open(url, "_blank", "noopener");
+    },
+    handleVideoPreviewError(type) {
+      this.videoPreviewErrors[type] = true;
+    },
+    clearVideoPreviewError(type) {
+      this.videoPreviewErrors[type] = false;
     },
     formatRatio(value) {
       if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -864,6 +992,16 @@ export default {
   width: 100%;
   border-radius: 14px;
   background: #000;
+}
+
+.video-preview-fallback {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 160, 0, 0.25);
+  background: rgba(255, 248, 230, 0.9);
+  color: #8a5a00;
+  line-height: 1.6;
 }
 
 .metric-grid {

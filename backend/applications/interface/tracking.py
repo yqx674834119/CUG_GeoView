@@ -2,14 +2,18 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
 
-from applications.common.model_assets import load_model_manifest, resolve_model_dir
+from applications.common.model_assets import (load_model_manifest,
+                                              resolve_model_dir,
+                                              resolve_repo_path)
 from applications.common.path_global import generate_url, md5_name, up_url
 from applications.common.utils.upload import img_url_handle
 
@@ -60,6 +64,8 @@ IMAGE_EXTENSIONS = {
     ".tiff",
     ".webp",
 }
+
+BROWSER_VIDEO_SUFFIX = ".mp4"
 
 
 def requires_initial_rect(model_path: Optional[str]) -> bool:
@@ -182,6 +188,8 @@ def execute(model_path: str, data_path: str, out_dir: str, names: List[dict],
         finally:
             writer.release()
 
+        _rewrite_video_for_web(video_path)
+
         preview_image = _build_preview_strip(preview_frames)
         if not cv2.imwrite(preview_path, preview_image):
             raise TrackingError("预览图写入失败")
@@ -252,6 +260,7 @@ def _execute_botsort_engineering(model_path: str, out_dir: str,
         model_file=detector_weight_file,
         tracker_config=tracker_config_path,
     )
+    _rewrite_video_for_web(video_path)
 
     summary = output_data.get("summary") or {}
     tracked_frames = int(summary.get("tracked_frames", 0))
@@ -340,8 +349,8 @@ def _execute_botsort_official(model_path: str, out_dir: str,
         output_preview_path=preview_path,
         output_trajectory_path=trajectory_path,
         output_mot_path=mot_path,
-        repo_dir=str(manifest.get("official_repo_dir",
-                                  "/home/livablecity/geoview_runtime/BoT-SORT")),
+        repo_dir=str(resolve_repo_path(manifest.get("official_repo_dir",
+                                                    "backend/runtime/BoT-SORT"))),
         exp_file=str(manifest.get("exp_file",
                                   "yolox/exps/example/mot/yolox_x_mix_det.py")),
         detector_ckpt=str(manifest.get("detector_ckpt_file",
@@ -362,6 +371,7 @@ def _execute_botsort_official(model_path: str, out_dir: str,
         proximity_thresh=float(manifest.get("proximity_thresh", 0.5)),
         appearance_thresh=float(manifest.get("appearance_thresh", 0.25)),
     )
+    _rewrite_video_for_web(video_path)
 
     summary = output_data.get("summary") or {}
     tracked_frames = int(summary.get("tracked_frames", 0))
@@ -452,16 +462,27 @@ def _extract_video_frames(video_item: FrameItem,
 
     preview_base = os.path.splitext(os.path.basename(video_item.filename))[0]
     preview_name = md5_name(f"tracking_{preview_base[:48]}_input_preview.png")
+    source_preview_name = md5_name(f"tracking_{preview_base[:48]}_source_preview{BROWSER_VIDEO_SUFFIX}")
     preview_path = os.path.join(out_dir, preview_name)
+    source_preview_path = os.path.join(out_dir, source_preview_name)
     if not cv2.imwrite(preview_path, first_frame_bgr):
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise TrackingError("视频首帧预览图写入失败")
+
+    normalized_source_path = _transcode_video_for_web(
+        video_item.absolute_path,
+        source_preview_path,
+    )
+    if normalized_source_path:
+        source_input_path = generate_url + os.path.basename(normalized_source_path)
+    else:
+        source_input_path = up_url + video_item.relative_path
 
     return TrackingInputBundle(
         frames=frames,
         input_mode="video",
         first_frame_input=generate_url + preview_name,
-        source_input_path=up_url + video_item.relative_path,
+        source_input_path=source_input_path,
         source_input_name=video_item.filename,
         temp_dir=temp_dir,
     )
@@ -480,6 +501,7 @@ def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
     if model_path == "builtin:tracking:botsort_engineering":
         return "botsort_engineering"
     if model_path == "builtin:tracking:botsort_official":
+        _ensure_official_botsort_enabled(None)
         return "botsort_official"
     if model_path == "builtin:tracking:csrt":
         return "csrt"
@@ -487,8 +509,23 @@ def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
         return "kcf"
     manifest = load_model_manifest(model_path)
     if manifest and manifest.get("backend") == "tracking":
-        return manifest.get("runtime", "auto")
+        runtime = manifest.get("runtime", "auto")
+        if runtime == "botsort_official":
+            _ensure_official_botsort_enabled(manifest)
+        return runtime
     raise TrackingError(f"不支持的跟踪模型: {model_path}")
+
+
+def _ensure_official_botsort_enabled(manifest: Optional[dict]):
+    repo_dir = (manifest or {}).get(
+        "official_repo_dir",
+        "backend/runtime/BoT-SORT",
+    )
+    if os.path.isdir(resolve_repo_path(repo_dir)):
+        return
+    raise TrackingError(
+        "Official BoT-SORT 运行目录不存在；请确认 BoT-SORT 官方仓库已随交付环境提供。"
+    )
 
 
 def _create_tracker(mode: str):
@@ -818,6 +855,60 @@ def _create_video_writer(path: str, width: int, height: int):
     if not writer.isOpened():
         raise TrackingError("结果视频写入失败，请检查 OpenCV 编码器支持")
     return writer
+
+
+def _transcode_video_for_web(source_path: str,
+                             output_path: Optional[str] = None) -> Optional[str]:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not os.path.isfile(source_path):
+        return None
+
+    target_path = output_path or f"{source_path}.h264.mp4"
+    os.makedirs(os.path.dirname(target_path) or ".", exist_ok=True)
+
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        source_path,
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-an",
+        target_path,
+    ]
+
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=1800,
+    )
+    if result.returncode != 0 or not os.path.isfile(target_path):
+        with suppress(Exception):
+            os.remove(target_path)
+        print(
+            f"[Tracking] ffmpeg transcode failed for {source_path}: {result.stderr}",
+            flush=True,
+        )
+        return None
+    return target_path
+
+
+def _rewrite_video_for_web(source_path: str):
+    temp_output_path = f"{source_path}.h264.mp4"
+    normalized_path = _transcode_video_for_web(source_path, temp_output_path)
+    if not normalized_path:
+        return
+    os.replace(normalized_path, source_path)
 
 
 def _load_bgr_image(path: str) -> np.ndarray:

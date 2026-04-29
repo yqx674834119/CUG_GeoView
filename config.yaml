@@ -8,6 +8,16 @@ baidu_map:
   access_key: <ACCESS_KEY>
 debug: false
 miner:
-  enabled: true
+  enabled: false
   frontend_port: 4000
   backend_port: 8000
+database:
+  backend: sqlite
+  sqlite_path: /app/backend/static/geoview.sqlite3
+services:
+  backend: true
+  frontend: false
+  miner: false
+assets:
+  serve_mode: buffered
+  chunk_size: 1048576

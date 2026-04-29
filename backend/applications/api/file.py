@@ -1,10 +1,265 @@
-from flask import Blueprint, request, jsonify
+import mimetypes
+import os
+import re
+import shutil
+import subprocess
+from contextlib import suppress
 
+import cv2
+from flask import (Blueprint, Response, abort, current_app, jsonify, request,
+                   send_from_directory, stream_with_context)
+
+from applications.common.path_global import generate_url, md5_name
 from applications.common.utils import upload as upload_curd, type_utils
 from applications.common.utils.http import fail_api
 from applications.common.utils.tiff_processor import is_tiff_file, MAX_TIFF_SIZE_MB
 
 file_api = Blueprint('file_api', __name__, url_prefix='/api/file')
+RANGE_HEADER_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
+
+
+def _resolve_asset_path(filename):
+    destination = current_app.config.get("UPLOADED_PHOTOS_DEST")
+    if not destination:
+        abort(404)
+
+    normalized = str(filename or "").replace("\\", "/").lstrip("/")
+    absolute_path = os.path.abspath(os.path.join(destination, normalized))
+    destination_root = os.path.abspath(destination)
+
+    if not absolute_path.startswith(destination_root + os.sep) and absolute_path != destination_root:
+        abort(404)
+
+    if not os.path.isfile(absolute_path):
+        abort(404)
+
+    return destination, normalized, absolute_path
+
+
+def _build_inline_headers(absolute_path):
+    file_name = os.path.basename(absolute_path)
+    return {
+        "Content-Disposition": f'inline; filename="{file_name}"',
+        "Cache-Control": "no-cache",
+    }
+
+
+def _relative_asset_path_from_public_path(value):
+    normalized = str(value or "").replace("\\", "/").strip()
+    prefixes = (
+        "/api/file/assets-buffered/photos/",
+        "/api/file/assets/photos/",
+        "/_uploads/photos/",
+    )
+    for prefix in prefixes:
+        if normalized.startswith(prefix):
+            return normalized[len(prefix):].lstrip("/")
+    return normalized.lstrip("/")
+
+
+def _prefers_direct_streaming(absolute_path):
+    mimetype = mimetypes.guess_type(absolute_path)[0] or ""
+    return mimetype.startswith("video/")
+
+
+def _serve_asset_buffered(absolute_path):
+    mimetype = mimetypes.guess_type(absolute_path)[0] or "application/octet-stream"
+    with open(absolute_path, "rb") as file:
+        payload = file.read()
+    response = Response(payload, mimetype=mimetype)
+    response.headers.update(_build_inline_headers(absolute_path))
+    response.content_length = len(payload)
+    return response
+
+
+def _serve_asset_chunked(absolute_path):
+    mimetype = mimetypes.guess_type(absolute_path)[0] or "application/octet-stream"
+    chunk_size = max(65536, int(current_app.config.get("PHOTO_ASSET_CHUNK_SIZE", 1048576)))
+
+    def generate():
+        with open(absolute_path, "rb") as file:
+            while True:
+                chunk = file.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+    response = Response(stream_with_context(generate()), mimetype=mimetype)
+    response.headers.update(_build_inline_headers(absolute_path))
+    with suppress(Exception):
+        response.content_length = None
+    return response
+
+
+def _parse_range_request(range_header, file_size):
+    if not range_header:
+        return None
+
+    match = RANGE_HEADER_PATTERN.match(range_header.strip())
+    if not match:
+        return None
+
+    start_raw, end_raw = match.groups()
+    if start_raw == "" and end_raw == "":
+        return None
+
+    if start_raw == "":
+        length = min(file_size, int(end_raw))
+        start = max(0, file_size - length)
+        end = file_size - 1
+    else:
+        start = int(start_raw)
+        end = int(end_raw) if end_raw else file_size - 1
+
+    if start < 0 or start >= file_size:
+        abort(416)
+
+    end = min(end, file_size - 1)
+    if end < start:
+        abort(416)
+
+    return start, end
+
+
+def _serve_asset_ranged(absolute_path):
+    mimetype = mimetypes.guess_type(absolute_path)[0] or "application/octet-stream"
+    file_size = os.path.getsize(absolute_path)
+    range_header = request.headers.get("Range")
+    byte_range = _parse_range_request(range_header, file_size)
+    chunk_size = max(65536, int(current_app.config.get("PHOTO_ASSET_CHUNK_SIZE", 1048576)))
+
+    if byte_range is None:
+        start = 0
+        end = file_size - 1
+        status_code = 200
+    else:
+        start, end = byte_range
+        status_code = 206
+
+    content_length = max(0, end - start + 1)
+
+    def generate():
+        remaining = content_length
+        with open(absolute_path, "rb") as file:
+            file.seek(start)
+            while remaining > 0:
+                chunk = file.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    response = Response(
+        stream_with_context(generate()),
+        status=status_code,
+        mimetype=mimetype,
+        direct_passthrough=True,
+    )
+    response.headers.update(_build_inline_headers(absolute_path))
+    response.headers["Accept-Ranges"] = "bytes"
+    response.content_length = content_length
+    if status_code == 206:
+        response.headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+    return response
+
+
+def _transcode_video_for_web(source_path, output_path):
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not os.path.isfile(source_path):
+        return None
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        source_path,
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-an",
+        output_path,
+    ]
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=1800,
+    )
+    if result.returncode != 0 or not os.path.isfile(output_path):
+        with suppress(Exception):
+            os.remove(output_path)
+        current_app.logger.warning(
+            "ffmpeg transcode failed for %s: %s",
+            source_path,
+            result.stderr,
+        )
+        return None
+    return output_path
+
+
+def _build_video_preview_assets(absolute_path, display_name):
+    if not os.path.isfile(absolute_path):
+        abort(404)
+
+    capture = cv2.VideoCapture(absolute_path)
+    if not capture.isOpened():
+        raise ValueError("无法读取视频文件，无法生成预览")
+
+    first_frame = None
+    try:
+        ok, frame = capture.read()
+        if ok and frame is not None:
+            first_frame = frame
+    finally:
+        capture.release()
+
+    if first_frame is None:
+        raise ValueError("视频内容无效，无法生成预览")
+
+    output_dir = os.path.join(current_app.config["UPLOADED_PHOTOS_DEST"], "res")
+    os.makedirs(output_dir, exist_ok=True)
+
+    preview_base = os.path.splitext(os.path.basename(display_name or absolute_path))[0][:48]
+    first_frame_name = md5_name(f"tracking_{preview_base}_input_preview.png")
+    preview_video_name = md5_name(f"tracking_{preview_base}_source_preview.mp4")
+
+    first_frame_path = os.path.join(output_dir, first_frame_name)
+    preview_video_path = os.path.join(output_dir, preview_video_name)
+
+    if not cv2.imwrite(first_frame_path, first_frame):
+        raise ValueError("视频首帧预览图写入失败")
+
+    transcoded_path = _transcode_video_for_web(absolute_path, preview_video_path)
+    if not transcoded_path:
+        raise ValueError("视频标准化转码失败")
+
+    return {
+        "first_frame_path": generate_url + first_frame_name,
+        "preview_video_path": generate_url + os.path.basename(transcoded_path),
+    }
+
+
+def _serve_photo_asset(filename, forced_mode=None):
+    destination, normalized, absolute_path = _resolve_asset_path(filename)
+    mode = str(forced_mode or current_app.config.get("PHOTO_ASSET_SERVE_MODE", "sendfile")).lower()
+
+    if _prefers_direct_streaming(absolute_path):
+        return _serve_asset_ranged(absolute_path)
+
+    if mode == "buffered":
+        return _serve_asset_buffered(absolute_path)
+    if mode == "chunked":
+        return _serve_asset_chunked(absolute_path)
+    return _serve_asset_ranged(absolute_path)
 
 
 #   上传接口
@@ -54,3 +309,59 @@ def upload_api():
         return jsonify(res)
     return fail_api("请选择文件")
 
+
+@file_api.post('/upload-video-preview')
+def upload_video_preview_api():
+    if 'file' not in request.files:
+        return fail_api("请选择视频文件")
+
+    video = request.files['file']
+    type_ = request.form.get('type', '目标跟踪')
+    mime = video.content_type or ""
+    suffix = os.path.splitext(getattr(video, "filename", "") or "")[1].lower()
+    if not (mime.startswith("video/") or suffix in {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm", ".mpg", ".mpeg"}):
+        return fail_api("仅支持常见视频文件预览")
+
+    try:
+        upload_results = upload_curd.upload_one(
+            photo=video,
+            mime=mime or "video/mp4",
+            type_=type_utils.str_to_type(type_),
+            enable_slicing=False,
+        )
+    except Exception as exc:
+        return fail_api(f"视频上传失败: {str(exc)}")
+
+    if not upload_results:
+        return fail_api("视频上传失败")
+
+    file_url, photo_id, display_name = upload_results[0]
+    relative_path = _relative_asset_path_from_public_path(file_url)
+    _, _, absolute_path = _resolve_asset_path(relative_path)
+
+    try:
+        preview_assets = _build_video_preview_assets(absolute_path, display_name)
+    except ValueError as exc:
+        return fail_api(str(exc))
+
+    return jsonify({
+        "msg": "视频预览生成成功",
+        "code": 0,
+        "success": True,
+        "data": {
+            "src": file_url,
+            "filename": display_name,
+            "photo_id": photo_id,
+            **preview_assets,
+        }
+    })
+
+
+@file_api.get('/assets/photos/<path:filename>')
+def get_photo_asset(filename):
+    return _serve_photo_asset(filename)
+
+
+@file_api.get('/assets-buffered/photos/<path:filename>')
+def get_photo_asset_buffered(filename):
+    return _serve_photo_asset(filename, forced_mode="buffered")

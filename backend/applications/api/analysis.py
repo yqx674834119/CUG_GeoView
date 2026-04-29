@@ -298,7 +298,12 @@ def tracking_api():
         return fail_api("请提供上传后的图像序列或单个视频文件")
     from applications.interface.tracking import requires_initial_rect
 
-    if requires_initial_rect(model_path):
+    try:
+        need_initial_rect = requires_initial_rect(model_path)
+    except Exception as e:
+        return fail_api(f"跟踪失败: {str(e)}")
+
+    if need_initial_rect:
         if not rect or len(rect) != 4:
             return fail_api("请提供初始跟踪框")
 

@@ -12,6 +12,11 @@ from applications.models import Photo
 from applications.schemas import PhotoOutSchema
 
 
+def build_photo_asset_url(relative_path):
+    normalized = str(relative_path or "").replace("\\", "/").lstrip("/")
+    return f"/api/file/assets/photos/{normalized}"
+
+
 def get_photo(page, limit):
     photo = Photo.query.order_by(desc(Photo.create_time)).paginate(
         page=page, per_page=limit, error_out=False)
@@ -93,7 +98,7 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
         p_path = p_file['path']
         p_display = p_file['display_name']
         
-        file_url = '/_uploads/photos/' + p_filename
+        file_url = build_photo_asset_url(p_filename)
         
         # 获取大小
         if os.path.exists(p_path):

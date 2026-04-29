@@ -865,7 +865,7 @@ import {
 import { historyGetPage } from "@/api/history";
 import Tabinfor from "@/components/Tabinfor";
 import DraggableItem from "@/components/DraggableItem";
-import global from "@/global";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { PieChart, BarChart } from "echarts/charts";
@@ -1223,20 +1223,20 @@ export default {
       this.historyGetPage(1, 20, "变化检测")
           .then((res) => {
             res.data.data.forEach((item)=>{
-              item['before_img1']=global.BASEURL+item.before_img1
-              item['before_img'] = global.BASEURL+item.before_img
-              item['after_img'] = global.BASEURL+item.after_img
-              item.data['hole'] = global.BASEURL + item.data['hole']
-              item.data['hole_style'][0] =  global.BASEURL + item.data['hole_style'][0]
-              item.data['hole_style'][1] =  global.BASEURL + item.data['hole_style'][1]
-              item.data['hole_style'][2] =  global.BASEURL + item.data['hole_style'][2]
-              item.data['hole_style'][3] =  global.BASEURL + item.data['hole_style'][3]
-              item.data[0] = global.BASEURL + item.data[0]
-              item.data[1] = global.BASEURL + item.data[1]
-              item.data[2] = global.BASEURL + item.data[2]
-              item.data[3] = global.BASEURL + item.data[3]
-              item.data['mask'] = global.BASEURL +item.data.mask
-              item.data['mask_hole'] = global.BASEURL + item.data.mask_hole
+              item['before_img1'] = toBackendAssetUrl(item.before_img1)
+              item['before_img'] = toBackendAssetUrl(item.before_img)
+              item['after_img'] = toBackendAssetUrl(item.after_img)
+              item.data['hole'] = toBackendAssetUrl(item.data['hole'])
+              item.data['hole_style'][0] = toBackendAssetUrl(item.data['hole_style'][0])
+              item.data['hole_style'][1] = toBackendAssetUrl(item.data['hole_style'][1])
+              item.data['hole_style'][2] = toBackendAssetUrl(item.data['hole_style'][2])
+              item.data['hole_style'][3] = toBackendAssetUrl(item.data['hole_style'][3])
+              item.data[0] = toBackendAssetUrl(item.data[0])
+              item.data[1] = toBackendAssetUrl(item.data[1])
+              item.data[2] = toBackendAssetUrl(item.data[2])
+              item.data[3] = toBackendAssetUrl(item.data[3])
+              item.data['mask'] = toBackendAssetUrl(item.data.mask)
+              item.data['mask_hole'] = toBackendAssetUrl(item.data.mask_hole)
             })
             this.resultArr = res.data.data
             if (this.resultArr.length) {
@@ -1287,7 +1287,7 @@ export default {
             this.createSrc(formData1).then((res) => {
               this.uploadSrc3 = res.data.data.splice(0, 3);
               this.Img1 = this.uploadSrc3.map((item) => {
-                return global.BASEURL + item.src;
+                return toBackendAssetUrl(item.src);
               });
               resolve();
             }).catch((rej)=>{})
@@ -1296,7 +1296,7 @@ export default {
             this.createSrc(formData2).then((res) => {
               this.uploadSrc4 = res.data.data.splice(0, 3);
               this.Img3 = this.uploadSrc4.map((item) => {
-                return global.BASEURL + item.src;
+                return toBackendAssetUrl(item.src);
               });
               resolve();
             }).catch((rej)=>{})
@@ -1333,7 +1333,7 @@ export default {
               this.myhistogram.list = this.getList(this.histogramSrc);
               this.histogramUpload(this.myhistogram).then((res) => {
                 this.Img2 = res.data.data.map((item) => {
-                  return global.BASEURL + item;
+                  return toBackendAssetUrl(item);
                 });
                 this.Img2 = this.Img2.splice(0, 3);
               }).catch((rej)=>{})
@@ -1389,7 +1389,7 @@ export default {
             this.createSrc(formData1).then((res) => {
               this.sharpenSrc1 = res.data.data.splice(0, 3);
               this.Img1 = this.sharpenSrc1.map((item) => {
-                return global.BASEURL + item.src;
+                return toBackendAssetUrl(item.src);
               });
               resolve();
             }).catch((rej)=>{})
@@ -1398,7 +1398,7 @@ export default {
             this.createSrc(formData2).then((res) => {
               this.sharpenSrc2 = res.data.data.splice(0, 3);
               this.Img3 = this.sharpenSrc2.map((item) => {
-                return global.BASEURL + item.src;
+                return toBackendAssetUrl(item.src);
               });
               resolve();
             }).catch((rej)=>{})
@@ -1433,11 +1433,11 @@ export default {
               this.mysharpen.list =  this.getList(this.sharpenSrc);
               this.histogramUpload(this.mysharpen).then((res) => {
                 this.sharpenImg1 = res.data.data.map((item) => {
-                  return global.BASEURL + item.first;
+                  return toBackendAssetUrl(item.first);
                 });
 
                 this.sharpenImg2 = res.data.data.map((item) => {
-                  return global.BASEURL + item.second;
+                  return toBackendAssetUrl(item.second);
                 });
               }).catch(()=>{})
             }

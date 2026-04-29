@@ -1,5 +1,5 @@
 import {createSrc,prePhotoHandle} from '@/api/upload'
-import global from '@/global'
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 function selectSharpen(type) {
   if(this.fileList.length  === 0){
     if( this.uploadSrc.prehandle === 4){
@@ -30,7 +30,7 @@ function selectSharpen(type) {
       }
       createSrc(formData).then((res) => {
         this.uploadSrc.list = res.data.data.map((item) => {
-          return global.BASEURL+item.src;
+          return toBackendAssetUrl(item.src);
         });
         this.before = this.uploadSrc.list.splice(0,3)
 
@@ -40,7 +40,7 @@ function selectSharpen(type) {
         prePhotoHandle(this.prePhoto).then((res)=>{
 
           this.sharpenImg = res.data.data.map((item)=>{
-            return global.BASEURL + item
+            return toBackendAssetUrl(item)
           })
         }).catch(()=>{})
       }).catch((rej)=>{})
@@ -75,7 +75,7 @@ function selectSharpen(type) {
         }
         createSrc(formData).then((res) => {
           this.uploadSrc.list = res.data.data.map((item) => {
-            return global.BASEURL+item.src;
+            return toBackendAssetUrl(item.src);
           });
           this.before = this.uploadSrc.list.splice(0,3)
 
@@ -85,7 +85,7 @@ function selectSharpen(type) {
           prePhotoHandle(this.prePhoto).then((res)=>{
 
             this.claheImg = res.data.data.map((item)=>{
-              return global.BASEURL + item
+              return toBackendAssetUrl(item)
             })
           }).catch((rej)=>{})
         }).catch((rej)=>{})

@@ -8,8 +8,19 @@ class BaseConfig:
     # 主题面板的链接列表配置
     SYSTEM_PANEL_LINKS = []
 
-    UPLOADED_PHOTOS_DEST = 'static/upload'
+    GEOVIEW_STATIC_ROOT = os.getenv(
+        'GEOVIEW_STATIC_ROOT',
+        '/app/backend/static',
+    )
+    UPLOADED_PHOTOS_DEST = os.getenv(
+        'UPLOADED_PHOTOS_DEST',
+        os.path.join(GEOVIEW_STATIC_ROOT, 'upload'),
+    )
     UPLOADED_FILES_ALLOW = ['gif', 'jpg', 'png']
+    PHOTO_ASSET_SERVE_MODE = os.getenv('GEOVIEW_PHOTO_ASSET_SERVE_MODE',
+                                       'buffered')
+    PHOTO_ASSET_CHUNK_SIZE = int(
+        os.getenv('GEOVIEW_PHOTO_ASSET_CHUNK_SIZE') or 1048576)
 
     # JSON配置
     JSON_AS_ASCII = False
@@ -47,6 +58,27 @@ class TestingConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'  # 内存数据库
 
 
+class EmbeddedSQLiteConfig(BaseConfig):
+    """单镜像离线部署配置，不依赖外部 MySQL。"""
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = False
+    LOG_LEVEL = logging.ERROR
+
+    SQLITE_DATABASE_PATH = os.getenv(
+        'SQLITE_DATABASE_PATH',
+        os.path.join(BaseConfig.GEOVIEW_STATIC_ROOT, 'geoview.sqlite3'),
+    )
+    SQLALCHEMY_DATABASE_URI = (
+        os.getenv('SQLALCHEMY_DATABASE_URI')
+        or f"sqlite:///{SQLITE_DATABASE_PATH}"
+    )
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "connect_args": {
+            "check_same_thread": False,
+        }
+    }
+
+
 class DevelopmentConfig(BaseConfig):
     """ 开发配置 """
     SQLALCHEMY_TRACK_MODIFICATIONS = True
@@ -65,5 +97,6 @@ class ProductionConfig(BaseConfig):
 config = {
     'development': DevelopmentConfig,
     'testing': TestingConfig,
+    'embedded': EmbeddedSQLiteConfig,
     'production': ProductionConfig
 }

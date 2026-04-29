@@ -1,0 +1,246 @@
+FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
+
+ARG MMENGINE_VERSION=0.10.4
+ARG MMCV_VERSION=2.2.0
+ARG MMSEG_VERSION=1.2.2
+ARG MMDET_VERSION=3.0.0
+ARG MMROTATE_VERSION=1.0.0rc1
+ARG CONDA_CHANNEL_MODE=official
+ARG USER_HOME=/root
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai \
+    MAMBA_DOCKERFILE_ACTIVATE=1
+
+RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
+    && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    build-essential \
+    wget \
+    bzip2 \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget -O /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && bash /tmp/miniconda.sh -b -p /opt/conda \
+    && rm /tmp/miniconda.sh
+
+ENV PATH=/opt/conda/bin:${PATH}
+
+RUN python - <<'PY'
+from pathlib import Path
+import os
+
+mode = os.environ.get("CONDA_CHANNEL_MODE", "official").strip().lower()
+condarc = Path("/opt/conda/.condarc")
+
+channel_sets = {
+    "official": [
+        "https://conda.anaconda.org/Paddle",
+        "https://conda.anaconda.org/conda-forge",
+        "https://repo.anaconda.com/pkgs/main",
+        "https://repo.anaconda.com/pkgs/r",
+    ],
+    "mirror": [
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/Paddle",
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge",
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main",
+        "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r",
+    ],
+}
+
+channels = channel_sets.get(mode, channel_sets["official"])
+lines = ["channels:"] + [f"  - {channel}" for channel in channels] + [
+    "show_channel_urls: true",
+    "notify_outdated_conda: false",
+    "remote_connect_timeout_secs: 20",
+    "remote_read_timeout_secs: 60",
+    "remote_max_retries: 5",
+    "channel_priority: strict",
+]
+condarc.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+RUN conda clean -afy
+
+RUN if [ "${CONDA_CHANNEL_MODE}" = "official" ]; then \
+      conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+      conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r; \
+    fi
+
+RUN conda create -y -n PaddleRS37 \
+    python=3.7 \
+    paddlepaddle-gpu=2.4.2 \
+    cudatoolkit=11.7 \
+    cudnn=8.4 \
+    gdal && \
+    conda clean -afy
+
+RUN conda create -y -n HFPyTorch310 python=3.10 && \
+    conda clean -afy
+
+RUN conda create -y -n BoTSORTOfficial37 python=3.7 && \
+    conda clean -afy
+
+RUN conda run -n HFPyTorch310 pip install \
+    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118 && \
+    conda run -n HFPyTorch310 pip install \
+    numpy==1.26.4 pillow>=9.0.0 && \
+    conda run -n HFPyTorch310 pip install \
+    transformers==4.36.2 huggingface_hub \
+    timm scipy "numpy<2" ultralytics lapx gdown && \
+    conda run -n HFPyTorch310 pip install --force-reinstall \
+    "numpy<2" \
+    "opencv-python<4.11" \
+    "opencv-python-headless<4.11" && \
+    conda run -n HFPyTorch310 pip cache purge
+
+RUN conda run -n BoTSORTOfficial37 pip install \
+    torch==1.11.0+cu113 torchvision==0.12.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113 && \
+    conda run -n BoTSORTOfficial37 pip install \
+    numpy "opencv-python<4.11" "opencv-contrib-python<4.11" loguru scikit-image scikit-learn tqdm Pillow thop ninja tabulate tensorboard lap motmetrics filterpy h5py matplotlib scipy prettytable easydict pyyaml yacs termcolor gdown cython cython_bbox faiss-cpu pycocotools && \
+    conda run -n BoTSORTOfficial37 pip cache purge
+
+ENV HF_ENDPOINT=https://hf-mirror.com
+ENV HF_HOME=/root/.cache/huggingface \
+    HF_HUB_CACHE=/root/.cache/huggingface/hub \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1 \
+    TORCH_HOME=/root/.cache/torch \
+    PADDLE_HOME=/root/.paddle
+
+RUN conda create -y -n MMSeg310 python=3.10 gdal && \
+    conda clean -afy
+
+RUN conda run -n MMSeg310 pip install \
+    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
+
+RUN conda run -n MMSeg310 pip install \
+    "numpy==1.26.4" \
+    "opencv-python<4.11" \
+    "opencv-python-headless<4.11" \
+    "setuptools<81" \
+    wheel
+
+RUN conda run -n MMSeg310 pip install \
+    openmim==0.3.9 && \
+    conda run -n MMSeg310 pip uninstall -y mmdet || true && \
+    conda run -n MMSeg310 mim install "mmengine==${MMENGINE_VERSION}" && \
+    conda run -n MMSeg310 mim install "mmcv==${MMCV_VERSION}"
+
+RUN conda run -n MMSeg310 pip install \
+    "mmsegmentation==${MMSEG_VERSION}" \
+    transformers==4.36.2 \
+    huggingface_hub \
+    numpy==1.26.4 \
+    "opencv-python-headless<4.11" \
+    pillow>=9.0.0 \
+    ftfy \
+    regex \
+    "scipy<1.14" && \
+    conda run -n MMSeg310 mim install "mmdet==${MMDET_VERSION}" && \
+    conda run -n MMSeg310 mim install "mmrotate==${MMROTATE_VERSION}" && \
+    conda run -n MMSeg310 pip install --force-reinstall \
+    "numpy<2" \
+    "opencv-python<4.11"
+
+RUN sed -i "s/mmcv_maximum_version = .*/mmcv_maximum_version = '2.3.0'/" \
+      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmdet/__init__.py \
+      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmrotate/__init__.py && \
+    sed -i "s/MMCV_MAX = .*/MMCV_MAX = '2.3.0'/" \
+      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmseg/__init__.py && \
+    conda run -n MMSeg310 python -c "import mmcv, mmengine, mmdet, mmrotate, mmseg; print('OpenMMLab imports OK', mmcv.__version__, mmengine.__version__, mmdet.__version__, mmrotate.__version__, mmseg.__version__)"
+
+RUN conda run -n MMSeg310 pip cache purge
+
+RUN conda run -n HFPyTorch310 pip install \
+    kornia==0.7.1 \
+    kornia_moons \
+    "opencv-python-headless<4.11" \
+    matplotlib && \
+    conda run -n HFPyTorch310 pip install --force-reinstall \
+    "numpy<2" && \
+    conda run -n HFPyTorch310 pip cache purge
+
+RUN set -eux; \
+    ARCH="linux-x64"; \
+    NODE_VERSION="v18.20.3"; \
+    (curl -fsSL --retry 3 https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o node.tar.xz || \
+     curl -fsSL --retry 3 https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o node.tar.xz); \
+    tar -xJf node.tar.xz -C /usr/local --strip-components=1; \
+    rm node.tar.xz; \
+    ln -sf /usr/local/bin/node /usr/bin/node; \
+    ln -sf /usr/local/bin/npm /usr/bin/npm; \
+    ln -sf /usr/local/bin/npx /usr/bin/npx
+
+RUN set -eux; \
+    ARCH="linux-x64"; \
+    NODE_VERSION="v20.19.0"; \
+    mkdir -p /opt/node20; \
+    (curl -fsSL --retry 3 https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz || \
+     curl -fsSL --retry 3 https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/${NODE_VERSION}/node-${NODE_VERSION}-${ARCH}.tar.xz -o /tmp/node20.tar.xz); \
+    tar -xJf /tmp/node20.tar.xz -C /opt/node20 --strip-components=1; \
+    rm /tmp/node20.tar.xz
+
+WORKDIR /app
+COPY sync_model_assets.py /app/sync_model_assets.py
+COPY config.yaml /app/config.yaml
+COPY backend/requirements.txt /app/backend/requirements.txt
+COPY PaddleRS/requirements.txt /app/PaddleRS/requirements.txt
+COPY frontend/package.json frontend/package-lock.json /app/frontend/
+COPY miner/package.json miner/package-lock.json /app/miner/
+COPY backend/model /app/backend/model
+
+RUN mkdir -p /root/.pip && \
+    echo "[global]" > /root/.pip/pip.conf && \
+    echo "index-url = https://pypi.org/simple" >> /root/.pip/pip.conf
+
+RUN conda run -n PaddleRS37 python -m pip install --upgrade pip && \
+    conda run -n PaddleRS37 pip install "setuptools<=65.5.0"
+
+RUN conda run -n PaddleRS37 pip install -r /app/backend/requirements.txt
+RUN conda run -n PaddleRS37 pip install -r /app/PaddleRS/requirements.txt
+RUN cd /app/frontend && npm install --no-audit --prefer-offline
+RUN cd /app/miner && PATH=/opt/node20/bin:$PATH npm install --no-audit --prefer-offline
+
+RUN python /app/sync_model_assets.py --quiet && \
+    test -d /root/.cache/huggingface/hub/models--facebook--detr-resnet-50 && \
+    test -d /root/.cache/huggingface/hub/models--caidas--swin2SR-classical-sr-x2-64 && \
+    test -f /root/.cache/torch/hub/checkpoints/loftr_outdoor.ckpt
+
+ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
+    CONDA_DEFAULT_ENV=PaddleRS37 \
+    FLASK_CONFIG=embedded \
+    DATABASE_BACKEND=sqlite \
+    SQLITE_DATABASE_PATH=/app/backend/static/geoview.sqlite3 \
+    HF_HOME=/root/.cache/huggingface \
+    HF_HUB_CACHE=/root/.cache/huggingface/hub \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1 \
+    TORCH_HOME=/root/.cache/torch \
+    PADDLE_HOME=/root/.paddle \
+    GEOVIEW_ENABLE_BOTSORT_OFFICIAL=0 \
+    PYTHONUNBUFFERED=1 \
+    LD_LIBRARY_PATH=/opt/conda/envs/PaddleRS37/lib:${LD_LIBRARY_PATH} \
+    GEOVIEW_MODEL_ROOT=/app/backend/model
+
+RUN find /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu -maxdepth 1 \
+      \( -type f -size 0 -o -xtype l \) \
+      \( -name 'libcuda.so*' \
+         -o -name 'libnvidia-*' \
+         -o -name 'libcudadebugger.so*' \
+         -o -name 'libdxcore.so*' \) \
+      -print -delete \
+    && ldconfig

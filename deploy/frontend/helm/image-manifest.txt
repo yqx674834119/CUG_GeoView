@@ -1,1 +1,1 @@
-geoview-frontend:latest
+172.20.20.107:8443/your-project/geoview-frontend:20260428-final

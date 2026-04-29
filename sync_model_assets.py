@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 from pathlib import Path
 
@@ -14,6 +15,34 @@ OFFLINE_CACHE_ROOT = REPO_ROOT / "offline_cache"
 HF_CACHE_ROOT = OFFLINE_CACHE_ROOT / "huggingface" / "hub"
 TORCH_CACHE_ROOT = OFFLINE_CACHE_ROOT / "torch" / "hub" / "checkpoints"
 PADDLE_CACHE_ROOT = OFFLINE_CACHE_ROOT / "paddle"
+
+
+def unique_paths(*paths: Path) -> list[Path]:
+    resolved = []
+    seen = set()
+    for path in paths:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        resolved.append(path)
+    return resolved
+
+
+def hf_cache_roots() -> list[Path]:
+    runtime_hub = Path(os.environ.get("HF_HUB_CACHE", str(HF_CACHE_ROOT)))
+    return unique_paths(HF_CACHE_ROOT, runtime_hub)
+
+
+def torch_checkpoint_roots() -> list[Path]:
+    torch_home = Path(os.environ.get("TORCH_HOME", str(OFFLINE_CACHE_ROOT / "torch")))
+    return unique_paths(TORCH_CACHE_ROOT, torch_home / "hub" / "checkpoints")
+
+
+def paddle_cache_roots() -> list[Path]:
+    paddle_home = Path(os.environ.get("PADDLE_HOME", str(PADDLE_CACHE_ROOT)))
+    paddle_cache = Path(os.environ.get("PADDLE_CACHE_DIR", str(paddle_home)))
+    return unique_paths(PADDLE_CACHE_ROOT, paddle_home, paddle_cache)
 
 
 def sync_path(src: Path, dst: Path) -> None:
@@ -33,15 +62,18 @@ def sync_path(src: Path, dst: Path) -> None:
 
 
 def sync_huggingface(verbose: bool) -> int:
-    HF_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    destinations = hf_cache_roots()
+    for root in destinations:
+        root.mkdir(parents=True, exist_ok=True)
     synced = 0
     for hub_dir in MODEL_ROOT.glob("**/hub"):
         for item in sorted(hub_dir.iterdir()):
-            target = HF_CACHE_ROOT / item.name
-            sync_path(item, target)
+            for root in destinations:
+                target = root / item.name
+                sync_path(item, target)
+                if verbose:
+                    print(f"[sync] HF {item} -> {target}")
             synced += 1
-            if verbose:
-                print(f"[sync] HF {item} -> {target}")
     return synced
 
 
@@ -49,18 +81,20 @@ def sync_loftr(verbose: bool) -> int:
     checkpoint = MODEL_ROOT / "registration" / "loftr_outdoor" / "loftr_outdoor.ckpt"
     if not checkpoint.exists():
         return 0
-    TORCH_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-    target = TORCH_CACHE_ROOT / "loftr_outdoor.ckpt"
-    sync_path(checkpoint, target)
-    if verbose:
-        print(f"[sync] LoFTR {checkpoint} -> {target}")
+    for root in torch_checkpoint_roots():
+        root.mkdir(parents=True, exist_ok=True)
+        target = root / "loftr_outdoor.ckpt"
+        sync_path(checkpoint, target)
+        if verbose:
+            print(f"[sync] LoFTR {checkpoint} -> {target}")
     return 1
 
 
 def ensure_paddle_cache(verbose: bool) -> int:
-    PADDLE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-    if verbose:
-        print(f"[sync] Paddle cache dir ready: {PADDLE_CACHE_ROOT}")
+    for root in paddle_cache_roots():
+        root.mkdir(parents=True, exist_ok=True)
+        if verbose:
+            print(f"[sync] Paddle cache dir ready: {root}")
     return 1
 
 

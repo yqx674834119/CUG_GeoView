@@ -18,6 +18,11 @@ import kornia.feature as KF
 import numpy as np
 import torch
 
+try:
+    import rasterio
+except Exception:
+    rasterio = None
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOFTR_CHECKPOINT = os.path.abspath(
     os.path.join(SCRIPT_DIR, "..", "..", "model", "registration",
@@ -27,8 +32,8 @@ _MATCHER_CACHE = {}
 
 
 def register_pair(img1_path, img2_path, output_path, device='cuda'):
-    img1_t = K.io.load_image(img1_path, K.io.ImageLoadType.RGB32)[None, ...].to(device)
-    img2_t = K.io.load_image(img2_path, K.io.ImageLoadType.RGB32)[None, ...].to(device)
+    img1_t = _load_image_tensor(img1_path, device)
+    img2_t = _load_image_tensor(img2_path, device)
 
     img1_gray = K.color.rgb_to_grayscale(img1_t)
     img2_gray = K.color.rgb_to_grayscale(img2_t)
@@ -70,6 +75,77 @@ def register_pair(img1_path, img2_path, output_path, device='cuda'):
         "inlier_ratio": round(float(inlier_count / len(mask)), 4),
         "rmse": round(float(rmse), 4),
     }
+
+
+def _load_image_tensor(path, device):
+    rgb = _load_rgb_image(path)
+    tensor = torch.from_numpy(rgb).permute(2, 0, 1).float() / 255.0
+    return tensor.unsqueeze(0).to(device)
+
+
+def _load_rgb_image(path):
+    ext = os.path.splitext(path)[1].lower()
+    if ext in {'.tif', '.tiff'}:
+        if rasterio is None:
+            raise RuntimeError('rasterio is required to read TIFF images')
+        with rasterio.open(path) as dataset:
+            array = dataset.read()
+        if array.size == 0:
+            raise RuntimeError(f'Failed to read image: {path}')
+        return _multiband_to_rgb(array)
+
+    image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if image is None:
+        raise RuntimeError(f'Failed to read image: {path}')
+    if image.ndim == 2:
+        image = np.stack([image] * 3, axis=-1)
+    elif image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    if image.dtype != np.uint8:
+        image = _normalize_to_uint8(image)
+    return image
+
+
+def _multiband_to_rgb(array):
+    bands = array.shape[0]
+    if bands >= 3:
+        rgb = np.stack([array[0], array[1], array[2]], axis=-1)
+    elif bands == 2:
+        mean_band = ((array[0].astype(np.float32) + array[1].astype(np.float32)) /
+                     2.0)
+        rgb = np.stack([array[0], array[1], mean_band], axis=-1)
+    else:
+        rgb = np.stack([array[0], array[0], array[0]], axis=-1)
+    return _normalize_to_uint8(rgb)
+
+
+def _normalize_to_uint8(image):
+    image = np.nan_to_num(image.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    if image.ndim == 2:
+        return _robust_channel_normalize(image)
+
+    channels = []
+    for index in range(image.shape[2]):
+        channels.append(_robust_channel_normalize(image[:, :, index]))
+    return np.stack(channels, axis=-1)
+
+
+def _robust_channel_normalize(channel):
+    valid = channel[np.isfinite(channel)]
+    if valid.size == 0:
+        return np.zeros(channel.shape, dtype=np.uint8)
+
+    low, high = np.percentile(valid, [2, 98])
+    if high <= low:
+        low = float(valid.min())
+        high = float(valid.max())
+    if high <= low:
+        return np.zeros(channel.shape, dtype=np.uint8)
+
+    channel = np.clip(channel, low, high)
+    channel = (channel - low) / (high - low)
+    return np.clip(channel * 255.0, 0, 255).astype(np.uint8)
 
 
 def _get_matcher(device):

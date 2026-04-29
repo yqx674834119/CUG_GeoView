@@ -48,7 +48,29 @@ def analysis_handle(items):
         if t.data == "" or t.data is None:
             continue
         t.data = json.loads(t.data)
+        if type_utils.type_to_str(t.type) == "变化检测":
+            _normalize_change_detection_assets(t)
     pass
+
+
+def _derive_mask_path(path):
+    if not path:
+        return ""
+    stem, ext = path.rsplit(".", 1) if "." in path else (path, "png")
+    return f"{stem}_mask.{ext}"
+
+
+def _normalize_change_detection_assets(item):
+    data = item.data or {}
+    if not isinstance(data, dict):
+        return
+
+    if not data.get("mask") and item.after_img:
+        data["mask"] = _derive_mask_path(item.after_img)
+
+    hole_path = data.get("hole")
+    if not data.get("mask_hole") and hole_path:
+        data["mask_hole"] = _derive_mask_path(hole_path)
 
 
 """

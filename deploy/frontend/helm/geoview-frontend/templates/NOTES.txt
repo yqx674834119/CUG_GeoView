@@ -1,3 +1,5 @@
 1. GeoView frontend has been deployed.
 2. Default service port: {{ .Values.frontend.service.port }}
 3. If the backend address changes, update frontend.runtimeConfig and redeploy.
+4. PVC mount path: {{ .Values.frontend.persistence.mountPath }}
+5. PVC storageClassName: {{ .Values.frontend.persistence.storageClassName }}

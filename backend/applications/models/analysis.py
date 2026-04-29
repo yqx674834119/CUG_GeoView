@@ -10,7 +10,7 @@ class Analysis(db.Model):
     before_img = db.Column(db.String(512))
     before_img1 = db.Column(db.String(512))
     after_img = db.Column(db.String(512))
-    data = db.Column(db.String(2048))
+    data = db.Column(db.Text)
     is_hole = db.Column(db.Boolean)
     checked = db.Column(db.String(32))
     create_time = db.Column(db.DateTime, default=datetime.datetime.now)
