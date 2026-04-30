@@ -4,6 +4,7 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import { initializeTheme } from '@/utils/theme'
+import { installAssetImageInterceptor } from '@/utils/assetDomInterceptor'
 
 import '@/assets/font/iconfont.css'
 import './assets/css/normalize.css'
@@ -16,6 +17,7 @@ import JSZIP from "jszip"
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 initializeTheme()
+installAssetImageInterceptor()
 
 const RESIZE_OBSERVER_NOISE = "ResizeObserver loop completed with undelivered notifications."
 

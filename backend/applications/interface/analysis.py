@@ -7,6 +7,7 @@ import cv2
 from applications.common.path_global import fun_type_1, fun_type_2, fun_type_3, fun_type_4, fun_type_5, \
     fun_type_6, fun_type_7, generate_url, fun_type_8, up_url, generate_dir
 from applications.common.utils.upload import img_url_handle
+from applications.common.storage import mirror_upload_tree
 from applications.extensions import db
 from applications.image_processing import histogram_match
 from applications.image_processing.CLAHE import CLAHE
@@ -45,6 +46,7 @@ def save_analysis(type_,
     analysis.checked = checked
     db.session.add(analysis)
     db.session.commit()
+    mirror_upload_tree()
 
 
 def change_detection(model_path,

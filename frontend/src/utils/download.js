@@ -3,31 +3,59 @@ import JSZIP from "jszip"
 import FileSaver from 'file-saver'
 
 import {hideFullScreenLoading} from "@/utils/loading";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { getBackendAssetPreviewDataUrl } from "@/utils/assetPreview";
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, encoded] = String(dataUrl || "").split(",");
+  const mimetype = (meta.match(/data:(.*?);base64/) || [])[1] || "application/octet-stream";
+  const binary = atob(encoded || "");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimetype });
+}
+
+function saveBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const ele = document.createElement("a");
+  ele.style.display = "none";
+  ele.href = url;
+  ele.download = filename;
+  document.querySelectorAll("body")[0].appendChild(ele);
+  ele.click();
+  ele.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function buildDownloadName(index, funtype) {
+  return index === -1 ? `${funtype}` : `第${index}组${funtype}`;
+}
+
 function downloadimgWithWords(index, src, funtype) {
-  fetch(src)
-    .then((response) => response.blob())//链式编程
-    .then((res) => {
-      let blob = new Blob([res]);
-      // 通过URL.createObjectURL生成文件路径
-      let url = window.URL.createObjectURL(blob);
-      // 创建a标签
-      let ele = document.createElement("a");
-      ele.style.display = "none";
-      // 设置href属性为文件路径，download属性可以设置文件名称
-      ele.href = url;
-      if(index === -1){ele.download = `${funtype}`}
-      else{
-        ele.download = `第${index}组${funtype}`;
+  const filename = buildDownloadName(index, funtype);
+  if (isBackendPhotoAssetPath(src)) {
+    getBackendAssetPreviewDataUrl(src, 1400)
+      .then((dataUrl) => saveBlob(dataUrlToBlob(dataUrl), filename))
+      .catch(() => {});
+    return;
+  }
+
+  fetch(toBackendAssetUrl(src))
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`download failed: ${response.status}`);
       }
-      // 将a标签添加到页面并模拟点击
-      document.querySelectorAll("body")[0].appendChild(ele);
-      ele.click();
-      // 移除a标签
-      ele.remove();
-    });
+      return response.blob();
+    })
+    .then((blob) => saveBlob(blob, filename));
 }
 function getImgArrayBuffer(url) {
+  if (isBackendPhotoAssetPath(url)) {
+    return getBackendAssetPreviewDataUrl(url, 1400).then(dataUrlToBlob);
+  }
+
   return new Promise((resolve, reject) => {
     //通过请求获取文件blob格式
     let xmlhttp = new XMLHttpRequest();

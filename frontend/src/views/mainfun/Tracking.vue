@@ -342,16 +342,146 @@
           </el-card>
         </el-col>
       </el-row>
+
+      <el-row
+        v-if="resultSummary"
+        :gutter="20"
+      >
+        <el-col :xs="24" :sm="24" :md="24" :lg="24">
+          <div class="tracking-metric-row">
+            <div class="tracking-metric-card">
+              <div class="tracking-metric-card__label">唯一轨迹数</div>
+              <div class="tracking-metric-card__value">{{ resultSummary.unique_track_count || 0 }}</div>
+              <div class="tracking-metric-card__desc">跨全序列持续存在的 track id 数量</div>
+            </div>
+            <div class="tracking-metric-card">
+              <div class="tracking-metric-card__label">累计检测数</div>
+              <div class="tracking-metric-card__value">{{ resultSummary.total_detections || 0 }}</div>
+              <div class="tracking-metric-card__desc">所有帧内检测到的目标总量</div>
+            </div>
+            <div class="tracking-metric-card">
+              <div class="tracking-metric-card__label">最大并发轨迹</div>
+              <div class="tracking-metric-card__value">{{ resultSummary.max_concurrent_tracks || 0 }}</div>
+              <div class="tracking-metric-card__desc">单帧同时存在的最多目标数</div>
+            </div>
+            <div class="tracking-metric-card">
+              <div class="tracking-metric-card__label">标签种类数</div>
+              <div class="tracking-metric-card__value">{{ Object.keys(resultSummary.label_histogram || {}).length }}</div>
+              <div class="tracking-metric-card__desc">目标类别复杂度的一个侧面指标</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <el-row
+        v-if="resultSummary"
+        :gutter="20"
+      >
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-card class="result-card">
+            <template #header>
+              <div class="result-card__head">
+                <span>帧级状态结构</span>
+                <span class="result-card__meta">成功 / 丢失</span>
+              </div>
+            </template>
+            <v-chart
+              class="analytics-chart"
+              :option="trackingStatusChartOption"
+              autoresize
+            />
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-card class="result-card">
+            <template #header>
+              <div class="result-card__head">
+                <span>目标类别统计</span>
+                <span class="result-card__meta">label histogram</span>
+              </div>
+            </template>
+            <v-chart
+              class="analytics-chart"
+              :option="trackingLabelChartOption"
+              autoresize
+            />
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <el-row
+        v-if="trajectoryAnalysis"
+        :gutter="20"
+      >
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-card class="result-card">
+            <template #header>
+              <div class="result-card__head">
+                <span>逐帧目标数量</span>
+                <span class="result-card__meta">轨迹 JSON 推导</span>
+              </div>
+            </template>
+            <v-chart
+              class="analytics-chart"
+              :option="trackingFrameChartOption"
+              autoresize
+            />
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-card class="result-card">
+            <template #header>
+              <div class="result-card__head">
+                <span>Top 轨迹存活时长</span>
+                <span class="result-card__meta">按出现帧数排序</span>
+              </div>
+            </template>
+            <v-chart
+              class="analytics-chart"
+              :option="trackingTopTracksChartOption"
+              autoresize
+            />
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <div
+        v-if="trajectoryError"
+        class="trajectory-error"
+      >
+        {{ trajectoryError }}
+      </div>
     </div>
     <el-empty v-else description="暂无结果" />
   </div>
 </template>
 
 <script>
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { BarChart, LineChart, PieChart } from "echarts/charts";
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+} from "echarts/components";
+import VChart from "vue-echarts";
+
 import Tabinfor from "@/components/Tabinfor";
 import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchJsonAsset, summarizeTrajectoryPayload } from "@/utils/frontAnalysis";
+
+use([
+  CanvasRenderer,
+  BarChart,
+  LineChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+]);
 
 const IMAGE_SUFFIXES = [
   "jpg",
@@ -391,7 +521,7 @@ const LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES = ["mp4", "webm", "m4v"];
 
 export default {
   name: "Tracking",
-  components: { Tabinfor },
+  components: { Tabinfor, VChart },
   data() {
     return {
       fileList: [],
@@ -421,6 +551,9 @@ export default {
         source: false,
         output: false,
       },
+      trajectoryPayload: null,
+      trajectoryAnalysis: null,
+      trajectoryError: "",
     };
   },
   computed: {
@@ -442,6 +575,87 @@ export default {
     },
     selectedModel() {
       return this.modelPathArr.find((item) => item.model_path === this.uploadSrc.model_path) || null;
+    },
+    trackingStatusChartOption() {
+      const summary = this.resultSummary || {};
+      return {
+        tooltip: { trigger: "item" },
+        legend: { bottom: 0 },
+        series: [
+          {
+            type: "pie",
+            radius: ["38%", "68%"],
+            data: [
+              { name: "成功帧", value: summary.tracked_frames || 0, itemStyle: { color: "#16a34a" } },
+              { name: "丢失帧", value: summary.lost_frames || 0, itemStyle: { color: "#dc2626" } },
+            ],
+            label: { formatter: "{b}\n{d}%" },
+          },
+        ],
+      };
+    },
+    trackingLabelChartOption() {
+      const entries = Object.entries(this.resultSummary?.label_histogram || {});
+      return {
+        tooltip: { trigger: "axis" },
+        grid: { left: 50, right: 20, top: 20, bottom: 50 },
+        xAxis: {
+          type: "category",
+          data: entries.map(([name]) => name),
+          axisLabel: {
+            interval: 0,
+            rotate: 18,
+          },
+        },
+        yAxis: { type: "value", name: "目标数" },
+        series: [
+          {
+            type: "bar",
+            data: entries.map(([, value]) => value),
+            itemStyle: { color: "#2563eb", borderRadius: [6, 6, 0, 0] },
+          },
+        ],
+      };
+    },
+    trackingFrameChartOption() {
+      const frameCounts = this.trajectoryAnalysis?.frameCounts || [];
+      return {
+        tooltip: { trigger: "axis" },
+        grid: { left: 52, right: 24, top: 20, bottom: 42 },
+        xAxis: { type: "category", data: frameCounts.map((item) => item.frame) },
+        yAxis: { type: "value", name: "目标数" },
+        series: [
+          {
+            type: "line",
+            smooth: true,
+            data: frameCounts.map((item) => item.value),
+            itemStyle: { color: "#0f766e" },
+            areaStyle: { color: "rgba(15, 118, 110, 0.18)" },
+          },
+        ],
+      };
+    },
+    trackingTopTracksChartOption() {
+      const topTracks = this.trajectoryAnalysis?.topTracks || [];
+      return {
+        tooltip: { trigger: "axis" },
+        grid: { left: 52, right: 20, top: 20, bottom: 50 },
+        xAxis: {
+          type: "category",
+          data: topTracks.map((item) => `#${item.id}`),
+          axisLabel: {
+            interval: 0,
+          },
+        },
+        yAxis: { type: "value", name: "出现帧数" },
+        series: [
+          {
+            type: "bar",
+            data: topTracks.map((item) => item.count),
+            itemStyle: { color: "#7c3aed", borderRadius: [6, 6, 0, 0] },
+          },
+        ],
+      };
     },
     requiresInitialRect() {
       const modelPath = (this.selectedModel && this.selectedModel.model_path) || "";
@@ -495,6 +709,9 @@ export default {
         source: false,
         output: false,
       };
+      this.trajectoryPayload = null;
+      this.trajectoryAnalysis = null;
+      this.trajectoryError = "";
       if (this.$refs.upload) {
         this.$refs.upload.clearFiles();
       }
@@ -602,6 +819,9 @@ export default {
         source: false,
         output: false,
       };
+      this.trajectoryPayload = null;
+      this.trajectoryAnalysis = null;
+      this.trajectoryError = "";
       this.firstFrame = ordered.length ? URL.createObjectURL(ordered[0].raw) : null;
       if (this.inputMode === "video" && ordered.length === 1) {
         this.prepareVideoPreview(ordered[0]);
@@ -762,6 +982,7 @@ export default {
           output_video_full_url: this.prefixUrl(data.output_video_path),
           trajectory_full_url: this.prefixUrl(data.trajectory_path),
         };
+        await this.loadTrajectoryAnalysis(this.result.trajectory_full_url);
         this.$message.success(response.data.msg || "目标跟踪完成");
       } catch (error) {
         console.error(error);
@@ -788,6 +1009,22 @@ export default {
         return;
       }
       window.open(url, "_blank", "noopener");
+    },
+    async loadTrajectoryAnalysis(url) {
+      this.trajectoryPayload = null;
+      this.trajectoryAnalysis = null;
+      this.trajectoryError = "";
+      if (!url) {
+        return;
+      }
+      try {
+        const payload = await fetchJsonAsset(url);
+        this.trajectoryPayload = payload;
+        this.trajectoryAnalysis = summarizeTrajectoryPayload(payload);
+      } catch (error) {
+        console.error(error);
+        this.trajectoryError = "轨迹 JSON 已生成，但前端未能读取详细统计。";
+      }
     },
     handleVideoPreviewError(type) {
       this.videoPreviewErrors[type] = true;
@@ -1019,6 +1256,50 @@ export default {
   margin-top: 12px;
 }
 
+.tracking-metric-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.tracking-metric-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 255, 0.98));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.tracking-metric-card__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.tracking-metric-card__value {
+  margin-top: 8px;
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--theme-heading-color);
+  font-family: var(--theme-display-fontfamily);
+}
+
+.tracking-metric-card__desc {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.analytics-chart {
+  width: 100%;
+  height: 320px;
+}
+
+.trajectory-error {
+  margin-top: 4px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   .clear-queue {
     position: static;
@@ -1027,6 +1308,10 @@ export default {
 
   .result-summary {
     padding-right: 0;
+  }
+
+  .analytics-chart {
+    height: 260px;
   }
 }
 </style>

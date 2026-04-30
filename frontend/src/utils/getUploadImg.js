@@ -1,14 +1,16 @@
 import { historyGetPage } from "@/api/history"
 import { showFullScreenLoading } from "@/utils/loading";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { hydrateAssetPreviews } from "@/utils/assetPreview";
 
 function getUploadImg(type) {
   historyGetPage(1, 20, type).then((res) => {
-    this.imgArr = res.data.data.forEach((item) => {
-      item['before_img'] = toBackendAssetUrl(item.before_img)
-      item['after_img'] = toBackendAssetUrl(item.after_img)
-    })
     this.imgArr = res.data.data
+    this.imgArr.forEach((item) => {
+      item.before_img_url = toBackendAssetUrl(item.before_img);
+      item.after_img_url = toBackendAssetUrl(item.after_img);
+    });
+    hydrateAssetPreviews(this.imgArr, ["before_img", "after_img"], 420);
     this.isUpload = this.imgArr.length !== 0;
   }).catch((rej) => { })
 }

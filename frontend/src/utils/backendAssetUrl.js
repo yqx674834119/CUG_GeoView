@@ -4,7 +4,7 @@ function isAbsoluteUrl(value) {
   return /^(https?:)?\/\//i.test(value) || value.startsWith("data:") || value.startsWith("blob:");
 }
 
-function normalizeBackendAssetPath(value) {
+export function normalizeBackendAssetPath(value) {
   if (typeof value !== "string") {
     return value;
   }
@@ -24,6 +24,37 @@ function normalizeBackendAssetPath(value) {
   }
 
   return value;
+}
+
+function photoAssetRelativePath(path) {
+  if (!path) {
+    return "";
+  }
+
+  const value = normalizeBackendAssetPath(String(path)).split(/[?#]/)[0];
+  const prefixes = [
+    "/api/file/assets-buffered/photos/",
+    "/api/file/assets/photos/",
+  ];
+
+  for (const prefix of prefixes) {
+    if (value.startsWith(prefix)) {
+      return value.slice(prefix.length);
+    }
+  }
+
+  for (const prefix of prefixes) {
+    const prefixIndex = value.indexOf(prefix);
+    if (prefixIndex >= 0) {
+      return value.slice(prefixIndex + prefix.length);
+    }
+  }
+
+  return "";
+}
+
+export function isBackendPhotoAssetPath(path) {
+  return Boolean(photoAssetRelativePath(path));
 }
 
 function applyAssetMode(path) {
@@ -56,4 +87,20 @@ export function toBackendAssetUrl(path) {
   }
 
   return suffix ? `${base}/${suffix}` : base;
+}
+
+export function toBackendAssetPreviewUrl(path, maxSize = 640) {
+  const relativePath = photoAssetRelativePath(path);
+  if (!relativePath) {
+    return "";
+  }
+
+  const base = String(global.BASEURL || "").replace(/\/+$/, "");
+  const encodedPath = relativePath
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+  const suffix = `api/file/assets-preview/photos/${encodedPath}?max_size=${encodeURIComponent(maxSize)}`;
+
+  return base ? `${base}/${suffix}` : `/${suffix}`;
 }

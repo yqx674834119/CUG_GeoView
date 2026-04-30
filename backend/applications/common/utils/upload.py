@@ -6,6 +6,7 @@ from flask import current_app
 from sqlalchemy import desc
 
 from applications.common.curd import model_to_dicts
+from applications.common.storage import mirror_file
 from applications.extensions import db
 from applications.extensions.init_upload import photos
 from applications.models import Photo
@@ -103,6 +104,7 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
         # 获取大小
         if os.path.exists(p_path):
             size = os.path.getsize(p_path)
+            mirror_file(p_path)
         else:
             size = 0
             

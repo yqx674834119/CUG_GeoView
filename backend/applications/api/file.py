@@ -1,39 +1,51 @@
+import base64
+import io
 import mimetypes
 import os
 import re
 import shutil
 import subprocess
+import time
 from contextlib import suppress
 
 import cv2
 from flask import (Blueprint, Response, abort, current_app, jsonify, request,
                    send_from_directory, stream_with_context)
+from PIL import Image, UnidentifiedImageError
 
 from applications.common.path_global import generate_url, md5_name
+from applications.common.storage import (ensure_storage_dirs, log_asset,
+                                         mirror_file, resolve_asset_path)
 from applications.common.utils import upload as upload_curd, type_utils
 from applications.common.utils.http import fail_api
 from applications.common.utils.tiff_processor import is_tiff_file, MAX_TIFF_SIZE_MB
 
 file_api = Blueprint('file_api', __name__, url_prefix='/api/file')
 RANGE_HEADER_PATTERN = re.compile(r"bytes=(\d*)-(\d*)$")
+MIN_PREVIEW_SIZE = 64
+MAX_PREVIEW_SIZE = 1600
+DEFAULT_PREVIEW_SIZE = 640
+DEFAULT_PREVIEW_QUALITY = 82
 
 
 def _resolve_asset_path(filename):
-    destination = current_app.config.get("UPLOADED_PHOTOS_DEST")
-    if not destination:
+    resolved = resolve_asset_path(filename)
+    if not resolved or not resolved.get("relative_path"):
         abort(404)
-
-    normalized = str(filename or "").replace("\\", "/").lstrip("/")
-    absolute_path = os.path.abspath(os.path.join(destination, normalized))
-    destination_root = os.path.abspath(destination)
-
-    if not absolute_path.startswith(destination_root + os.sep) and absolute_path != destination_root:
+    if not resolved.get("absolute_path"):
+        current_app.logger.warning(
+            "asset not found: %s misses=%s",
+            resolved.get("relative_path"),
+            resolved.get("misses"),
+        )
         abort(404)
-
-    if not os.path.isfile(absolute_path):
-        abort(404)
-
-    return destination, normalized, absolute_path
+    return (
+        resolved["root"],
+        resolved["relative_path"],
+        resolved["absolute_path"],
+        resolved["store"],
+        resolved.get("misses", []),
+    )
 
 
 def _build_inline_headers(absolute_path):
@@ -70,6 +82,80 @@ def _serve_asset_buffered(absolute_path):
     response.headers.update(_build_inline_headers(absolute_path))
     response.content_length = len(payload)
     return response
+
+
+def _int_query_arg(name, default, min_value, max_value):
+    raw_value = request.args.get(name)
+    if raw_value in (None, ""):
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return max(min_value, min(value, max_value))
+
+
+def _build_image_preview_payload(absolute_path, source_store=""):
+    started_at = time.time()
+    max_size = _int_query_arg(
+        "max_size",
+        DEFAULT_PREVIEW_SIZE,
+        MIN_PREVIEW_SIZE,
+        MAX_PREVIEW_SIZE,
+    )
+    quality = _int_query_arg("quality", DEFAULT_PREVIEW_QUALITY, 40, 95)
+    original_size = os.path.getsize(absolute_path)
+
+    try:
+        with Image.open(absolute_path) as image:
+            image.load()
+            original_width, original_height = image.size
+            preview = image.copy()
+    except UnidentifiedImageError:
+        raise ValueError("仅支持图片文件预览")
+
+    preview.thumbnail((max_size, max_size), Image.LANCZOS)
+    has_alpha = preview.mode in ("RGBA", "LA") or (
+        preview.mode == "P" and "transparency" in preview.info
+    )
+
+    output = io.BytesIO()
+    if has_alpha:
+        preview = preview.convert("RGBA")
+        preview_format = "PNG"
+        mimetype = "image/png"
+        preview.save(output, format=preview_format, optimize=True)
+    else:
+        preview = preview.convert("RGB")
+        preview_format = "JPEG"
+        mimetype = "image/jpeg"
+        preview.save(
+            output,
+            format=preview_format,
+            quality=quality,
+            optimize=True,
+            progressive=True,
+        )
+
+    preview_bytes = output.getvalue()
+    encoded = base64.b64encode(preview_bytes).decode("ascii")
+    file_name = os.path.basename(absolute_path)
+
+    return {
+        "filename": file_name,
+        "mimetype": mimetype,
+        "format": preview_format.lower(),
+        "data_url": f"data:{mimetype};base64,{encoded}",
+        "source_store": source_store,
+        "original_size": original_size,
+        "original_width": original_width,
+        "original_height": original_height,
+        "preview_size": len(preview_bytes),
+        "preview_width": preview.width,
+        "preview_height": preview.height,
+        "max_size": max_size,
+        "duration_ms": int((time.time() - started_at) * 1000),
+    }
 
 
 def _serve_asset_chunked(absolute_path):
@@ -237,10 +323,12 @@ def _build_video_preview_assets(absolute_path, display_name):
 
     if not cv2.imwrite(first_frame_path, first_frame):
         raise ValueError("视频首帧预览图写入失败")
+    mirror_file(first_frame_path)
 
     transcoded_path = _transcode_video_for_web(absolute_path, preview_video_path)
     if not transcoded_path:
         raise ValueError("视频标准化转码失败")
+    mirror_file(transcoded_path)
 
     return {
         "first_frame_path": generate_url + first_frame_name,
@@ -249,7 +337,7 @@ def _build_video_preview_assets(absolute_path, display_name):
 
 
 def _serve_photo_asset(filename, forced_mode=None):
-    destination, normalized, absolute_path = _resolve_asset_path(filename)
+    _, normalized, absolute_path, _, _ = _resolve_asset_path(filename)
     mode = str(forced_mode or current_app.config.get("PHOTO_ASSET_SERVE_MODE", "sendfile")).lower()
 
     if _prefers_direct_streaming(absolute_path):
@@ -265,6 +353,7 @@ def _serve_photo_asset(filename, forced_mode=None):
 #   上传接口
 @file_api.post('/upload')
 def upload_api():
+    ensure_storage_dirs()
     if 'files' in request.files:
         type_ = request.form['type']
         to_type = type_utils.str_to_type(type_)
@@ -337,7 +426,7 @@ def upload_video_preview_api():
 
     file_url, photo_id, display_name = upload_results[0]
     relative_path = _relative_asset_path_from_public_path(file_url)
-    _, _, absolute_path = _resolve_asset_path(relative_path)
+    _, _, absolute_path, _, _ = _resolve_asset_path(relative_path)
 
     try:
         preview_assets = _build_video_preview_assets(absolute_path, display_name)
@@ -365,3 +454,72 @@ def get_photo_asset(filename):
 @file_api.get('/assets-buffered/photos/<path:filename>')
 def get_photo_asset_buffered(filename):
     return _serve_photo_asset(filename, forced_mode="buffered")
+
+
+@file_api.get('/assets-preview/photos/<path:filename>')
+def get_photo_asset_preview(filename):
+    resolved = resolve_asset_path(filename)
+    if not resolved or not resolved.get("relative_path"):
+        return jsonify({
+            "msg": "图片路径无效",
+            "code": 400,
+            "success": False,
+            "data": {
+                "source_store": "",
+                "fallback_misses": [],
+            },
+        }), 400
+
+    normalized = resolved["relative_path"]
+    absolute_path = resolved.get("absolute_path")
+    source_store = resolved.get("store", "")
+    misses = resolved.get("misses", [])
+    if not absolute_path:
+        current_app.logger.warning(
+            "preview asset not found: %s misses=%s",
+            normalized,
+            misses,
+        )
+        return jsonify({
+            "msg": "图片文件不存在",
+            "code": 404,
+            "success": False,
+            "data": {
+                "src": f"/api/file/assets/photos/{normalized}",
+                "source_store": "",
+                "fallback_misses": misses,
+            },
+        }), 404
+
+    try:
+        payload = _build_image_preview_payload(absolute_path, source_store=source_store)
+    except ValueError as exc:
+        return jsonify({
+            "msg": str(exc),
+            "code": 415,
+            "success": False,
+            "data": {
+                "src": f"/api/file/assets/photos/{normalized}",
+                "source_store": source_store,
+                "fallback_misses": misses,
+            },
+        }), 415
+
+    payload["src"] = f"/api/file/assets/photos/{normalized}"
+    payload["fallback_misses"] = misses
+    log_asset(
+        "preview relative={} source_store={} original_size={} preview_size={} duration_ms={}".format(
+            normalized,
+            payload["source_store"],
+            payload["original_size"],
+            payload["preview_size"],
+            payload["duration_ms"],
+        ),
+        "info",
+    )
+    return jsonify({
+        "msg": "图片预览生成成功",
+        "code": 0,
+        "success": True,
+        "data": payload,
+    })

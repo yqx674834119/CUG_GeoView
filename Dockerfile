@@ -35,6 +35,13 @@ COPY docker/backend_startup_diagnostics.py /usr/local/bin/backend_startup_diagno
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/backend_startup_diagnostics.py && \
     chmod +x /app/sync_model_assets.py
 
+ENV GEOVIEW_EXTERNAL_STATIC_ROOT=/data/geoview/static \
+    GEOVIEW_INTERNAL_STATIC_ROOT=/app/backend/static \
+    UPLOADED_PHOTOS_DEST=/data/geoview/static/upload \
+    GEOVIEW_ASSET_READ_ORDER=external,internal \
+    GEOVIEW_ASSET_DEBUG=1 \
+    GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS=false
+
 EXPOSE 5008 3000
 
 CMD ["entrypoint.sh"]

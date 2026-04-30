@@ -81,6 +81,20 @@ def fetch(url, headers=None, timeout=15):
         }
 
 
+def fetch_json(url, timeout=15):
+    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read()
+        text = body.decode("utf-8")
+        payload = json.loads(text)
+        return {
+            "status": response.status,
+            "headers": dict(response.headers.items()),
+            "body_length": len(body),
+            "payload": payload,
+        }
+
+
 def wait_for_ping(base_url, timeout_seconds):
     ping_url = f"{base_url}/api/system/ping"
     deadline = time.time() + timeout_seconds
@@ -131,8 +145,12 @@ def build_results():
         f"http://127.0.0.1:{os.getenv('BACKEND_PORT', '5008')}",
     ).rstrip("/")
     upload_dest = os.getenv("UPLOADED_PHOTOS_DEST", "/app/backend/static/upload")
+    external_static_root = os.getenv("GEOVIEW_EXTERNAL_STATIC_ROOT", "/data/geoview/static")
+    internal_static_root = os.getenv("GEOVIEW_INTERNAL_STATIC_ROOT", "/app/backend/static")
+    asset_read_order = os.getenv("GEOVIEW_ASSET_READ_ORDER", "external,internal")
     serve_mode = os.getenv("GEOVIEW_PHOTO_ASSET_SERVE_MODE", "buffered")
     strict = env_flag("GEOVIEW_STRICT_STARTUP_DIAGNOSTICS", "true")
+    require_binary = env_flag("GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS", "false")
     wait_timeout = int(os.getenv("GEOVIEW_DIAGNOSTICS_WAIT_TIMEOUT", "60"))
 
     probe_dir = os.path.join(upload_dest, "res")
@@ -145,12 +163,17 @@ def build_results():
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "base_url": base_url,
         "uploaded_photos_dest": upload_dest,
+        "external_static_root": external_static_root,
+        "internal_static_root": internal_static_root,
+        "asset_read_order": asset_read_order,
         "photo_asset_serve_mode": serve_mode,
+        "require_binary_asset_diagnostics": require_binary,
         "diagnostics_path": diagnostics_path,
         "strict_mode": strict,
         "supported_api_prefixes": {
             "image": "/api/file/assets/photos/",
             "buffered_image": "/api/file/assets-buffered/photos/",
+            "preview_json": "/api/file/assets-preview/photos/",
             "legacy": "/_uploads/photos/",
         },
         "checks": {},
@@ -178,6 +201,33 @@ def build_results():
         "mp4_path": mp4_path,
         "mp4_size": mp4_size,
     }
+
+    preview_entry = {
+        "url": f"{base_url}/api/file/assets-preview/photos/res/{png_name}?max_size=64",
+    }
+    try:
+        response = fetch_json(preview_entry["url"])
+        preview_entry.update(response)
+        payload = response.get("payload") or {}
+        data = payload.get("data") or {}
+        preview_entry["evaluation"] = {
+            "status_ok": response.get("status") == 200,
+            "code_ok": payload.get("code") == 0,
+            "data_url_present": str(data.get("data_url", "")).startswith("data:image/"),
+            "source_store_present": bool(data.get("source_store")),
+        }
+    except Exception as exc:  # pragma: no cover - startup diagnostics only
+        preview_entry["status"] = None
+        preview_entry["error"] = str(exc)
+        preview_entry["evaluation"] = {"status_ok": False}
+
+    preview_entry["passed"] = all(preview_entry["evaluation"].values())
+    results["checks"]["image_preview_json"] = preview_entry
+    if not preview_entry["passed"]:
+        results["errors"].append(
+            summarize_failure("image_preview_json", preview_entry["evaluation"])
+            or "image_preview_json failed"
+        )
 
     checks = {
         "image_direct": {
@@ -248,12 +298,20 @@ def build_results():
             supported_failures.append(summarize_failure(name, entry["evaluation"]))
 
     if supported_failures:
-        results["errors"].extend(supported_failures)
-        results["errors"].append(
-            "supported asset API failed local loopback diagnostics; this would "
-            "risk image/video transfer truncation in deployment"
-        )
-    else:
+        if require_binary:
+            results["errors"].extend(supported_failures)
+            results["errors"].append(
+                "supported binary asset API failed local loopback diagnostics; this would "
+                "risk image/video transfer truncation in deployment"
+            )
+        else:
+            results["warnings"].extend(supported_failures)
+            results["warnings"].append(
+                "binary asset API is not required for page preview; frontend preview uses "
+                "/api/file/assets-preview/... JSON data URLs"
+            )
+
+    if not results["errors"]:
         results["pass"] = True
 
     return results
@@ -275,8 +333,19 @@ def main():
     print(f"[diag][backend] diagnostics_path={diagnostics_path}", flush=True)
     print(f"[diag][backend] uploaded_photos_dest={results['uploaded_photos_dest']}",
           flush=True)
+    print(f"[diag][backend] external_static_root={results['external_static_root']}",
+          flush=True)
+    print(f"[diag][backend] internal_static_root={results['internal_static_root']}",
+          flush=True)
+    print(f"[diag][backend] asset_read_order={results['asset_read_order']}",
+          flush=True)
     print(f"[diag][backend] photo_asset_serve_mode={results['photo_asset_serve_mode']}",
           flush=True)
+    print(
+        "[diag][backend] "
+        f"require_binary_asset_diagnostics={results['require_binary_asset_diagnostics']}",
+        flush=True,
+    )
 
     for name, entry in results.get("checks", {}).items():
         status = entry.get("status", "n/a")

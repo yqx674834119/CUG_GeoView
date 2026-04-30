@@ -6,6 +6,9 @@ from flask import Blueprint, current_app
 
 from applications.common.path_global import (FILE_ASSET_API_PREFIX,
                                              LEGACY_FILE_ASSET_PREFIX)
+from applications.common.storage import (external_static_root,
+                                         internal_static_root,
+                                         storage_read_order)
 from applications.common.utils.http import success_api
 
 system_api_blueprint = Blueprint("system_api_blueprint",
@@ -41,6 +44,9 @@ def ping():
             "PHOTO_ASSET_CHUNK_SIZE"),
         "uploaded_photos_dest": current_app.config.get(
             "UPLOADED_PHOTOS_DEST"),
+        "external_static_root": external_static_root(),
+        "internal_static_root": internal_static_root(),
+        "asset_read_order": [store for store, _ in storage_read_order()],
         "preferred_asset_prefix": FILE_ASSET_API_PREFIX,
         "legacy_asset_prefix": LEGACY_FILE_ASSET_PREFIX,
         "diagnostics": _read_diagnostics_payload(),

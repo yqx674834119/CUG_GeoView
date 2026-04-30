@@ -2,15 +2,18 @@ import hashlib
 import os
 import random
 
+from applications.common.storage import (external_static_root,
+                                         external_upload_root)
+
 
 def _with_trailing_slash(value):
     return value if value.endswith("/") else value + "/"
 
 
-STATIC_ROOT = os.getenv("GEOVIEW_STATIC_ROOT", "/app/backend/static")
+STATIC_ROOT = os.getenv("GEOVIEW_STATIC_ROOT", external_static_root())
 UPLOADED_PHOTOS_DEST = os.getenv(
     "UPLOADED_PHOTOS_DEST",
-    os.path.join(STATIC_ROOT, "upload"),
+    external_upload_root(),
 )
 FILE_ASSET_API_PREFIX = "/api/file/assets/photos/"
 LEGACY_FILE_ASSET_PREFIX = "/_uploads/photos/"

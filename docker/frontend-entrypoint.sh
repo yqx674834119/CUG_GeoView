@@ -16,6 +16,7 @@ MINER_ENABLED="${GEOVIEW_MINER_ENABLED:-false}"
 MINER_URL="${GEOVIEW_MINER_URL:-}"
 BAIDU_MAP_ACCESS_KEY="${GEOVIEW_BAIDU_MAP_ACCESS_KEY:-}"
 BACKEND_ASSET_MODE="${GEOVIEW_BACKEND_ASSET_MODE:-buffered}"
+FRONTEND_ASSET_DEBUG="${GEOVIEW_FRONTEND_ASSET_DEBUG:-false}"
 
 if [ -z "${BACKEND_URL}" ] && [ -z "${BACKEND_PORT}" ]; then
     BACKEND_PORT="5008"
@@ -52,6 +53,7 @@ window.__GEOVIEW_RUNTIME_CONFIG__ = {
   backendHost: "$(js_escape "${BACKEND_HOST}")",
   backendPort: "$(js_escape "${BACKEND_PORT}")",
   backendAssetMode: "$(js_escape "${BACKEND_ASSET_MODE}")",
+  frontendAssetDebug: "$(js_escape "${FRONTEND_ASSET_DEBUG}")",
   minerEnabled: "$(js_escape "${MINER_ENABLED}")",
   minerUrl: "$(js_escape "${MINER_URL}")",
   baiduMapAccessKey: "$(js_escape "${BAIDU_MAP_ACCESS_KEY}")"
@@ -67,6 +69,7 @@ cat > "${WEB_ROOT}/runtime-diagnostics.json" <<EOF
   "backendHost": "$(js_escape "${BACKEND_HOST}")",
   "backendPort": "$(js_escape "${BACKEND_PORT}")",
   "backendAssetMode": "$(js_escape "${BACKEND_ASSET_MODE}")",
+  "frontendAssetDebug": "$(js_escape "${FRONTEND_ASSET_DEBUG}")",
   "preferredAssetPrefix": "$(js_escape "${PREFERRED_ASSET_PREFIX}")",
   "legacyAssetPrefix": "/_uploads/photos/",
   "strictRuntimeDiagnostics": "$(js_escape "${STRICT_RUNTIME_DIAGNOSTICS}")"
@@ -76,6 +79,7 @@ EOF
 echo "[diag][frontend] runtime diagnostics summary"
 echo "[diag][frontend] resolved_backend_url=${RESOLVED_BACKEND_URL}"
 echo "[diag][frontend] backend_asset_mode=${BACKEND_ASSET_MODE}"
+echo "[diag][frontend] frontend_asset_debug=${FRONTEND_ASSET_DEBUG}"
 echo "[diag][frontend] preferred_asset_prefix=${PREFERRED_ASSET_PREFIX}"
 echo "[diag][frontend] diagnostics_file=${WEB_ROOT}/runtime-diagnostics.json"
 

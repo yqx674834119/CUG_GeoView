@@ -50,7 +50,7 @@
             @click="openTrackingSource(scope.row)"
           >
             <img
-              :src="toAbsoluteUrl(scope.row.before_img)"
+              :src="previewAsset(scope.row, 'before_img')"
               min-width="70"
               height="70"
               alt="视频封面"
@@ -59,7 +59,7 @@
           </div>
           <img
             v-else
-            :src="toAbsoluteUrl(scope.row.before_img)"
+            :src="previewAsset(scope.row, 'before_img')"
             min-width="70"
             height="70"
             alt="原图"
@@ -68,7 +68,7 @@
 
           <img
             v-if="scope.row.type === '变化检测' || scope.row.type === '自动配准'"
-            :src="toAbsoluteUrl(scope.row.before_img1)"
+            :src="previewAsset(scope.row, 'before_img1')"
             min-width="70"
             height="70"
             style="margin-left: 20px"
@@ -81,7 +81,7 @@
         <template #default="scope">
           <img
             v-show="scope.row.type !== '场景分类'"
-            :src="toAbsoluteUrl(scope.row.after_img)"
+            :src="previewAsset(scope.row, 'after_img')"
             min-width="70"
             height="70"
             alt="结果图"
@@ -398,7 +398,8 @@ import {
   previewThreePic,
 } from "@/utils/preview.js";
 import { downloadimgWithWords } from "@/utils/download.js";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { getBackendAssetPreviewDataUrl } from "@/utils/assetPreview";
 
 import global from "@/global.vue";
 export default {
@@ -427,6 +428,8 @@ export default {
       previewPic2: "",
       previewPic3: "",
       tableData: [],
+      previewLoadToken: 0,
+      previewPlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
       global: {
         BASEURL: global.BASEURL,
       },
@@ -442,6 +445,38 @@ export default {
     historyDelete,
     previewTwoPic,
     previewThreePic,
+    previewAsset(row, field) {
+      if (!row || !row[field]) {
+        return this.previewPlaceholder;
+      }
+      return row[`_${field}_preview`] || this.previewPlaceholder;
+    },
+    loadHistoryPreviews() {
+      const token = this.previewLoadToken + 1;
+      this.previewLoadToken = token;
+      const fields = ["before_img", "before_img1", "after_img"];
+
+      this.tableData.forEach((row) => {
+        fields.forEach((field) => {
+          const path = row[field];
+          if (!path) {
+            return;
+          }
+
+          getBackendAssetPreviewDataUrl(path, 420)
+            .then((dataUrl) => {
+              if (this.previewLoadToken === token) {
+                row[`_${field}_preview`] = dataUrl;
+              }
+            })
+            .catch(() => {
+              if (this.previewLoadToken === token) {
+                row[`_${field}_preview`] = "";
+              }
+            });
+        });
+      });
+    },
     toAbsoluteUrl(path) {
       if (!path) {
         return "";
@@ -460,6 +495,10 @@ export default {
     openExternalAsset(path) {
       if (!path) {
         this.$message.warning("未找到可预览的文件");
+        return;
+      }
+      if (isBackendPhotoAssetPath(path)) {
+        this.previewOnePic(path);
         return;
       }
       window.open(this.toAbsoluteUrl(path), "_blank", "noopener");
@@ -621,6 +660,7 @@ export default {
       this.historyGetPage(this.currentPage, 10, this.type).then((res) => {
         this.total = res.data.count;
         this.tableData = res.data.data;
+        this.loadHistoryPreviews();
       }).catch((rej)=>{})
     },
     goNextPage() {

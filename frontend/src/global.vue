@@ -68,6 +68,13 @@ function resolveBackendAssetMode(runtimeConfig) {
   return "buffered";
 }
 
+function resolveFrontendAssetDebug(runtimeConfig) {
+  const rawValue = hasText(runtimeConfig.frontendAssetDebug)
+    ? runtimeConfig.frontendAssetDebug
+    : process.env.VUE_APP_FRONTEND_ASSET_DEBUG;
+  return String(rawValue || "false").toLowerCase() === "true";
+}
+
 function resolveBaiduMapAccessKey(runtimeConfig) {
   if (hasText(runtimeConfig.baiduMapAccessKey)) {
     return runtimeConfig.baiduMapAccessKey.trim();
@@ -78,6 +85,7 @@ function resolveBaiduMapAccessKey(runtimeConfig) {
 const runtimeConfig = getRuntimeConfig();
 const BASEURL = resolveBackendBaseUrl(runtimeConfig);
 const BACKEND_ASSET_MODE = resolveBackendAssetMode(runtimeConfig);
+const FRONTEND_ASSET_DEBUG = resolveFrontendAssetDebug(runtimeConfig);
 const MINER_ENABLED = resolveMinerEnabled(runtimeConfig);
 const MINER_URL = resolveMinerUrl(runtimeConfig);
 const BAIDU_MAP_ACCESS_KEY = resolveBaiduMapAccessKey(runtimeConfig);
@@ -85,6 +93,7 @@ const BAIDU_MAP_ACCESS_KEY = resolveBaiduMapAccessKey(runtimeConfig);
 export default {
   BASEURL,
   BACKEND_ASSET_MODE,
+  FRONTEND_ASSET_DEBUG,
   MINER_ENABLED,
   MINER_URL,
   BAIDU_MAP_ACCESS_KEY,

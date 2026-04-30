@@ -6,6 +6,7 @@ from flask_cors import CORS
 
 from applications.api import system_api
 from applications.common.scripts import init_script
+from applications.common.storage import ensure_storage_dirs
 from applications.configs import config
 from applications.extensions import init_plugs
 
@@ -26,6 +27,7 @@ def create_app(config_name=None):
 
     # 引入数据库配置
     app.config.from_object(config[config_name])
+    ensure_storage_dirs()
 
     # 注册各种插件
     init_plugs(app)

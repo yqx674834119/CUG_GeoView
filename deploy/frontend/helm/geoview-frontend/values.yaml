@@ -15,6 +15,7 @@ frontend:
     backendHost: ""
     backendPort: ""
     backendAssetMode: buffered
+    frontendAssetDebug: false
     minerEnabled: false
     minerUrl: ""
     baiduMapAccessKey: ""

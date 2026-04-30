@@ -2,6 +2,8 @@ import logging
 import os
 from urllib.parse import quote_plus
 
+from applications.common.storage import external_static_root, external_upload_root
+
 
 class BaseConfig:
     SYSTEM_NAME = os.getenv('SYSTEM_NAME', 'Admin')
@@ -10,11 +12,11 @@ class BaseConfig:
 
     GEOVIEW_STATIC_ROOT = os.getenv(
         'GEOVIEW_STATIC_ROOT',
-        '/app/backend/static',
+        external_static_root(),
     )
     UPLOADED_PHOTOS_DEST = os.getenv(
         'UPLOADED_PHOTOS_DEST',
-        os.path.join(GEOVIEW_STATIC_ROOT, 'upload'),
+        external_upload_root(),
     )
     UPLOADED_FILES_ALLOW = ['gif', 'jpg', 'png']
     PHOTO_ASSET_SERVE_MODE = os.getenv('GEOVIEW_PHOTO_ASSET_SERVE_MODE',
