@@ -3,9 +3,19 @@ import json
 import os
 
 import cv2
+import numpy as np
 
 from applications.common.path_global import fun_type_1, fun_type_2, fun_type_3, fun_type_4, fun_type_5, \
     fun_type_6, fun_type_7, generate_url, fun_type_8, up_url, generate_dir
+from applications.common.visualization import (
+    attach_visual_payload,
+    build_visual_payload,
+    extract_binary_regions,
+    extract_class_regions,
+    image_size_from_file,
+    normalize_analysis_record,
+    resolve_generated_path,
+)
 from applications.common.utils.upload import img_url_handle
 from applications.common.storage import mirror_upload_tree
 from applications.extensions import db
@@ -27,6 +37,24 @@ from applications.interface.compute_variation import compute_variation
 from applications.interface.draw_mask import draw_masks
 from applications.models.analysis import Analysis
 
+PADDLE_SEGMENTATION_CLASSES = ["cloud", "shadow", "snow", "water", "land"]
+PADDLE_SEGMENTATION_PALETTE = [
+    [0, 0, 0],
+    [128, 0, 0],
+    [0, 128, 0],
+    [128, 128, 0],
+    [0, 0, 128],
+]
+MMSEG_SEGMENTATION_CLASSES = ["grassland", "forest", "building", "road", "bareground", "water"]
+MMSEG_SEGMENTATION_PALETTE = [
+    [0, 255, 0],
+    [0, 128, 0],
+    [255, 0, 0],
+    [255, 255, 0],
+    [255, 0, 255],
+    [0, 191, 255],
+]
+
 
 def save_analysis(type_,
                   pic1,
@@ -47,6 +75,109 @@ def save_analysis(type_,
     db.session.add(analysis)
     db.session.commit()
     mirror_upload_tree()
+    payload = {
+        "id": analysis.id,
+        "type": analysis.type,
+        "before_img": analysis.before_img,
+        "before_img1": analysis.before_img1,
+        "after_img": analysis.after_img,
+        "data": json.loads(analysis.data) if analysis.data else {},
+        "is_hole": analysis.is_hole,
+        "checked": analysis.checked,
+        "create_time": analysis.create_time.isoformat() if analysis.create_time else None,
+    }
+    return normalize_analysis_record(payload)
+
+
+def _legacy_asset_bundle(before_img, after_img="", before_img1="", **extra):
+    bundle = {
+        "source_primary": before_img,
+        "source_secondary": before_img1,
+        "primary_result": after_img,
+    }
+    for key, value in extra.items():
+        if value not in (None, ""):
+            bundle[key] = value
+    return bundle
+
+
+def _source_entry(asset_path, absolute_path=None, filename=None):
+    entry = {"asset_path": asset_path}
+    if filename:
+        entry["filename"] = filename
+    if absolute_path:
+        entry.update(image_size_from_file(absolute_path))
+    return entry
+
+
+def _label_histogram(detections):
+    histogram = {}
+    for item in detections:
+        label = item.get("label") or "unknown"
+        histogram[label] = histogram.get(label, 0) + 1
+    return dict(sorted(histogram.items()))
+
+
+def _score_stats(detections):
+    scores = [float(item.get("score", 0.0)) for item in detections if item.get("score") is not None]
+    if not scores:
+        return {"mean_score": 0.0, "max_score": 0.0, "min_score": 0.0}
+    return {
+        "mean_score": round(float(sum(scores) / len(scores)), 4),
+        "max_score": round(float(max(scores)), 4),
+        "min_score": round(float(min(scores)), 4),
+    }
+
+
+def _round_matrix(matrix):
+    if matrix is None:
+        return None
+    array = np.asarray(matrix, dtype=float)
+    return json.loads(json.dumps(np.round(array, 6).tolist()))
+
+
+def _transform_corners(matrix, transform_type, width, height):
+    if matrix is None or width <= 0 or height <= 0:
+        return []
+    source = np.array([
+        [0.0, 0.0],
+        [float(width), 0.0],
+        [float(width), float(height)],
+        [0.0, float(height)],
+    ], dtype=np.float32)
+    array = np.asarray(matrix, dtype=np.float32)
+    try:
+        if transform_type == "homography" and array.shape == (3, 3):
+            projected = cv2.perspectiveTransform(source.reshape(-1, 1, 2), array).reshape(-1, 2)
+        elif array.shape == (2, 3):
+            projected = cv2.transform(source.reshape(-1, 1, 2), array).reshape(-1, 2)
+        else:
+            return []
+    except Exception:
+        return []
+    return [[round(float(point[0]), 3), round(float(point[1]), 3)] for point in projected]
+
+
+def _load_mask_array(path):
+    if not path or not os.path.exists(path):
+        return None
+    return cv2.imread(path, cv2.IMREAD_UNCHANGED)
+
+
+def _build_restoration_metrics(before_path, after_path):
+    before = image_size_from_file(before_path)
+    after = image_size_from_file(after_path)
+    metrics = {
+        "input_width": before.get("width"),
+        "input_height": before.get("height"),
+        "output_width": after.get("width"),
+        "output_height": after.get("height"),
+    }
+    if before.get("width") and after.get("width"):
+        metrics["scale_x"] = round(after["width"] / max(before["width"], 1), 4)
+    if before.get("height") and after.get("height"):
+        metrics["scale_y"] = round(after["height"] / max(before["height"], 1), 4)
+    return metrics
 
 
 def change_detection(model_path,
@@ -108,16 +239,17 @@ def change_detection(model_path,
     # 4.检测渲染
     res = handle(fun_type_6, filenames, out_dir, out_dir)
     # 5.入库
+    records = []
     i = 0
     for pair in temp_names:
-        # first_ = pair["first"]
         first_ = up_url + resizes[i]
         second_ = pair['second']
         retPic = retPics[i]
-        mask, count, areas = draw_masks(os.path.join(out_dir, filenames[i]))
+        rendered_mask_path = os.path.join(out_dir, filenames[i])
+        mask, count, areas = draw_masks(rendered_mask_path)
         mask_name = os.path.splitext(filenames[i])[0] + "_mask.png"
-        cv2.imwrite(
-            os.path.join(out_dir, mask_name), mask)
+        mask_full_path = os.path.join(out_dir, mask_name)
+        cv2.imwrite(mask_full_path, mask)
         res[i]["mask"] = generate_url + mask_name
         res[i]["count"] = count
         
@@ -178,17 +310,56 @@ def change_detection(model_path,
 
         res[i]["fractional_variation_hole"] = compute_variation(
             os.path.join(generate_dir + "hole/", os.path.basename(after_img)))
-        data = json.dumps(res[i])
-        save_analysis(
+        primary_regions = extract_binary_regions(_load_mask_array(mask_full_path))
+        hole_mask_full_path = os.path.join(
+            out_dir + "hole/",
+            os.path.splitext(os.path.basename(after_img))[0] + "_mask.png")
+        hole_regions = extract_binary_regions(_load_mask_array(hole_mask_full_path))
+        payload = build_visual_payload(
+            analysis_type="变化检测",
+            renderer="change_detection",
+            source={
+                "primary": _source_entry(first_, os.path.join(data_path, resizes[i]), filenames[i]),
+                "secondary": _source_entry(second_, os.path.join(data_path, img_url_handle(second_)), img_url_handle(second_)),
+            },
+            result={
+                "regions": primary_regions,
+                "mask_path": res[i]["mask"],
+                "hole_regions": hole_regions,
+                "mask_hole_path": res[i]["mask_hole"],
+            },
+            metrics={
+                "change_count": count,
+                "total_area": total_area,
+                "avg_area": round(avg_area, 2),
+                "size_distribution": res[i]["size_distribution"],
+                "fractional_variation": res[i]["fractional_variation"],
+                "change_count_hole": res[i]["count_hole"],
+                "total_area_hole": total_area_hole,
+                "avg_area_hole": round(avg_area_hole, 2),
+                "size_distribution_hole": res[i]["size_distribution_hole"],
+                "fractional_variation_hole": res[i]["fractional_variation_hole"],
+            },
+            legacy_assets=_legacy_asset_bundle(
+                before_img=first_,
+                before_img1=second_,
+                after_img=retPic,
+                hole_path=after_img,
+                rendered_path=res[i].get("hole_style"),
+            ),
+        )
+        data = json.dumps(attach_visual_payload(res[i], payload), ensure_ascii=False)
+        records.append(save_analysis(
             type_,
             first_,
             retPic,
             pic2=second_,
             data=data,
             checked=str(step1) + "," + str(step2),
-            is_hole=True)
+            is_hole=True))
         i += 1
     print("变化检测----------------->end")
+    return records
 
 
 def hole_handle(data_path, out_dir, names):
@@ -243,17 +414,41 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
     retPics = OD.execute(model_path, data_path, out_dir, imgs)
     print("[OD-DEBUG] 目标检测返回数量:", len(retPics), flush=True)
     # 5.入库
+    records = []
     for i, pair in enumerate(resizes):
         first_ = up_url + pair
-        retPic = retPics[i]
-        save_analysis(
+        result_item = retPics[i] if i < len(retPics) else {}
+        if isinstance(result_item, str):
+            result_item = {"after_img": result_item, "detections": []}
+        retPic = result_item.get("after_img", "")
+        detections = result_item.get("detections", []) or []
+        payload = build_visual_payload(
+            analysis_type="目标检测",
+            renderer="object_detection",
+            source={
+                "primary": _source_entry(first_, os.path.join(data_path, pair), pair),
+            },
+            result={
+                "detections": detections,
+                "image_size": result_item.get("image_size") or image_size_from_file(os.path.join(data_path, pair)),
+            },
+            metrics={
+                "detection_count": len(detections),
+                "label_histogram": _label_histogram(detections),
+                **_score_stats(detections),
+            },
+            legacy_assets=_legacy_asset_bundle(before_img=first_, after_img=retPic),
+        )
+        data = json.dumps(attach_visual_payload({}, payload), ensure_ascii=False)
+        records.append(save_analysis(
             type_,
             first_,
             retPic,
             pic2="",
-            data="",
-            checked=str(step1) + "," + str(step2))
+            data=data,
+            checked=str(step1) + "," + str(step2)))
     print("目标检测----------------->end", flush=True)
+    return records
 
 
 def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
@@ -287,22 +482,53 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
     retPics = SS.execute(model_path, data_path, out_dir, imgs)
     
     # 5.入库
+    records = []
     for i, pair in enumerate(resizes):
         first_ = up_url + pair
-        retPic = retPics[i]
-        
-        # If MMSeg returns a full URL, we might need to handle it.
-        # But save_analysis expects a URL or path. 
-        # The frontend usually displays whatever is in 'after_img'.
-        
-        save_analysis(
+        result_item = retPics[i] if i < len(retPics) else {}
+        if isinstance(result_item, str):
+            result_item = {"after_img": result_item}
+        retPic = result_item.get("after_img", "")
+        mask_path = result_item.get("mask_path")
+        mask_abs_path = resolve_generated_path(mask_path) if mask_path else ""
+        class_names = result_item.get("class_names") or (
+            MMSEG_SEGMENTATION_CLASSES if str(retPic).endswith(".png") and "pred_" in str(retPic)
+            else PADDLE_SEGMENTATION_CLASSES
+        )
+        palette = result_item.get("palette") or (
+            MMSEG_SEGMENTATION_PALETTE if class_names == MMSEG_SEGMENTATION_CLASSES
+            else PADDLE_SEGMENTATION_PALETTE
+        )
+        segmentation_data = extract_class_regions(
+            _load_mask_array(mask_abs_path),
+            class_names=class_names,
+            palette=palette,
+        ) if mask_abs_path else {"classes": [], "totals": {}}
+        payload = build_visual_payload(
+            analysis_type="地物分类",
+            renderer="semantic_segmentation",
+            source={"primary": _source_entry(first_, os.path.join(data_path, pair), pair)},
+            result={
+                "classes": segmentation_data.get("classes", []),
+                "mask_path": mask_path,
+                "image_size": segmentation_data.get("image_size") or image_size_from_file(os.path.join(data_path, pair)),
+            },
+            metrics={
+                "class_totals": segmentation_data.get("totals", {}),
+                "pixel_count": segmentation_data.get("pixel_count"),
+            },
+            legacy_assets=_legacy_asset_bundle(before_img=first_, after_img=retPic),
+        )
+        data = json.dumps(attach_visual_payload({}, payload), ensure_ascii=False)
+        records.append(save_analysis(
             type_,
             first_,
             retPic,
             pic2="",
-            data="",
-            checked=str(step1) + "," + str(step2))
+            data=data,
+            checked=str(step1) + "," + str(step2)))
     print("地物分类----------------->end")
+    return records
 
 
 def classification(model_path, data_path, names, type):
@@ -322,13 +548,32 @@ def classification(model_path, data_path, names, type):
     # 1. 场景分类
     result = C.execute(model_path, data_path, imgs)
     # 2.入库
+    records = []
     for i, pair in enumerate(names):
         first_ = up_url + pair
         ret = {}
         for j in range(0, len(result[i]["label_names_map"])):
             ret[result[i]["label_names_map"][j]] = result[i]["scores_map"][j]
-        save_analysis(type, first_, "", pic2="", data=json.dumps(ret))
+        score_items = [
+            {"label": label, "score": float(score)}
+            for label, score in ret.items()
+        ]
+        score_items.sort(key=lambda item: item["score"], reverse=True)
+        payload = build_visual_payload(
+            analysis_type="场景分类",
+            renderer="scene_classification",
+            source={"primary": _source_entry(first_, os.path.join(data_path, pair), pair)},
+            result={"scores": score_items},
+            metrics={
+                "top_label": score_items[0]["label"] if score_items else "",
+                "top_score": score_items[0]["score"] if score_items else 0.0,
+            },
+            legacy_assets=_legacy_asset_bundle(before_img=first_, after_img=""),
+        )
+        data = json.dumps(attach_visual_payload(ret, payload), ensure_ascii=False)
+        records.append(save_analysis(type, first_, "", pic2="", data=data))
     print("场景分类----------------->end")
+    return records
 
 
 def image_restoration(model_path, data_path, out_dir, names, type_):
@@ -348,11 +593,36 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
     # 1. 图像复原
     retPics = IR.execute(model_path, data_path, out_dir, imgs)
     # 2.入库
+    records = []
     for i, pair in enumerate(names):
         first_ = up_url + pair
-        retPic = retPics[i]
-        save_analysis(type_, first_, retPic, pic2="", data="")
+        result_item = retPics[i] if i < len(retPics) else {}
+        if isinstance(result_item, str):
+            result_item = {"after_img": result_item}
+        retPic = result_item.get("after_img", "")
+        before_path = os.path.join(data_path, pair)
+        after_path = resolve_generated_path(retPic)
+        metrics = _build_restoration_metrics(before_path, after_path)
+        metrics.update(result_item.get("metrics") or {})
+        payload = build_visual_payload(
+            analysis_type="影像超分重建",
+            renderer="image_restoration",
+            source={"primary": _source_entry(first_, before_path, pair)},
+            result={
+                "simulation_mode": "local_interpolation_preview",
+                "output_size": image_size_from_file(after_path),
+            },
+            metrics=metrics,
+            capabilities={
+                "frontend_render_exact": False,
+                "frontend_render_note": "JSON 模式使用浏览器端近似放大预览，不等同模型真实输出像素。",
+            },
+            legacy_assets=_legacy_asset_bundle(before_img=first_, after_img=retPic),
+        )
+        data = json.dumps(attach_visual_payload({}, payload), ensure_ascii=False)
+        records.append(save_analysis(type_, first_, retPic, pic2="", data=data))
     print("图像复原----------------->end")
+    return records
 
 
 def registration(model_path, data_path, out_dir, names, type_):
@@ -370,6 +640,7 @@ def registration(model_path, data_path, out_dir, names, type_):
     results = REG.execute(model_path, data_path, out_dir, names)
     
     # Save to database
+    records = []
     for i, pair in enumerate(names):
         result = results[i]
         if result.get("status") != "success":
@@ -377,6 +648,9 @@ def registration(model_path, data_path, out_dir, names, type_):
         first_ = up_url + pair["first"]
         second_ = up_url + pair["second"]
         ret_pic = result["output_path"]
+        moving_abs_path = os.path.join(data_path, pair["first"])
+        fixed_abs_path = os.path.join(data_path, pair["second"])
+        moving_size = image_size_from_file(moving_abs_path)
         metadata = {
             "pair_name": result.get("pair_name"),
             "method_used": result.get("method_used"),
@@ -385,19 +659,52 @@ def registration(model_path, data_path, out_dir, names, type_):
             "inlier_count": result.get("inlier_count"),
             "inlier_ratio": result.get("inlier_ratio"),
             "rmse": result.get("rmse"),
+            "transform_matrix": _round_matrix(result.get("transform_matrix")),
             "overlay_path": result.get("overlay_path"),
             "checkerboard_path": result.get("checkerboard_path"),
         }
-        save_analysis(
+        payload = build_visual_payload(
+            analysis_type="自动配准",
+            renderer="registration",
+            source={
+                "primary": _source_entry(first_, moving_abs_path, pair["first"]),
+                "secondary": _source_entry(second_, fixed_abs_path, pair["second"]),
+            },
+            result={
+                "transform_type": metadata.get("transform_type"),
+                "transform_matrix": metadata.get("transform_matrix"),
+                "moving_corners_on_fixed": _transform_corners(
+                    metadata.get("transform_matrix"),
+                    metadata.get("transform_type"),
+                    moving_size.get("width", 0),
+                    moving_size.get("height", 0),
+                ),
+            },
+            metrics={
+                "match_count": metadata.get("match_count"),
+                "inlier_count": metadata.get("inlier_count"),
+                "inlier_ratio": metadata.get("inlier_ratio"),
+                "rmse": metadata.get("rmse"),
+            },
+            legacy_assets=_legacy_asset_bundle(
+                before_img=first_,
+                before_img1=second_,
+                after_img=ret_pic,
+                overlay_path=metadata.get("overlay_path"),
+                checkerboard_path=metadata.get("checkerboard_path"),
+            ),
+        )
+        data = json.dumps(attach_visual_payload(metadata, payload), ensure_ascii=False)
+        records.append(save_analysis(
             type_,
             first_,
             ret_pic,
             pic2=second_,
-            data=json.dumps(metadata, ensure_ascii=False),
-        )
+            data=data,
+        ))
         
     print("自动配准----------------->end")
-    return results
+    return records
 
 
 def tracking(model_path, data_path, out_dir, names, rect, type_):
@@ -417,6 +724,7 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         "input_mode": result.get("input_mode", "image_sequence"),
         "source_input_path": result.get("source_input_path"),
         "source_input_name": result.get("source_input_name"),
+        "source_sequence_paths": result.get("source_sequence_paths") or [],
         "output_video_path": result.get("output_video_path"),
         "trajectory_path": result.get("trajectory_path"),
         "summary": result.get("summary"),
@@ -424,16 +732,51 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         "runtime_variant": result.get("runtime_variant"),
         "mot_result_path": result.get("mot_result_path"),
     }
-    save_analysis(
+    trajectory_frames = []
+    trajectory_abs_path = resolve_generated_path(metadata.get("trajectory_path"))
+    if trajectory_abs_path and os.path.exists(trajectory_abs_path):
+        try:
+            with open(trajectory_abs_path, "r", encoding="utf-8") as file:
+                trajectory_payload = json.load(file)
+            trajectory_frames = trajectory_payload.get("frames", [])
+        except Exception:
+            trajectory_frames = []
+    payload = build_visual_payload(
+        analysis_type="目标跟踪",
+        renderer="tracking",
+        source={
+            "primary": {"asset_path": metadata.get("source_input_path") or first_frame},
+            "input_mode": metadata.get("input_mode", "image_sequence"),
+            "source_input_name": metadata.get("source_input_name"),
+            "sequence_asset_paths": metadata.get("source_sequence_paths") or [],
+        },
+        result={
+            "rect": rect,
+            "frames": trajectory_frames,
+        },
+        metrics=metadata.get("summary") or {},
+        legacy_assets=_legacy_asset_bundle(
+            before_img=first_frame,
+            after_img=preview_path,
+            video_path=metadata.get("output_video_path"),
+            trajectory_path=metadata.get("trajectory_path"),
+            mot_result_path=metadata.get("mot_result_path"),
+        ),
+    )
+    data = json.dumps(attach_visual_payload(metadata, payload), ensure_ascii=False)
+    record = save_analysis(
         type_,
         first_frame,
         preview_path,
         pic2="",
-        data=json.dumps(metadata, ensure_ascii=False),
+        data=data,
     )
     
     print("目标跟踪----------------->end")
-    return result
+    return {
+        **result,
+        "record": record,
+    }
 
 
 def handle(fun_type, imgs, src_dir, save_dir, prefix=""):

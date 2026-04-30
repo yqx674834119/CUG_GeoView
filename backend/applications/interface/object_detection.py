@@ -139,16 +139,41 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
         with paddle.no_grad():
             for idx, im in zip(range(len(names)), ims):
                 vis = im
+                detections = []
                 if len(pred[idx]) > 0:
                     vis = visualize_detection(
                         np.array(vis),
                         pred[idx],
                         threshold=threshold,
                         save_dir=None)
+                    for detection in pred[idx]:
+                        bbox = detection.get("bbox", [])
+                        if len(bbox) >= 4:
+                            x, y, w, h = bbox[:4]
+                            box = [
+                                round(float(x), 2),
+                                round(float(y), 2),
+                                round(float(x + w), 2),
+                                round(float(y + h), 2),
+                            ]
+                        else:
+                            box = [round(float(value), 2) for value in bbox]
+                        detections.append({
+                            "label": str(detection.get("category", detection.get("category_id", "unknown"))),
+                            "score": round(float(detection.get("score", 0.0)), 4),
+                            "box": box,
+                        })
                 name = names[idx]
                 new_name = md5_name(name)
                 imsave(osp.join(out_dir, new_name), vis)
-                temps.append(generate_url + new_name)
+                temps.append({
+                    "after_img": generate_url + new_name,
+                    "detections": detections,
+                    "image_size": {
+                        "width": int(np.array(im).shape[1]),
+                        "height": int(np.array(im).shape[0]),
+                    },
+                })
         print("[OD-DEBUG] 可视化与保存完成，用时秒:", round(time.time() - t3, 3), flush=True)
     except Exception:
         print("[OD-DEBUG] 可视化或保存异常:\n", traceback.format_exc(), flush=True)

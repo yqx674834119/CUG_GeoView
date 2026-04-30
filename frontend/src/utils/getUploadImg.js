@@ -2,6 +2,7 @@ import { historyGetPage } from "@/api/history"
 import { showFullScreenLoading } from "@/utils/loading";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { hydrateAssetPreviews } from "@/utils/assetPreview";
+import { registerUploadedSources } from "@/utils/localSourceRegistry";
 
 function getUploadImg(type) {
   historyGetPage(1, 20, type).then((res) => {
@@ -39,7 +40,9 @@ function upload(type, funUrl) {
       }
     }
     this.createSrc(formData).then((res) => {
-      this.uploadSrc.list = res.data.data.map((item) => {
+      const uploadedItems = res.data.data || [];
+      registerUploadedSources(uploadedItems, this.fileList);
+      this.uploadSrc.list = uploadedItems.map((item) => {
         return item.src;
       });
       this.imgUpload(this.uploadSrc, funUrl).then((res) => {

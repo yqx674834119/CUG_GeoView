@@ -89,6 +89,7 @@ import {
 import { upload, goCompress } from "@/utils/getUploadImg";
 import { getImgArrayBuffer, atchDownload } from "@/utils/download";
 import { historyGetPage } from "@/api/history";
+import { registerUploadedSources } from "@/utils/localSourceRegistry";
 
 export default {
   components: {
@@ -203,7 +204,9 @@ export default {
         formData.append("files", File);
         formData.append("type", funtype);
         this.createSrc(formData).then((res) => {
-          this.uploadSrc.list = res.data.data.map((item) => {
+          const uploadedItems = res.data.data || [];
+          registerUploadedSources(uploadedItems, [File]);
+          this.uploadSrc.list = uploadedItems.map((item) => {
             return item.src;
           });
           if (funtype === "地物分类") {

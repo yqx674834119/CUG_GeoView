@@ -208,6 +208,13 @@
     <el-divider />
 
     <div v-if="result" class="result-box">
+      <div v-if="hasTrackingJsonMode" class="render-mode-bar">
+        <span class="render-mode-bar__label">结果渲染模式</span>
+        <el-radio-group v-model="renderMode" size="small">
+          <el-radio-button label="legacy">原始模式</el-radio-button>
+          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+        </el-radio-group>
+      </div>
       <el-row :gutter="20">
         <el-col :xs="24" :sm="24" :md="12" :lg="12">
           <el-card class="result-card">
@@ -257,13 +264,20 @@
           <el-card class="result-card">
             <template #header>
               <div class="result-card__head">
-                <span>跟踪预览图</span>
+                <span>{{ renderMode === "json" && hasTrackingJsonMode ? "JSON 本地可视化" : "跟踪预览图" }}</span>
                 <el-tag type="success" effect="dark">
                   {{ result.method_used }}
                 </el-tag>
               </div>
             </template>
+            <TrackingJsonPlayer
+              v-if="renderMode === 'json' && hasTrackingJsonMode"
+              :payload="trackingJsonPayload"
+              :video-src="trackingLocalVideoSrc"
+              :frame-sources="trackingLocalSequenceSources"
+            />
             <el-image
+              v-else
               :src="result.preview_full_url"
               :preview-src-list="[result.preview_full_url]"
               :preview-teleported="true"
@@ -468,10 +482,12 @@ import {
 import VChart from "vue-echarts";
 
 import Tabinfor from "@/components/Tabinfor";
+import TrackingJsonPlayer from "@/components/TrackingJsonPlayer";
 import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { fetchJsonAsset, summarizeTrajectoryPayload } from "@/utils/frontAnalysis";
+import { getLocalSourceUrl, registerLocalSource, registerUploadedSources } from "@/utils/localSourceRegistry";
 
 use([
   CanvasRenderer,
@@ -521,7 +537,7 @@ const LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES = ["mp4", "webm", "m4v"];
 
 export default {
   name: "Tracking",
-  components: { Tabinfor, VChart },
+  components: { Tabinfor, VChart, TrackingJsonPlayer },
   data() {
     return {
       fileList: [],
@@ -554,6 +570,7 @@ export default {
       trajectoryPayload: null,
       trajectoryAnalysis: null,
       trajectoryError: "",
+      renderMode: "legacy",
     };
   },
   computed: {
@@ -572,6 +589,21 @@ export default {
     },
     resultSummary() {
       return (this.result && this.result.summary) || null;
+    },
+    trackingJsonPayload() {
+      return this.result?.record?.visual_payload || null;
+    },
+    trackingLocalVideoSrc() {
+      const path = this.trackingJsonPayload?.source?.primary?.asset_path;
+      return getLocalSourceUrl(path);
+    },
+    trackingLocalSequenceSources() {
+      const sequence = this.trackingJsonPayload?.source?.sequence_asset_paths || [];
+      return sequence.map((path) => getLocalSourceUrl(path)).filter(Boolean);
+    },
+    hasTrackingJsonMode() {
+      return !!this.trackingJsonPayload
+        && (this.trackingLocalVideoSrc || this.trackingLocalSequenceSources.length);
     },
     selectedModel() {
       return this.modelPathArr.find((item) => item.model_path === this.uploadSrc.model_path) || null;
@@ -853,6 +885,9 @@ export default {
         if (!data?.src || !data?.preview_video_path) {
           throw new Error(response?.data?.msg || "视频预览生成失败");
         }
+        registerLocalSource(data.src, fileItem.raw, {
+          filename: data.filename,
+        });
         this.preparedVideoUpload = [{
           src: data.src,
           filename: data.filename,
@@ -919,7 +954,9 @@ export default {
       }
       formData.append("type", "目标跟踪");
       const response = await createSrc(formData);
-      return response.data.data || [];
+      const uploaded = response.data.data || [];
+      registerUploadedSources(uploaded, fileList);
+      return uploaded;
     },
     async startTracking() {
       if (!this.canStart) {
@@ -976,6 +1013,7 @@ export default {
         }
         this.result = {
           ...data,
+          record: data.record || null,
           first_frame_full_url: this.prefixUrl(data.first_frame_input),
           source_input_full_url: this.prefixUrl(data.source_input_path),
           preview_full_url: this.prefixUrl(data.preview_path),
@@ -1195,6 +1233,19 @@ export default {
 .handle-button {
   margin-top: 24px;
   text-align: center;
+}
+
+.render-mode-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.render-mode-bar__label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .result-summary {

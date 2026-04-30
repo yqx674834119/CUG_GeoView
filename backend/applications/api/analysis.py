@@ -9,9 +9,9 @@ from applications.common.curd import model_to_dicts
 from applications.common.model_assets import infer_model_backend
 from applications.common.path_global import up_dir, generate_dir, fun_type_1, fun_type_4, fun_type_5, fun_type_3, \
     fun_type_2, generate_url
+from applications.common.visualization import normalize_analysis_record
 from applications.common.utils import type_utils
 from applications.common.utils.http import fail_api, success_api, table_api
-from applications.common.utils.type_utils import items_handle
 from applications.common.utils.upload import img_url_handle
 from applications.extensions import db
 from applications.image_processing import histogram_match
@@ -36,12 +36,11 @@ def show_result(type):
     to_type = type_utils.str_to_type(type)
     log = Analysis.query.filter_by(
         type=to_type).order_by(desc(Analysis.create_time)).layui_paginate()
-    log_items = log.items
-    items_handle(log_items)
     count = log.total
+    dicts = model_to_dicts(schema=AnalysisSchema, data=log.items)
+    dicts = [normalize_analysis_record(item) for item in dicts]
     return table_api(
-        data=model_to_dicts(
-            schema=AnalysisSchema, data=log_items), count=count)
+        data=dicts, count=count)
 
 
 """
@@ -81,9 +80,9 @@ def change_detection_api():
             return fail_api("请求参数异常")
     print("----------------->change_detection" + json.dumps(req_json))
     type_ = 1
-    change_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
-                     type_, window_size, stride)
-    return success_api()
+    records = change_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
+                               type_, window_size, stride)
+    return success_api(data={"records": records})
 
 
 """
@@ -117,10 +116,10 @@ def object_detection_api():
     if list_ is None:
         return fail_api("请上传图片")
     type_ = 2
-    object_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
-                     type_)
+    records = object_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
+                               type_)
 
-    return success_api()
+    return success_api(data={"records": records})
 
 
 """
@@ -167,9 +166,9 @@ def semantic_segmentation_api():
     
     type_ = 3
     try:
-        terrain_classification(model_path, up_dir, generate_dir, list_, step1_,
-                               step2_, type_)
-        return success_api()
+        records = terrain_classification(model_path, up_dir, generate_dir, list_, step1_,
+                                         step2_, type_)
+        return success_api(data={"records": records})
     except Exception as e:
         return fail_api(f"推理失败: {str(e)}")
 
@@ -193,8 +192,8 @@ def classification_api():
     if img_list is None:
         return fail_api("请上传图片")
     type_ = 4
-    classification(model_path, up_dir, img_list, type_)
-    return success_api()
+    records = classification(model_path, up_dir, img_list, type_)
+    return success_api(data={"records": records})
 
 
 """
@@ -237,8 +236,8 @@ def image_restoration_api():
     type_ = 5
     try:
         # image_restoration 函数现在会自动路由到 Paddle 或 HuggingFace
-        image_restoration(model_path, up_dir, generate_dir, img_list, type_)
-        return success_api()
+        records = image_restoration(model_path, up_dir, generate_dir, img_list, type_)
+        return success_api(data={"records": records})
     except Exception as e:
         return fail_api(f"推理失败: {str(e)}")
 
@@ -264,16 +263,16 @@ def registration_api():
             return fail_api("请求参数异常")
             
     try:
-        results = registration(model_path, up_dir, generate_dir, list_, type_=6)
-        success_count = len([item for item in results if item.get("status") == "success"])
+        records = registration(model_path, up_dir, generate_dir, list_, type_=6)
+        success_count = len(records)
         return success_api(
-            msg=f"配准完成，共 {success_count}/{len(results)} 对成功",
+            msg=f"配准完成，共 {success_count}/{len(list_)} 对成功",
             data={
-                "results": results,
+                "records": records,
                 "summary": {
-                    "total_pairs": len(results),
+                    "total_pairs": len(list_),
                     "success_pairs": success_count,
-                    "failed_pairs": len(results) - success_count,
+                    "failed_pairs": len(list_) - success_count,
                     "model_path": model_path,
                 }
             },

@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 from collections import Counter
 
@@ -44,8 +45,21 @@ def execute_paddle(model_path, data_path, out_dir, test_names):
     for idx, im in zip(range(len(image_list)), ims):
         im = lut[im]
         new_name = md5_name(test_names[idx])
+        mask_name = f"mask_{os.path.splitext(new_name)[0]}.png"
         imsave(osp.join(out_dir, new_name), np.uint8(im))
-        temps.append(generate_url + new_name)
+        imsave(osp.join(out_dir, mask_name), np.uint8(ims[idx]))
+        temps.append({
+            "after_img": generate_url + new_name,
+            "mask_path": generate_url + mask_name,
+            "class_names": ["cloud", "shadow", "snow", "water", "land"],
+            "palette": [
+                [0, 0, 0],
+                [128, 0, 0],
+                [0, 128, 0],
+                [128, 128, 0],
+                [0, 0, 128],
+            ],
+        })
     return temps
 
 

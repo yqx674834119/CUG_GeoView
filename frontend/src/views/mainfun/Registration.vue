@@ -144,6 +144,13 @@
     <el-divider />
 
     <div v-if="resultCard" class="result-box">
+      <div v-if="resultCard.record?.visual_payload" class="render-mode-bar">
+        <span class="render-mode-bar__label">结果渲染模式</span>
+        <el-radio-group v-model="renderMode" size="small">
+          <el-radio-button label="legacy">原始模式</el-radio-button>
+          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+        </el-radio-group>
+      </div>
       <el-row :gutter="20">
         <el-col :xs="24" :sm="24" :md="8" :lg="8">
           <el-card class="result-card">
@@ -187,7 +194,13 @@
               {{ resultCard.model_name }}
             </div>
             <div class="result-image-box">
+              <JsonImageVisualizer
+                v-if="renderMode === 'json' && resultCard.record?.visual_payload"
+                :image-src="resultCard.moving_preview_url"
+                :payload="resultCard.record.visual_payload"
+              />
               <el-image
+                v-else
                 :src="resultCard.output_full_url"
                 :preview-src-list="[resultCard.output_full_url]"
                 :preview-teleported="true"
@@ -213,9 +226,11 @@
 
 <script>
 import Tabinfor from "@/components/Tabinfor";
+import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
 import { historyGetPage } from "@/api/history";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { registerUploadedSources } from "@/utils/localSourceRegistry";
 
 const SUPPORTED_SUFFIXES = [
   "jpg",
@@ -246,7 +261,7 @@ function revokeObjectUrl(url) {
 
 export default {
   name: "Registration",
-  components: { Tabinfor },
+  components: { Tabinfor, JsonImageVisualizer },
   data() {
     return {
       fixedFileList: [],
@@ -259,6 +274,7 @@ export default {
       },
       running: false,
       resultCard: null,
+      renderMode: "legacy",
     };
   },
   created() {
@@ -360,6 +376,7 @@ export default {
       if (!items.length) {
         throw new Error("上传结果为空");
       }
+      registerUploadedSources(items, [current]);
       return items[0];
     },
     async findLatestDetectionRecord(uploadedSrc) {
@@ -382,14 +399,14 @@ export default {
       this.resultCard = null;
       try {
         const uploaded = await this.uploadMovingImage();
-        await imgUpload({
+        const response = await imgUpload({
           model_path: this.uploadSrc.model_path,
           list: [uploaded.src],
           prehandle: 0,
           denoise: 0,
         }, "object_detection");
 
-        const record = await this.findLatestDetectionRecord(uploaded.src);
+        const record = response?.data?.data?.records?.[0] || await this.findLatestDetectionRecord(uploaded.src);
         if (!record || !record.after_img) {
           throw new Error("未获取到检测结果");
         }
@@ -400,6 +417,7 @@ export default {
           moving_preview_url: this.movingPreviewUrl,
           output_full_url: toBackendAssetUrl(record.after_img),
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
+          record,
         };
         this.$message.success("检测结果已生成");
       } catch (error) {
@@ -485,6 +503,19 @@ export default {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.render-mode-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.render-mode-bar__label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .result-card {

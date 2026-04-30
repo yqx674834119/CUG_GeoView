@@ -229,7 +229,16 @@ def main():
             result_img.save(output_path)
             
             log(f"Detected {len(detections)} objects. Saved to {output_path}")
-            final_results.append({"name": name, "status": "success", "output_path": output_path})
+            final_results.append({
+                "name": name,
+                "status": "success",
+                "output_path": output_path,
+                "image_size": {
+                    "width": int(image.size[0]),
+                    "height": int(image.size[1]),
+                },
+                "detections": detections,
+            })
         except Exception as e:
             log(f"Error processing {name}: {e}", level="ERROR")
             log(traceback.format_exc(), level="ERROR")

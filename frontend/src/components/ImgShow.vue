@@ -6,6 +6,17 @@
     />
 
     <div v-else>
+      <div
+        v-if="hasAnyJsonMode"
+        class="render-mode-bar"
+      >
+        <span class="render-mode-bar__label">结果渲染模式</span>
+        <el-radio-group v-model="renderMode" size="small">
+          <el-radio-button label="legacy">原始模式</el-radio-button>
+          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+        </el-radio-group>
+      </div>
+
       <div v-if="overviewStats" class="analysis-shell">
         <div class="analysis-shell__head">
           <div>
@@ -94,7 +105,13 @@
             </div>
           </div>
           <div class="img-display-item__result">
-            <div v-if="item.type!=='场景分类'">
+            <div v-if="useJsonModeFor(item)">
+              <JsonImageVisualizer
+                :image-src="localSourceFor(item)"
+                :payload="item.visual_payload"
+              />
+            </div>
+            <div v-else-if="item.type!=='场景分类'">
               <div style="display: flex;">
                 <div>
                   <el-image
@@ -224,6 +241,8 @@ import VChart from "vue-echarts";
 
 import { downloadimgWithWords } from "@/utils/download.js";
 import { ASSET_PREVIEW_PLACEHOLDER, hydrateAssetPreviews } from "@/utils/assetPreview";
+import JsonImageVisualizer from "@/components/JsonImageVisualizer";
+import { getLocalSourceUrl } from "@/utils/localSourceRegistry";
 import {
   analyzeClassificationRecord,
   analyzeRestorationRecord,
@@ -248,6 +267,7 @@ export default {
   name: "Imgshow",
   components: {
     VChart,
+    JsonImageVisualizer,
   },
   props: {
     imgArr: {
@@ -266,6 +286,7 @@ export default {
       analysisLoading: false,
       analysisError: "",
       analysisToken: 0,
+      renderMode: "legacy",
     };
   },
   computed: {
@@ -435,6 +456,9 @@ export default {
 
       return [];
     },
+    hasAnyJsonMode() {
+      return this.childImgArr.some((item) => !!item?.visual_payload);
+    },
   },
   mounted() {
     this.syncAndAnalyze(this.imgArr);
@@ -458,6 +482,16 @@ export default {
     },
     previewSrc(item, field) {
       return (item && item[`_${field}_preview`]) || ASSET_PREVIEW_PLACEHOLDER;
+    },
+    localSourceFor(item) {
+      const path = item?.visual_payload?.source?.primary?.asset_path || item?.before_img;
+      return getLocalSourceUrl(path) || this.previewSrc(item, "before_img");
+    },
+    useJsonModeFor(item) {
+      if (this.renderMode !== "json") {
+        return false;
+      }
+      return !!item?.visual_payload && !!this.localSourceFor(item);
     },
     async syncAndAnalyze(value) {
       this.childImgArr = Array.isArray(value) ? value : [];
@@ -717,6 +751,19 @@ export default {
 <style scoped lang="less">
 * {
   font-family: var(--theme-default-fontfamily);
+}
+
+.render-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.render-mode-bar__label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .analysis-shell {

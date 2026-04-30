@@ -9,6 +9,6 @@ class AnalysisSchema(ma.Schema):
     before_img = fields.Str()
     before_img1 = fields.Str()
     after_img = fields.Str()
-    data = fields.Dict()
+    data = fields.Raw()
     is_hole = fields.Boolean()
     create_time = fields.DateTime()

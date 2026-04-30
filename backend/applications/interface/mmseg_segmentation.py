@@ -233,7 +233,10 @@ def run_inference(
             results.append({
                 "name": out_name,
                 "mask_name": mask_name,
-                "status": "success"
+                "status": "success",
+                "class_names": CLASS_NAMES,
+                "palette": PALETTE,
+                "class_histogram": dict(Counter(pred_mask.reshape(-1).tolist())),
             })
             
             print(f"[MMSeg] Processed: {filename} -> {out_name}", file=sys.stderr)

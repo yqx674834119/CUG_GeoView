@@ -57,7 +57,7 @@ def call_hf_super_resolution(
     names: List[str],
     device: str = "auto",
     timeout: int = 600
-) -> List[str]:
+) -> List[dict]:
     """
     调用 HuggingFace 超分辨率模型进行推理
     
@@ -134,7 +134,11 @@ def call_hf_super_resolution(
                 raise RuntimeError(f"No result returned for file: {name}")
             
             if res.get("status") == "success":
-                temps.append(generate_url + res["name"])
+                temps.append({
+                    "after_img": generate_url + res["name"],
+                    "metrics": res.get("metrics") or {},
+                    "image_size": res.get("image_size") or {},
+                })
             else:
                 error_msg = res.get("message", "Unknown error")
                 print(f"[HF-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
@@ -155,7 +159,7 @@ def execute(
     out_dir: str,
     names: List[str],
     device: str = "auto"
-) -> List[str]:
+) -> List[dict]:
     """
     统一的执行接口，与 Paddle 推理模块保持一致
     
@@ -199,7 +203,7 @@ def call_hf_object_detection(
     names: List[str],
     device: str = "auto",
     timeout: int = 600
-) -> List[str]:
+) -> List[dict]:
     """
     Call HuggingFace Object Detection model for inference
     """
@@ -264,7 +268,11 @@ def call_hf_object_detection(
                 raise RuntimeError(f"No result returned for file: {name}")
             
             if res.get("status") == "success":
-                temps.append(generate_url + res["name"])
+                temps.append({
+                    "after_img": generate_url + res["name"],
+                    "detections": res.get("detections") or [],
+                    "image_size": res.get("image_size") or {},
+                })
             else:
                 error_msg = res.get("message", "Unknown error")
                 print(f"[HF-Caller] Error processing {name}: {error_msg}", file=sys.stderr)

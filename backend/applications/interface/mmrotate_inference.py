@@ -12,6 +12,7 @@ import os
 import sys
 import traceback
 import cv2
+import numpy as np
 import collections
 from collections import abc
 
@@ -62,6 +63,45 @@ def resolve_local_artifacts(model_dir: str):
     if not os.path.exists(checkpoint_file):
         raise FileNotFoundError(f"MMRotate checkpoint not found in {model_dir}")
     return config_file, checkpoint_file
+
+
+def _label_name(dataset_meta, label_index: int) -> str:
+    classes = None
+    if isinstance(dataset_meta, dict):
+        classes = dataset_meta.get("classes")
+    if classes and 0 <= label_index < len(classes):
+        return str(classes[label_index])
+    return str(label_index)
+
+
+def _serialize_rotated_box(raw_box: np.ndarray):
+    values = np.asarray(raw_box, dtype=float).reshape(-1).tolist()
+    if len(values) >= 8:
+        points = [[round(float(values[i]), 2), round(float(values[i + 1]), 2)] for i in range(0, 8, 2)]
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        bbox = [round(min(xs), 2), round(min(ys), 2), round(max(xs), 2), round(max(ys), 2)]
+        return {"polygon": points, "box": bbox}
+    if len(values) >= 5:
+        cx, cy, w, h, angle = values[:5]
+        rect = ((float(cx), float(cy)), (float(w), float(h)), float(np.degrees(angle)))
+        points = cv2.boxPoints(rect)
+        points = [[round(float(point[0]), 2), round(float(point[1]), 2)] for point in points]
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        bbox = [round(min(xs), 2), round(min(ys), 2), round(max(xs), 2), round(max(ys), 2)]
+        return {
+            "polygon": points,
+            "box": bbox,
+            "rbox": [
+                round(float(cx), 2),
+                round(float(cy), 2),
+                round(float(w), 2),
+                round(float(h), 2),
+                round(float(angle), 4),
+            ],
+        }
+    return {"box": [round(float(value), 2) for value in values[:4]]}
 
 
 def run_inference(
@@ -115,6 +155,17 @@ def run_inference(
             result = inference_detector(model, img_path)
             img = cv2.imread(img_path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            pred_instances = getattr(result, "pred_instances", None)
+            detections = []
+            if pred_instances is not None:
+                bboxes = pred_instances.bboxes.cpu().numpy() if hasattr(pred_instances, "bboxes") else []
+                scores = pred_instances.scores.cpu().numpy() if hasattr(pred_instances, "scores") else []
+                labels = pred_instances.labels.cpu().numpy() if hasattr(pred_instances, "labels") else []
+                for bbox, score, label in zip(bboxes, scores, labels):
+                    serialized = _serialize_rotated_box(bbox)
+                    serialized["score"] = round(float(score), 4)
+                    serialized["label"] = _label_name(model.dataset_meta, int(label))
+                    detections.append(serialized)
 
             out_name = f"det_{filename}"
             out_path = os.path.join(output_dir, out_name)
@@ -131,6 +182,11 @@ def run_inference(
                 "name": out_name,
                 "status": "success",
                 "output_path": out_path,
+                "image_size": {
+                    "width": int(img.shape[1]),
+                    "height": int(img.shape[0]),
+                },
+                "detections": detections,
             })
             print(f"Processed {filename} -> {out_name}", file=sys.stderr)
         except Exception as exc:

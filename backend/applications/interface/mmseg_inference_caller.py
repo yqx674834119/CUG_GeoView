@@ -71,7 +71,7 @@ def call_mmseg_inference(
     names: List[str],
     device: str = "cuda:0",
     timeout: int = 1200
-) -> List[str]:
+) -> List[dict]:
     """
     调用 MMSegmentation 模型进行语义分割推理
     
@@ -164,30 +164,29 @@ def call_mmseg_inference(
         if output_data.get("status") != "completed":
             raise RuntimeError(f"Inference incomplete: {output_data}")
         
-        # 生成结果 URL 列表
         temps = []
-        # Create map keyed by output filename (which is what res["name"] is)
         result_map = {res["name"]: res for res in output_data.get("results", [])}
         
         for name in names:
-            # Construct expected output filename: pred_{basename_without_ext}.png
-            # Note: mmseg_segmentation.py uses os.path.splitext(filename)[0]
             base_name = os.path.splitext(name)[0]
             expected_out_name = f"pred_{base_name}.png"
             
             res = result_map.get(expected_out_name)
             if not res:
-                # Fallback: check if the name itself is in the map (unlikely based on script logic)
                 res = result_map.get(name)
             
             if not res:
-                # Debug print to help identify mismatch
                 print(f"[MMSeg-Caller] available results: {list(result_map.keys())}", file=sys.stderr)
-                # Try to fuzzy match or just fail
                 raise RuntimeError(f"No result returned for file: {name} (expected {expected_out_name})")
             
             if res.get("status") == "success":
-                temps.append(generate_url + res["name"])
+                temps.append({
+                    "after_img": generate_url + res["name"],
+                    "mask_path": generate_url + res.get("mask_name", "") if res.get("mask_name") else "",
+                    "class_names": res.get("class_names") or [],
+                    "palette": res.get("palette") or [],
+                    "class_histogram": res.get("class_histogram") or {},
+                })
             else:
                 error_msg = res.get("message", "Unknown error")
                 print(f"[MMSeg-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
@@ -208,7 +207,7 @@ def execute(
     out_dir: str,
     names: List[str],
     device: str = "cuda:0"
-) -> List[str]:
+) -> List[dict]:
     """
     统一的执行接口，与 Paddle 推理模块保持一致
     
@@ -252,7 +251,7 @@ def call_mmrotate_inference(
     names: List[str],
     device: str = "cuda:0",
     timeout: int = 1200
-) -> List[str]:
+) -> List[dict]:
     """
     Call MMRotate for oriented object detection
     """
@@ -338,7 +337,11 @@ def call_mmrotate_inference(
                  raise RuntimeError(f"No result returned for file: {name}")
 
             if res.get("status") == "success":
-                temps.append(generate_url + res["name"])
+                temps.append({
+                    "after_img": generate_url + res["name"],
+                    "detections": res.get("detections") or [],
+                    "image_size": res.get("image_size") or {},
+                })
             else:
                 error_msg = res.get("message", "Unknown error")
                 print(f"[MMRotate-Caller] Error processing {name}: {error_msg}", file=sys.stderr)

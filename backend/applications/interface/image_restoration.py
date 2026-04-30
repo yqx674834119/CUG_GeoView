@@ -55,7 +55,14 @@ def execute_paddle(model_path, data_path, out_dir, names):
     imgs = [im['res_map'] for im in pred]
     for name, im in zip(names, imgs):
         imsave(osp.join(out_dir, name), im)
-        temps.append(generate_url + name)
+        height, width = im.shape[:2]
+        temps.append({
+            "after_img": generate_url + name,
+            "image_size": {
+                "width": int(width),
+                "height": int(height),
+            },
+        })
     return temps
 
 
