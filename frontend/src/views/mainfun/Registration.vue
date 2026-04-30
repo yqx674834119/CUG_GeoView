@@ -151,6 +151,63 @@
           <el-radio-button label="json">JSON 本地可视化</el-radio-button>
         </el-radio-group>
       </div>
+
+      <div v-if="registrationAnalysis" class="analysis-shell">
+        <div class="analysis-shell__head">
+          <div>
+            <div class="analysis-shell__title">配准检测统计总览</div>
+            <div class="analysis-shell__meta">
+              检测统计来自后端 JSON，影像质量指标与跨模态对比由前端本地计算
+            </div>
+          </div>
+          <el-tag effect="dark" type="warning">
+            多模态目标识别
+          </el-tag>
+        </div>
+
+        <div class="metric-row">
+          <div
+            v-for="metric in registrationMetricCards"
+            :key="metric.label"
+            class="metric-card"
+          >
+            <div class="metric-card__label">
+              {{ metric.label }}
+            </div>
+            <div class="metric-card__value">
+              {{ metric.value }}
+            </div>
+            <div class="metric-card__desc">
+              {{ metric.desc }}
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <el-card
+            v-for="chart in registrationCharts"
+            :key="chart.title"
+            shadow="never"
+            class="chart-card"
+          >
+            <div class="chart-card__title">
+              {{ chart.title }}
+            </div>
+            <v-chart
+              class="chart-view"
+              :option="chart.option"
+              autoresize
+            />
+          </el-card>
+        </div>
+      </div>
+      <div v-else-if="analysisLoading" class="analysis-loading">
+        正在计算多模态统计信息...
+      </div>
+      <div v-else-if="analysisError" class="analysis-error">
+        {{ analysisError }}
+      </div>
+
       <el-row :gutter="20">
         <el-col :xs="24" :sm="24" :md="8" :lg="8">
           <el-card class="result-card">
@@ -225,12 +282,32 @@
 </template>
 
 <script>
+import { use } from "echarts/core";
+import { CanvasRenderer } from "echarts/renderers";
+import { BarChart, PieChart } from "echarts/charts";
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+} from "echarts/components";
+import VChart from "vue-echarts";
+
 import Tabinfor from "@/components/Tabinfor";
 import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
 import { historyGetPage } from "@/api/history";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
+import { analyzeRegistrationRecord } from "@/utils/frontAnalysis";
+
+use([
+  CanvasRenderer,
+  BarChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+]);
 
 const SUPPORTED_SUFFIXES = [
   "jpg",
@@ -261,7 +338,7 @@ function revokeObjectUrl(url) {
 
 export default {
   name: "Registration",
-  components: { Tabinfor, JsonImageVisualizer },
+  components: { Tabinfor, JsonImageVisualizer, VChart },
   data() {
     return {
       fixedFileList: [],
@@ -275,10 +352,89 @@ export default {
       running: false,
       resultCard: null,
       renderMode: "legacy",
+      analysisLoading: false,
+      analysisError: "",
+      registrationAnalysis: null,
     };
   },
   created() {
     this.fetchModels();
+  },
+  computed: {
+    registrationMetricCards() {
+      if (!this.registrationAnalysis) {
+        return [];
+      }
+      const detection = this.registrationAnalysis.detection;
+      return [
+        {
+          label: "识别目标数",
+          value: detection.detectionCount,
+          desc: "当前结果中识别出的目标总数",
+        },
+        {
+          label: "平均置信度",
+          value: `${detection.avgConfidence}%`,
+          desc: "所有识别目标分数的均值",
+        },
+        {
+          label: "主导类别",
+          value: detection.dominantLabel,
+          desc: detection.dominantLabelCount ? `出现 ${detection.dominantLabelCount} 次` : "暂无目标",
+        },
+        {
+          label: "边缘重合率",
+          value: this.registrationAnalysis.edgeAlignment ? `${this.registrationAnalysis.edgeAlignment.edgeOverlap}%` : "--",
+          desc: "参考影像与待检影像的启发式结构接近度",
+        },
+        {
+          label: "模态对比度差",
+          value: `${this.modalityGapValue("对比度")}`,
+          desc: "参考影像与待检影像对比度差值",
+        },
+        {
+          label: "结果图清晰度",
+          value: this.registrationAnalysis.resultMetrics ? this.registrationAnalysis.resultMetrics.sharpness : "--",
+          desc: "结果图的拉普拉斯清晰度指标",
+        },
+      ];
+    },
+    registrationCharts() {
+      if (!this.registrationAnalysis) {
+        return [];
+      }
+      const detection = this.registrationAnalysis.detection;
+      return [
+        {
+          title: "识别类别分布",
+          option: this.createPieOption(detection.labelStats, "各类别识别次数"),
+        },
+        {
+          title: "置信度分层统计",
+          option: this.createBarOption(detection.confidenceBands, "value", "目标数量"),
+        },
+        {
+          title: "目标尺度分层",
+          option: this.createBarOption(detection.sizeBands, "value", "目标数量"),
+        },
+        {
+          title: "空间象限分布",
+          option: this.createBarOption(detection.quadrantStats, "value", "目标数量"),
+        },
+        {
+          title: "三图像指标对比",
+          option: this.createGroupedMetricOption(this.registrationAnalysis.metricRows),
+        },
+        {
+          title: "跨模态差异强度",
+          option: this.createBarOption(this.registrationAnalysis.modalityGap, "value", "差值"),
+        },
+        {
+          title: "高置信目标排名",
+          option: this.createBarOption(detection.topDetections, "value", "置信度 (%)"),
+        },
+      ];
+    },
   },
   beforeUnmount() {
     revokeObjectUrl(this.fixedPreviewUrl);
@@ -354,6 +510,8 @@ export default {
       this.fixedFileList = [];
       this.movingFileList = [];
       this.resultCard = null;
+      this.registrationAnalysis = null;
+      this.analysisError = "";
       if (this.$refs.uploadA) {
         this.$refs.uploadA.clearFiles();
       }
@@ -365,6 +523,126 @@ export default {
       this.fixedPreviewUrl = "";
       this.movingPreviewUrl = "";
       this.$message.success("清除成功");
+    },
+    modalityGapValue(name) {
+      const item = (this.registrationAnalysis?.modalityGap || []).find((entry) => entry.name === name);
+      return item ? item.value : "--";
+    },
+    createPieOption(data, subtitle) {
+      return {
+        tooltip: {
+          trigger: "item",
+        },
+        legend: {
+          bottom: 0,
+        },
+        title: subtitle ? {
+          text: subtitle,
+          left: "center",
+          top: 4,
+          textStyle: {
+            fontSize: 12,
+            fontWeight: 400,
+          },
+        } : null,
+        series: [
+          {
+            type: "pie",
+            radius: ["34%", "66%"],
+            center: ["50%", "52%"],
+            label: {
+              formatter: "{b}\n{d}%",
+            },
+            data,
+          },
+        ],
+      };
+    },
+    createBarOption(data, field, axisName) {
+      return {
+        tooltip: {
+          trigger: "axis",
+        },
+        grid: {
+          left: 52,
+          right: 20,
+          top: 24,
+          bottom: 54,
+        },
+        xAxis: {
+          type: "category",
+          data: data.map((item) => item.name),
+          axisLabel: {
+            interval: 0,
+            rotate: 18,
+          },
+        },
+        yAxis: {
+          type: "value",
+          name: axisName,
+        },
+        series: [
+          {
+            type: "bar",
+            data: data.map((item) => item[field]),
+            itemStyle: {
+              color: "#3b82f6",
+              borderRadius: [6, 6, 0, 0],
+            },
+          },
+        ],
+      };
+    },
+    createGroupedMetricOption(metricRows) {
+      const seriesDefs = [
+        { key: "fixed", name: "参考影像", color: "#64748b" },
+        { key: "moving", name: "待检影像", color: "#0ea5e9" },
+        { key: "result", name: "结果影像", color: "#f97316" },
+      ];
+      const activeSeries = seriesDefs.filter((series) => metricRows.some((row) => row[series.key] !== null && row[series.key] !== undefined));
+      return {
+        tooltip: { trigger: "axis" },
+        legend: { top: 0 },
+        grid: { left: 52, right: 20, top: 42, bottom: 44 },
+        xAxis: {
+          type: "category",
+          data: metricRows.map((row) => row.name),
+          axisLabel: {
+            interval: 0,
+            rotate: 18,
+          },
+        },
+        yAxis: { type: "value" },
+        series: activeSeries.map((series) => ({
+          name: series.name,
+          type: "bar",
+          data: metricRows.map((row) => row[series.key]),
+          itemStyle: { color: series.color },
+        })),
+      };
+    },
+    async refreshRegistrationAnalysis() {
+      if (!this.resultCard?.record) {
+        this.registrationAnalysis = null;
+        this.analysisError = "";
+        this.analysisLoading = false;
+        return;
+      }
+      this.analysisLoading = true;
+      this.analysisError = "";
+      try {
+        this.registrationAnalysis = await analyzeRegistrationRecord({
+          fixedSource: this.resultCard.fixed_preview_url,
+          movingSource: this.resultCard.moving_preview_url,
+          resultSource: this.resultCard.output_asset_path || this.resultCard.record?.after_img || this.resultCard.output_full_url,
+          record: this.resultCard.record,
+        });
+      } catch (error) {
+        this.registrationAnalysis = null;
+        this.analysisError = error?.message || "统计分析失败";
+      } finally {
+        this.analysisLoading = false;
+      }
     },
     async uploadMovingImage() {
       const formData = new FormData();
@@ -416,9 +694,11 @@ export default {
           fixed_preview_url: this.fixedPreviewUrl,
           moving_preview_url: this.movingPreviewUrl,
           output_full_url: toBackendAssetUrl(record.after_img),
+          output_asset_path: record.after_img,
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
           record,
         };
+        await this.refreshRegistrationAnalysis();
         this.$message.success("检测结果已生成");
       } catch (error) {
         console.error(error);
@@ -518,6 +798,102 @@ export default {
   color: var(--text-secondary);
 }
 
+.analysis-shell {
+  margin-bottom: 22px;
+  padding: 18px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 241, 0.98));
+  border: 1px solid rgba(245, 158, 11, 0.18);
+}
+
+.analysis-shell__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.analysis-shell__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--theme-heading-color);
+}
+
+.analysis-shell__meta {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.metric-row {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.metric-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.metric-card__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.metric-card__value {
+  margin-top: 8px;
+  font-size: 28px;
+  line-height: 1.1;
+  font-family: var(--theme-display-fontfamily);
+  color: var(--theme-heading-color);
+}
+
+.metric-card__desc {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chart-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.chart-card {
+  border-radius: 16px;
+}
+
+.chart-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.chart-view {
+  width: 100%;
+  height: 280px;
+}
+
+.analysis-loading,
+.analysis-error {
+  padding: 12px 2px 18px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.analysis-error {
+  color: #b91c1c;
+}
+
 .result-card {
   height: 100%;
 }
@@ -556,6 +932,10 @@ export default {
   .clear-queue {
     position: static;
     margin-bottom: 16px;
+  }
+
+  .chart-view {
+    height: 240px;
   }
 }
 </style>

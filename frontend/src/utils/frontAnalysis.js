@@ -292,6 +292,243 @@ export function summarizeClassification(items) {
   };
 }
 
+function getDetectionPayload(item) {
+  return item?.visual_payload || item?.data?.__visual_payload || {};
+}
+
+function getDetections(item) {
+  const payload = getDetectionPayload(item);
+  return Array.isArray(payload?.result?.detections) ? payload.result.detections : [];
+}
+
+function getDetectionImageSize(item) {
+  const payload = getDetectionPayload(item);
+  return payload?.result?.image_size || {};
+}
+
+function polygonArea(points) {
+  if (!Array.isArray(points) || points.length < 3) {
+    return 0;
+  }
+  let sum = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const current = points[i] || [0, 0];
+    const next = points[(i + 1) % points.length] || [0, 0];
+    sum += (Number(current[0]) * Number(next[1])) - (Number(next[0]) * Number(current[1]));
+  }
+  return Math.abs(sum) / 2;
+}
+
+function detectionQuadrant(xRatio, yRatio) {
+  if (xRatio < 0.5 && yRatio < 0.5) {
+    return "左上";
+  }
+  if (xRatio >= 0.5 && yRatio < 0.5) {
+    return "右上";
+  }
+  if (xRatio < 0.5 && yRatio >= 0.5) {
+    return "左下";
+  }
+  return "右下";
+}
+
+function confidenceBand(score) {
+  if (score >= 0.8) {
+    return "高置信";
+  }
+  if (score >= 0.5) {
+    return "中置信";
+  }
+  return "低置信";
+}
+
+function sizeBand(areaRatioPercent) {
+  if (areaRatioPercent < 0.5) {
+    return "微小目标";
+  }
+  if (areaRatioPercent < 2) {
+    return "小目标";
+  }
+  if (areaRatioPercent < 8) {
+    return "中目标";
+  }
+  return "大目标";
+}
+
+function accumulateCounter(target, key) {
+  target.set(key, (target.get(key) || 0) + 1);
+}
+
+function mapToSortedArray(counter) {
+  return Array.from(counter.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+function normalizeDetection(item, detection, index, imageArea, imageWidth, imageHeight) {
+  const polygon = Array.isArray(detection?.polygon) ? detection.polygon : [];
+  const box = Array.isArray(detection?.box) ? detection.box : [];
+  const fallbackWidth = Math.max(1, Number(imageWidth) || 1);
+  const fallbackHeight = Math.max(1, Number(imageHeight) || 1);
+  let x1 = 0;
+  let y1 = 0;
+  let x2 = 0;
+  let y2 = 0;
+
+  if (box.length >= 4) {
+    [x1, y1, x2, y2] = box.map((value) => Number(value) || 0);
+  } else if (polygon.length >= 3) {
+    const xs = polygon.map((point) => Number(point?.[0]) || 0);
+    const ys = polygon.map((point) => Number(point?.[1]) || 0);
+    x1 = Math.min(...xs);
+    y1 = Math.min(...ys);
+    x2 = Math.max(...xs);
+    y2 = Math.max(...ys);
+  }
+
+  const width = Math.max(0, x2 - x1);
+  const height = Math.max(0, y2 - y1);
+  const rawArea = polygon.length >= 3 ? polygonArea(polygon) : width * height;
+  const areaRatioPercent = normalizedPercent(rawArea, imageArea);
+  const centerX = x1 + (width / 2);
+  const centerY = y1 + (height / 2);
+  const centerXRatio = centerX / fallbackWidth;
+  const centerYRatio = centerY / fallbackHeight;
+  const score = Number(detection?.score) || 0;
+  const label = detection?.label || "未命名目标";
+
+  return {
+    id: `${item?.id ?? "result"}-${index + 1}`,
+    label,
+    score,
+    scorePercent: round(score * 100, 2),
+    area: round(rawArea, 2),
+    areaRatioPercent,
+    width: round(width, 2),
+    height: round(height, 2),
+    aspectRatio: height ? round(width / height, 2) : 0,
+    centerXRatio,
+    centerYRatio,
+    quadrant: detectionQuadrant(centerXRatio, centerYRatio),
+    confidenceBand: confidenceBand(score),
+    sizeBand: sizeBand(areaRatioPercent),
+  };
+}
+
+function createBandRows(counter, order) {
+  return order.map((name) => ({
+    name,
+    value: counter.get(name) || 0,
+  }));
+}
+
+export function analyzeDetectionRecord(item) {
+  const detections = getDetections(item);
+  const imageSize = getDetectionImageSize(item);
+  const imageWidth = Number(imageSize?.width) || 0;
+  const imageHeight = Number(imageSize?.height) || 0;
+  const imageArea = Math.max(1, imageWidth * imageHeight);
+  const normalized = detections.map((detection, index) => normalizeDetection(
+    item,
+    detection,
+    index,
+    imageArea,
+    imageWidth,
+    imageHeight,
+  ));
+
+  const labelCounter = new Map();
+  const confidenceCounter = new Map();
+  const sizeCounter = new Map();
+  const quadrantCounter = new Map();
+  let totalScore = 0;
+  let totalAreaRatio = 0;
+
+  normalized.forEach((detection) => {
+    accumulateCounter(labelCounter, detection.label);
+    accumulateCounter(confidenceCounter, detection.confidenceBand);
+    accumulateCounter(sizeCounter, detection.sizeBand);
+    accumulateCounter(quadrantCounter, detection.quadrant);
+    totalScore += detection.scorePercent;
+    totalAreaRatio += detection.areaRatioPercent;
+  });
+
+  const count = normalized.length || 1;
+  const labelStats = mapToSortedArray(labelCounter);
+  const topDetection = [...normalized].sort((a, b) => b.score - a.score)[0] || null;
+
+  return {
+    kind: "detection",
+    detectionCount: normalized.length,
+    imageWidth,
+    imageHeight,
+    imageMegapixels: round((imageWidth * imageHeight) / 1000000, 3),
+    avgConfidence: round(totalScore / count, 2),
+    avgAreaRatio: round(totalAreaRatio / count, 2),
+    dominantLabel: labelStats[0]?.name || "暂无",
+    dominantLabelCount: labelStats[0]?.value || 0,
+    labelStats,
+    confidenceBands: createBandRows(confidenceCounter, ["高置信", "中置信", "低置信"]),
+    sizeBands: createBandRows(sizeCounter, ["微小目标", "小目标", "中目标", "大目标"]),
+    quadrantStats: createBandRows(quadrantCounter, ["左上", "右上", "左下", "右下"]),
+    topDetections: [...normalized]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((detection) => ({
+        name: `${detection.label} ${detection.id.split("-").pop()}`,
+        value: detection.scorePercent,
+      })),
+    detections: normalized,
+    topDetection,
+    detectionDensity: round(normalized.length / Math.max(1, (imageWidth * imageHeight) / 1000000), 2),
+  };
+}
+
+export function summarizeDetection(items, analyses) {
+  const labelCounter = new Map();
+  const confidenceCounter = new Map();
+  const sizeCounter = new Map();
+  let totalDetections = 0;
+  let totalConfidence = 0;
+  let totalAreaRatio = 0;
+
+  analyses.forEach((analysis, index) => {
+    totalDetections += analysis.detectionCount;
+    totalConfidence += analysis.avgConfidence * analysis.detectionCount;
+    totalAreaRatio += analysis.avgAreaRatio * analysis.detectionCount;
+    analysis.labelStats.forEach((entry) => {
+      labelCounter.set(entry.name, (labelCounter.get(entry.name) || 0) + entry.value);
+    });
+    analysis.confidenceBands.forEach((entry) => {
+      confidenceCounter.set(entry.name, (confidenceCounter.get(entry.name) || 0) + entry.value);
+    });
+    analysis.sizeBands.forEach((entry) => {
+      sizeCounter.set(entry.name, (sizeCounter.get(entry.name) || 0) + entry.value);
+    });
+  });
+
+  const sampleCount = analyses.length;
+  const safeDetectionCount = totalDetections || 1;
+  const labelStats = mapToSortedArray(labelCounter);
+
+  return {
+    kind: "detection",
+    sampleCount,
+    totalDetections,
+    averageDetections: round(totalDetections / Math.max(1, sampleCount), 2),
+    averageConfidence: round(totalConfidence / safeDetectionCount, 2),
+    averageAreaRatio: round(totalAreaRatio / safeDetectionCount, 2),
+    classCount: labelStats.length,
+    dominantLabels: labelStats,
+    confidenceBands: createBandRows(confidenceCounter, ["高置信", "中置信", "低置信"]),
+    sizeBands: createBandRows(sizeCounter, ["微小目标", "小目标", "中目标", "大目标"]),
+    imageDetectionCounts: analyses.map((analysis, index) => ({
+      name: `第${items[index]?.id ?? index + 1}组`,
+      value: analysis.detectionCount,
+    })),
+  };
+}
+
 function isMmsegResult(item) {
   return Boolean(item?.after_img && String(item.after_img).includes("pred_"));
 }
@@ -493,6 +730,78 @@ export function summarizeRestoration(items, analyses) {
       { name: "信息熵", value: round(totals.entropy / count, 2) },
       { name: "边缘密度", value: round(totals.edgeDensity / count, 2) },
     ],
+  };
+}
+
+export async function analyzeRegistrationRecord({
+  fixedSource,
+  movingSource,
+  resultSource,
+  record,
+} = {}) {
+  const detection = analyzeDetectionRecord(record || {});
+  const [fixedPixels, movingPixels, resultPixels] = await Promise.all([
+    fixedSource ? loadImagePixels(fixedSource, IMAGE_PREVIEW_SIZE).catch(() => null) : Promise.resolve(null),
+    movingSource ? loadImagePixels(movingSource, IMAGE_PREVIEW_SIZE).catch(() => null) : Promise.resolve(null),
+    resultSource ? loadImagePixels(resultSource, IMAGE_PREVIEW_SIZE).catch(() => null) : Promise.resolve(null),
+  ]);
+
+  const fixedMetrics = fixedPixels ? computeImageMetrics(fixedPixels) : null;
+  const movingMetrics = movingPixels ? computeImageMetrics(movingPixels) : null;
+  const resultMetrics = resultPixels ? computeImageMetrics(resultPixels) : null;
+  const edgeAlignment = fixedSource && movingSource
+    ? await computeEdgeAlignmentComparison(fixedSource, movingSource, 256).catch(() => null)
+    : null;
+
+  const metricRows = [
+    {
+      name: "亮度",
+      fixed: fixedMetrics?.brightness ?? null,
+      moving: movingMetrics?.brightness ?? null,
+      result: resultMetrics?.brightness ?? null,
+    },
+    {
+      name: "对比度",
+      fixed: fixedMetrics?.contrast ?? null,
+      moving: movingMetrics?.contrast ?? null,
+      result: resultMetrics?.contrast ?? null,
+    },
+    {
+      name: "信息熵",
+      fixed: fixedMetrics?.entropy ?? null,
+      moving: movingMetrics?.entropy ?? null,
+      result: resultMetrics?.entropy ?? null,
+    },
+    {
+      name: "边缘密度",
+      fixed: fixedMetrics?.edgeDensity ?? null,
+      moving: movingMetrics?.edgeDensity ?? null,
+      result: resultMetrics?.edgeDensity ?? null,
+    },
+    {
+      name: "清晰度",
+      fixed: fixedMetrics?.sharpness ?? null,
+      moving: movingMetrics?.sharpness ?? null,
+      result: resultMetrics?.sharpness ?? null,
+    },
+  ];
+
+  const modalityGap = metricRows
+    .filter((row) => row.fixed !== null && row.moving !== null)
+    .map((row) => ({
+      name: row.name,
+      value: round(Math.abs(row.fixed - row.moving), 2),
+    }));
+
+  return {
+    kind: "registration_detection",
+    detection,
+    fixedMetrics,
+    movingMetrics,
+    resultMetrics,
+    edgeAlignment,
+    metricRows,
+    modalityGap,
   };
 }
 

@@ -245,9 +245,11 @@ import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import { getLocalSourceUrl } from "@/utils/localSourceRegistry";
 import {
   analyzeClassificationRecord,
+  analyzeDetectionRecord,
   analyzeRestorationRecord,
   analyzeSegmentationRecord,
   summarizeClassification,
+  summarizeDetection,
   summarizeRestoration,
   summarizeSegmentation,
 } from "@/utils/frontAnalysis";
@@ -261,7 +263,7 @@ use([
   TooltipComponent,
 ]);
 
-const SUPPORTED_ANALYSIS_TYPES = ["场景分类", "地物分类", "影像超分重建"];
+const SUPPORTED_ANALYSIS_TYPES = ["场景分类", "目标检测", "地物分类", "影像超分重建"];
 
 export default {
   name: "Imgshow",
@@ -302,6 +304,9 @@ export default {
       }
       if (this.currentType === "地物分类") {
         return "warning";
+      }
+      if (this.currentType === "目标检测") {
+        return "danger";
       }
       if (this.currentType === "影像超分重建") {
         return "info";
@@ -362,6 +367,32 @@ export default {
             label: "类别数",
             value: this.overviewStats.aggregateClassStats.length,
             desc: "聚合后出现过的地物类别",
+          },
+        ];
+      }
+
+      if (this.overviewStats.kind === "detection") {
+        const dominant = this.overviewStats.dominantLabels[0];
+        return [
+          {
+            label: "累计识别目标",
+            value: this.overviewStats.totalDetections,
+            desc: "全部结果中识别出的目标总数",
+          },
+          {
+            label: "平均每图目标数",
+            value: this.overviewStats.averageDetections,
+            desc: "衡量场景拥挤程度的基础指标",
+          },
+          {
+            label: "平均置信度",
+            value: `${this.overviewStats.averageConfidence}%`,
+            desc: "所有识别目标分数的整体均值",
+          },
+          {
+            label: "主导类别",
+            value: dominant ? dominant.name : "暂无",
+            desc: dominant ? `累计出现 ${dominant.value} 次` : "暂无样本",
           },
         ];
       }
@@ -436,6 +467,42 @@ export default {
               this.overviewStats.dominantClasses,
               "value",
               "成为主导类别的影像数",
+            ),
+          },
+        ];
+      }
+
+      if (this.overviewStats.kind === "detection") {
+        return [
+          {
+            title: "识别类别分布",
+            option: this.createPieOption(
+              this.overviewStats.dominantLabels,
+              "各类别累计识别次数",
+            ),
+          },
+          {
+            title: "置信度分层统计",
+            option: this.createBarOption(
+              this.overviewStats.confidenceBands,
+              "value",
+              "目标数量",
+            ),
+          },
+          {
+            title: "目标尺度分层",
+            option: this.createBarOption(
+              this.overviewStats.sizeBands,
+              "value",
+              "目标数量",
+            ),
+          },
+          {
+            title: "各结果目标数量",
+            option: this.createBarOption(
+              this.overviewStats.imageDetectionCounts,
+              "value",
+              "目标数",
             ),
           },
         ];
@@ -521,6 +588,9 @@ export default {
           if (type === "场景分类") {
             return analyzeClassificationRecord(item);
           }
+          if (type === "目标检测") {
+            return analyzeDetectionRecord(item);
+          }
           if (type === "地物分类") {
             return analyzeSegmentationRecord(item);
           }
@@ -539,6 +609,8 @@ export default {
 
         if (type === "场景分类") {
           this.overviewStats = summarizeClassification(currentItems);
+        } else if (type === "目标检测") {
+          this.overviewStats = summarizeDetection(currentItems, analyses);
         } else if (type === "地物分类") {
           this.overviewStats = summarizeSegmentation(currentItems, analyses);
         } else if (type === "影像超分重建") {
@@ -562,6 +634,9 @@ export default {
       if (analysis.kind === "classification") {
         return `Top1 ${analysis.topLabel}`;
       }
+      if (analysis.kind === "detection") {
+        return `${analysis.detectionCount} 个目标`;
+      }
       if (analysis.kind === "segmentation") {
         return `${analysis.dominantClass} ${analysis.dominantRatio}%`;
       }
@@ -583,6 +658,17 @@ export default {
           { label: "主导占比", value: `${analysis.dominantRatio}%` },
           { label: "总采样像素", value: analysis.totalPixels },
           { label: "统计来源", value: analysis.source },
+        ];
+      }
+
+      if (analysis.kind === "detection") {
+        return [
+          { label: "目标数量", value: analysis.detectionCount },
+          { label: "平均置信度", value: `${analysis.avgConfidence}%` },
+          { label: "主导类别", value: analysis.dominantLabel },
+          { label: "检测密度", value: `${analysis.detectionDensity} 个/MP` },
+          { label: "平均面积占比", value: `${analysis.avgAreaRatio}%` },
+          { label: "输入分辨率", value: `${analysis.imageWidth} × ${analysis.imageHeight}` },
         ];
       }
 
@@ -629,6 +715,42 @@ export default {
               })),
               "value",
               "占比 (%)",
+            ),
+          },
+        ];
+      }
+
+      if (analysis.kind === "detection") {
+        return [
+          {
+            title: "类别分布",
+            option: this.createPieOption(
+              analysis.labelStats,
+              "当前影像各类别目标数量",
+            ),
+          },
+          {
+            title: "置信度分层",
+            option: this.createBarOption(
+              analysis.confidenceBands,
+              "value",
+              "目标数量",
+            ),
+          },
+          {
+            title: "目标尺度分层",
+            option: this.createBarOption(
+              analysis.sizeBands,
+              "value",
+              "目标数量",
+            ),
+          },
+          {
+            title: "高置信目标排名",
+            option: this.createBarOption(
+              analysis.topDetections,
+              "value",
+              "置信度 (%)",
             ),
           },
         ];
