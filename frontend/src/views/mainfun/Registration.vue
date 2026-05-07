@@ -144,12 +144,19 @@
     <el-divider />
 
     <div v-if="resultCard" class="result-box">
-      <div v-if="resultCard.record?.visual_payload" class="render-mode-bar">
-        <span class="render-mode-bar__label">结果渲染模式</span>
-        <el-radio-group v-model="renderMode" size="small">
-          <el-radio-button label="legacy">原始模式</el-radio-button>
-          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+      <div class="render-mode-bar">
+        <span class="render-mode-bar__label">传输 / 渲染模式</span>
+        <el-radio-group v-model="displayMode" size="small">
+          <el-radio-button label="original">原始图像</el-radio-button>
+          <el-radio-button label="base64" :disabled="!hasBase64Mode">备用 Base64</el-radio-button>
+          <el-radio-button label="json" :disabled="!hasJsonMode">JSON 前端可视化</el-radio-button>
         </el-radio-group>
+      </div>
+      <div class="render-mode-state">
+        <el-tag size="small" :type="currentModeTagType" effect="dark">
+          当前显示：{{ currentModeLabel }}
+        </el-tag>
+        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
       </div>
 
       <div v-if="registrationAnalysis" class="analysis-shell">
@@ -235,8 +242,8 @@
             <div class="result-card__meta">待配准检测影像</div>
             <div class="result-image-box">
               <el-image
-                :src="resultCard.moving_preview_url"
-                :preview-src-list="[resultCard.moving_preview_url]"
+                :src="movingDisplaySrc"
+                :preview-src-list="[movingDisplaySrc]"
                 :preview-teleported="true"
                 fit="cover"
               />
@@ -252,14 +259,14 @@
             </div>
             <div class="result-image-box">
               <JsonImageVisualizer
-                v-if="renderMode === 'json' && resultCard.record?.visual_payload"
-                :image-src="resultCard.moving_preview_url"
+                v-if="displayMode === 'json' && hasJsonMode"
+                :image-src="jsonBaseSrc"
                 :payload="resultCard.record.visual_payload"
               />
               <el-image
                 v-else
-                :src="resultCard.output_full_url"
-                :preview-src-list="[resultCard.output_full_url]"
+                :src="outputDisplaySrc"
+                :preview-src-list="[outputDisplaySrc]"
                 :preview-teleported="true"
                 fit="cover"
               />
@@ -299,6 +306,14 @@ import { historyGetPage } from "@/api/history";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
 import { analyzeRegistrationRecord } from "@/utils/frontAnalysis";
+import {
+  availableDisplayModes,
+  getRecordTransport,
+  modeLabel,
+  normalizeDisplayMode,
+  resolveJsonBaseSource,
+  resolveRecordSource,
+} from "@/utils/mediaTransport";
 
 use([
   CanvasRenderer,
@@ -351,7 +366,7 @@ export default {
       },
       running: false,
       resultCard: null,
-      renderMode: "legacy",
+      displayMode: "original",
       analysisLoading: false,
       analysisError: "",
       registrationAnalysis: null,
@@ -361,6 +376,52 @@ export default {
     this.fetchModels();
   },
   computed: {
+    hasBase64Mode() {
+      return !!getRecordTransport(this.resultCard?.record, "before_img")?.preview_data_url
+        || !!getRecordTransport(this.resultCard?.record, "after_img")?.preview_data_url;
+    },
+    hasJsonMode() {
+      return this.availableModes.includes("json");
+    },
+    availableModes() {
+      return availableDisplayModes(this.resultCard?.record, ["before_img", "after_img"]);
+    },
+    currentModeLabel() {
+      return modeLabel(this.displayMode);
+    },
+    currentModeTagType() {
+      if (this.displayMode === "json") {
+        return "success";
+      }
+      if (this.displayMode === "base64") {
+        return "warning";
+      }
+      return "info";
+    },
+    modeAvailabilityText() {
+      return `当前结果可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
+    },
+    movingDisplaySrc() {
+      if (!this.resultCard?.record) {
+        return this.resultCard?.moving_preview_url || "";
+      }
+      if (this.displayMode === "base64") {
+        return resolveRecordSource(this.resultCard.record, "before_img", "base64") || this.resultCard.moving_preview_url;
+      }
+      return resolveRecordSource(this.resultCard.record, "before_img", "original") || this.resultCard.moving_preview_url;
+    },
+    outputDisplaySrc() {
+      if (!this.resultCard?.record) {
+        return this.resultCard?.output_full_url || "";
+      }
+      if (this.displayMode === "base64") {
+        return resolveRecordSource(this.resultCard.record, "after_img", "base64") || this.resultCard.output_full_url;
+      }
+      return resolveRecordSource(this.resultCard.record, "after_img", "original") || this.resultCard.output_full_url;
+    },
+    jsonBaseSrc() {
+      return resolveJsonBaseSource(this.resultCard?.record, this.displayMode === "original" ? "original" : "base64") || this.movingDisplaySrc;
+    },
     registrationMetricCards() {
       if (!this.registrationAnalysis) {
         return [];
@@ -441,6 +502,9 @@ export default {
     revokeObjectUrl(this.movingPreviewUrl);
   },
   methods: {
+    syncDisplayMode() {
+      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
+    },
     async fetchModels() {
       try {
         const res = await getCustomModel("object_detection");
@@ -622,6 +686,7 @@ export default {
       };
     },
     async refreshRegistrationAnalysis() {
+      this.syncDisplayMode();
       if (!this.resultCard?.record) {
         this.registrationAnalysis = null;
         this.analysisError = "";
@@ -698,6 +763,7 @@ export default {
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
           record,
         };
+        this.syncDisplayMode();
         await this.refreshRegistrationAnalysis();
         this.$message.success("检测结果已生成");
       } catch (error) {
@@ -790,11 +856,25 @@ export default {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .render-mode-bar__label {
   font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.render-mode-state {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.render-mode-state__text {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 

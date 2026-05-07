@@ -13,6 +13,7 @@ from flask import (Blueprint, Response, abort, current_app, jsonify, request,
                    send_from_directory, stream_with_context)
 from PIL import Image, UnidentifiedImageError
 
+from applications.common.asset_transport import build_asset_transport
 from applications.common.path_global import generate_url, md5_name
 from applications.common.storage import (ensure_storage_dirs, log_asset,
                                          mirror_file, resolve_asset_path)
@@ -376,7 +377,7 @@ def upload_api():
         is_slice = is_slice_str.lower() == 'true'
 
         for photo in photos:
-            mime = photo.content_type
+            mime = photo.content_type or mimetypes.guess_type(getattr(photo, "filename", "") or "")[0] or "application/octet-stream"
             try:
                 # upload_one now returns a list of (file_url, photo_id, display_name)
                 upload_results = upload_curd.upload_one(
@@ -386,7 +387,8 @@ def upload_api():
                     data.append({
                         "src": file_url,
                         "filename": display_name, # Use the display name for frontend pairing
-                        "photo_id": photo_id
+                        "photo_id": photo_id,
+                        "transport": build_asset_transport(file_url, preview_max_size=420),
                     })
             except ValueError as e:
                 # TIFF 处理失败
@@ -441,6 +443,9 @@ def upload_video_preview_api():
             "src": file_url,
             "filename": display_name,
             "photo_id": photo_id,
+            "transport": build_asset_transport(file_url, preview_max_size=420),
+            "first_frame_transport": build_asset_transport(preview_assets["first_frame_path"], preview_max_size=420),
+            "preview_video_transport": build_asset_transport(preview_assets["preview_video_path"], preview_max_size=420),
             **preview_assets,
         }
     })
@@ -522,4 +527,23 @@ def get_photo_asset_preview(filename):
         "code": 0,
         "success": True,
         "data": payload,
+    })
+
+
+@file_api.get('/assets-transport/photos/<path:filename>')
+def get_photo_asset_transport(filename):
+    relative_path = _relative_asset_path_from_public_path(filename)
+    transport = build_asset_transport(f"/api/file/assets/photos/{relative_path}", preview_max_size=640)
+    if not transport:
+        return jsonify({
+            "msg": "资源路径无效",
+            "code": 400,
+            "success": False,
+            "data": {},
+        }), 400
+    return jsonify({
+        "msg": "资源传输信息获取成功",
+        "code": 0,
+        "success": True,
+        "data": transport,
     })

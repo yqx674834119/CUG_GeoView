@@ -188,7 +188,7 @@ def call_mmseg_inference(
                     "class_histogram": res.get("class_histogram") or {},
                 })
             else:
-                error_msg = res.get("message", "Unknown error")
+                error_msg = res.get("message") or res.get("error") or "Unknown error"
                 print(f"[MMSeg-Caller] Error processing {name}: {error_msg}", file=sys.stderr)
                 raise RuntimeError(f"Processing failed for {name}: {error_msg}")
         

@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 
+from applications.common.asset_transport import (build_asset_transport,
+                                                 build_record_media_transports)
 from applications.common.path_global import generate_dir
 from applications.common.utils import type_utils
 
@@ -65,6 +67,7 @@ def build_visual_payload(analysis_type: str,
             "legacy_render_available": True,
             "frontend_renderable": True,
             "requires_local_source": True,
+            "transport_modes": ["original", "base64", "json"],
             **(capabilities or {}),
         },
         "legacy_assets": legacy_assets or {},
@@ -276,6 +279,16 @@ def build_legacy_visual_payload(item: Dict[str, Any]) -> Optional[Dict[str, Any]
     return None
 
 
+def _has_base64_transport(value: Any) -> bool:
+    if isinstance(value, dict):
+        if value.get("preview_data_url"):
+            return True
+        return any(_has_base64_transport(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_has_base64_transport(item) for item in value)
+    return False
+
+
 def normalize_analysis_record(item: Dict[str, Any]) -> Dict[str, Any]:
     normalized = copy.deepcopy(item)
     if "type" in normalized and isinstance(normalized["type"], int):
@@ -292,7 +305,24 @@ def normalize_analysis_record(item: Dict[str, Any]) -> Dict[str, Any]:
     normalized["data"] = data
 
     payload = extract_visual_payload(data) or build_legacy_visual_payload(normalized)
+    if isinstance(payload, dict):
+        source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+        for key, value in list(source.items()):
+            if isinstance(value, dict) and value.get("asset_path"):
+                source[key]["transport"] = build_asset_transport(value.get("asset_path"), preview_max_size=640)
+        legacy_assets = payload.get("legacy_assets") if isinstance(payload.get("legacy_assets"), dict) else {}
+        for key, value in list(legacy_assets.items()):
+            if isinstance(value, str):
+                legacy_assets[key] = {
+                    "asset_path": value,
+                    "transport": build_asset_transport(value, preview_max_size=640),
+                }
     normalized["visual_payload"] = payload
     normalized["json_visualization_available"] = bool(payload)
-    normalized["visualization_modes"] = ["legacy"] + (["json"] if payload else [])
+    normalized["media_transports"] = build_record_media_transports(normalized, preview_max_size=420)
+    normalized["visualization_modes"] = ["original"]
+    if _has_base64_transport(normalized["media_transports"]):
+        normalized["visualization_modes"].append("base64")
+    if payload:
+        normalized["visualization_modes"].append("json")
     return normalized

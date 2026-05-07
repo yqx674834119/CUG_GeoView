@@ -7,14 +7,20 @@
 
     <div v-else>
       <div
-        v-if="hasAnyJsonMode"
         class="render-mode-bar"
       >
-        <span class="render-mode-bar__label">结果渲染模式</span>
-        <el-radio-group v-model="renderMode" size="small">
-          <el-radio-button label="legacy">原始模式</el-radio-button>
-          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+        <span class="render-mode-bar__label">传输 / 渲染模式</span>
+        <el-radio-group v-model="displayMode" size="small">
+          <el-radio-button label="original">原始图像/视频</el-radio-button>
+          <el-radio-button label="base64" :disabled="!hasAnyBase64Mode">备用 Base64</el-radio-button>
+          <el-radio-button label="json" :disabled="!hasAnyJsonMode">JSON 前端可视化</el-radio-button>
         </el-radio-group>
+      </div>
+      <div class="render-mode-state">
+        <el-tag size="small" :type="currentModeTagType" effect="dark">
+          当前显示：{{ currentModeLabel }}
+        </el-tag>
+        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
       </div>
 
       <div v-if="overviewStats" class="analysis-shell">
@@ -93,10 +99,10 @@
             <el-image
               ref="tableTab"
               class="img-display"
-              :src="previewSrc(item, 'before_img')"
+              :src="displaySrc(item, 'before_img')"
               :fit="fit"
               :lazy="true"
-              :preview-src-list="[previewSrc(item, 'before_img')]"
+              :preview-src-list="[displaySrc(item, 'before_img')]"
               :preview-teleported="true"
             />
 
@@ -107,7 +113,7 @@
           <div class="img-display-item__result">
             <div v-if="useJsonModeFor(item)">
               <JsonImageVisualizer
-                :image-src="localSourceFor(item)"
+                :image-src="jsonBaseSource(item)"
                 :payload="item.visual_payload"
               />
             </div>
@@ -117,10 +123,10 @@
                   <el-image
                     ref="tableTab"
                     class="img-display"
-                    :src="previewSrc(item, 'after_img')"
+                    :src="displaySrc(item, 'after_img')"
                     :fit="fit"
                     :lazy="true"
-                    :preview-src-list="[previewSrc(item, 'after_img')]"
+                    :preview-src-list="[displaySrc(item, 'after_img')]"
                     :preview-teleported="true"
                   />
                   <div class="img-infor">
@@ -170,7 +176,7 @@
               v-else
               class="img-index"
             >
-              <span class="index-number ">{{ Object.keys(item.data)[0] }}: {{ item.data[Object.keys(item.data)] }}</span>
+              <span class="index-number ">{{ classificationSummary(item, index) }}</span>
             </div>
 
             <div
@@ -242,7 +248,6 @@ import VChart from "vue-echarts";
 import { downloadimgWithWords } from "@/utils/download.js";
 import { ASSET_PREVIEW_PLACEHOLDER, hydrateAssetPreviews } from "@/utils/assetPreview";
 import JsonImageVisualizer from "@/components/JsonImageVisualizer";
-import { getLocalSourceUrl } from "@/utils/localSourceRegistry";
 import {
   analyzeClassificationRecord,
   analyzeDetectionRecord,
@@ -253,6 +258,14 @@ import {
   summarizeRestoration,
   summarizeSegmentation,
 } from "@/utils/frontAnalysis";
+import {
+  getRecordTransport,
+  modeLabel,
+  normalizeDisplayMode,
+  resolveJsonBaseSource,
+  resolveRecordSource,
+  supportsJsonMode,
+} from "@/utils/mediaTransport";
 
 use([
   CanvasRenderer,
@@ -288,7 +301,7 @@ export default {
       analysisLoading: false,
       analysisError: "",
       analysisToken: 0,
-      renderMode: "legacy",
+      displayMode: "original",
     };
   },
   computed: {
@@ -523,8 +536,36 @@ export default {
 
       return [];
     },
+    hasAnyBase64Mode() {
+      return this.childImgArr.some((item) => !!getRecordTransport(item, "before_img")?.preview_data_url || !!getRecordTransport(item, "after_img")?.preview_data_url);
+    },
     hasAnyJsonMode() {
-      return this.childImgArr.some((item) => !!item?.visual_payload);
+      return this.childImgArr.some((item) => supportsJsonMode(item));
+    },
+    availableModes() {
+      const modes = ["original"];
+      if (this.hasAnyBase64Mode) {
+        modes.push("base64");
+      }
+      if (this.hasAnyJsonMode) {
+        modes.push("json");
+      }
+      return modes;
+    },
+    currentModeLabel() {
+      return modeLabel(this.displayMode);
+    },
+    currentModeTagType() {
+      if (this.displayMode === "json") {
+        return "success";
+      }
+      if (this.displayMode === "base64") {
+        return "warning";
+      }
+      return "info";
+    },
+    modeAvailabilityText() {
+      return `当前批次可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
     },
   },
   mounted() {
@@ -547,21 +588,26 @@ export default {
     analysisKey(item, index) {
       return `${item.id ?? index}`;
     },
-    previewSrc(item, field) {
+    displaySrc(item, field) {
+      const preferredMode = this.displayMode === "base64" ? "base64" : "original";
+      const source = resolveRecordSource(item, field, preferredMode);
+      if (source) {
+        return source;
+      }
       return (item && item[`_${field}_preview`]) || ASSET_PREVIEW_PLACEHOLDER;
     },
-    localSourceFor(item) {
-      const path = item?.visual_payload?.source?.primary?.asset_path || item?.before_img;
-      return getLocalSourceUrl(path) || this.previewSrc(item, "before_img");
+    jsonBaseSource(item) {
+      return resolveJsonBaseSource(item, this.displayMode === "original" ? "original" : "base64") || this.displaySrc(item, "before_img");
     },
     useJsonModeFor(item) {
-      if (this.renderMode !== "json") {
+      if (this.displayMode !== "json") {
         return false;
       }
-      return !!item?.visual_payload && !!this.localSourceFor(item);
+      return supportsJsonMode(item) && !!this.jsonBaseSource(item);
     },
     async syncAndAnalyze(value) {
       this.childImgArr = Array.isArray(value) ? value : [];
+      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
       await this.refreshPreviews();
       this.refreshAnalysis();
     },
@@ -641,6 +687,10 @@ export default {
         return `${analysis.dominantClass} ${analysis.dominantRatio}%`;
       }
       return `${analysis.scale.widthRatio}x 放大`;
+    },
+    classificationSummary(item, index) {
+      const analysis = this.analysisFor(item, index) || analyzeClassificationRecord(item);
+      return `${analysis.topLabel}: ${analysis.topScore}%`;
     },
     itemMetricCards(analysis) {
       if (analysis.kind === "classification") {
@@ -880,11 +930,25 @@ export default {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .render-mode-bar__label {
   font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.render-mode-state {
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.render-mode-state__text {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 

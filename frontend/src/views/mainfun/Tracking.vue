@@ -208,12 +208,19 @@
     <el-divider />
 
     <div v-if="result" class="result-box">
-      <div v-if="hasTrackingJsonMode" class="render-mode-bar">
-        <span class="render-mode-bar__label">结果渲染模式</span>
-        <el-radio-group v-model="renderMode" size="small">
-          <el-radio-button label="legacy">原始模式</el-radio-button>
-          <el-radio-button label="json">JSON 本地可视化</el-radio-button>
+      <div class="render-mode-bar">
+        <span class="render-mode-bar__label">传输 / 渲染模式</span>
+        <el-radio-group v-model="displayMode" size="small">
+          <el-radio-button label="original">原始图像/视频</el-radio-button>
+          <el-radio-button label="base64" :disabled="!hasTrackingBase64Mode">备用 Base64</el-radio-button>
+          <el-radio-button label="json" :disabled="!hasTrackingJsonMode">JSON 前端可视化</el-radio-button>
         </el-radio-group>
+      </div>
+      <div class="render-mode-state">
+        <el-tag size="small" :type="currentModeTagType" effect="dark">
+          当前显示：{{ currentModeLabel }}
+        </el-tag>
+        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
       </div>
       <el-row :gutter="20">
         <el-col :xs="24" :sm="24" :md="12" :lg="12">
@@ -227,7 +234,7 @@
               </div>
             </template>
             <video
-              v-if="result.input_mode === 'video' && result.source_input_full_url"
+              v-if="result.input_mode === 'video' && displayMode !== 'base64' && result.source_input_full_url"
               v-show="!videoPreviewErrors.source"
               controls
               preload="metadata"
@@ -239,15 +246,15 @@
               :src="result.source_input_full_url"
             />
             <div
-              v-if="result.input_mode === 'video' && result.source_input_full_url && videoPreviewErrors.source"
+              v-if="result.input_mode === 'video' && displayMode !== 'base64' && result.source_input_full_url && videoPreviewErrors.source"
               class="video-preview-fallback"
             >
               输入视频预览失败，请使用“查看输入”直接打开视频文件。
             </div>
             <el-image
               v-else
-              :src="result.first_frame_full_url"
-              :preview-src-list="[result.first_frame_full_url]"
+              :src="resultInputPreviewSrc"
+              :preview-src-list="[resultInputPreviewSrc]"
               :preview-teleported="true"
               fit="cover"
               class="result-preview"
@@ -264,22 +271,22 @@
           <el-card class="result-card">
             <template #header>
               <div class="result-card__head">
-                <span>{{ renderMode === "json" && hasTrackingJsonMode ? "JSON 本地可视化" : "跟踪预览图" }}</span>
+                <span>{{ displayMode === "json" && hasTrackingJsonMode ? "JSON 本地可视化" : "跟踪预览图" }}</span>
                 <el-tag type="success" effect="dark">
                   {{ result.method_used }}
                 </el-tag>
               </div>
             </template>
             <TrackingJsonPlayer
-              v-if="renderMode === 'json' && hasTrackingJsonMode"
+              v-if="displayMode === 'json' && hasTrackingJsonMode"
               :payload="trackingJsonPayload"
-              :video-src="trackingLocalVideoSrc"
-              :frame-sources="trackingLocalSequenceSources"
+              :video-src="trackingResolvedVideoSrc"
+              :frame-sources="trackingResolvedSequenceSources"
             />
             <el-image
               v-else
-              :src="result.preview_full_url"
-              :preview-src-list="[result.preview_full_url]"
+              :src="resultPreviewImageSrc"
+              :preview-src-list="[resultPreviewImageSrc]"
               :preview-teleported="true"
               fit="cover"
               class="result-preview"
@@ -306,6 +313,7 @@
               </div>
             </template>
             <video
+              v-if="displayMode !== 'base64'"
               v-show="!videoPreviewErrors.output"
               controls
               preload="metadata"
@@ -316,6 +324,12 @@
               @error="handleVideoPreviewError('output')"
               :src="result.output_video_full_url"
             />
+            <div
+              v-else
+              class="video-preview-fallback"
+            >
+              Base64 备用链路不传输视频，请切换到“原始图像/视频”或“JSON 本地可视化”查看结果。
+            </div>
             <div
               v-if="result.output_video_full_url && videoPreviewErrors.output"
               class="video-preview-fallback"
@@ -486,6 +500,13 @@ import TrackingJsonPlayer from "@/components/TrackingJsonPlayer";
 import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import {
+  getRecordTransport,
+  modeLabel,
+  normalizeDisplayMode,
+  resolveRecordSource,
+  resolveTransportSource,
+} from "@/utils/mediaTransport";
 import { fetchJsonAsset, summarizeTrajectoryPayload } from "@/utils/frontAnalysis";
 import { getLocalSourceUrl, registerLocalSource, registerUploadedSources } from "@/utils/localSourceRegistry";
 
@@ -570,7 +591,7 @@ export default {
       trajectoryPayload: null,
       trajectoryAnalysis: null,
       trajectoryError: "",
-      renderMode: "legacy",
+      displayMode: "original",
     };
   },
   computed: {
@@ -593,17 +614,70 @@ export default {
     trackingJsonPayload() {
       return this.result?.record?.visual_payload || null;
     },
-    trackingLocalVideoSrc() {
-      const path = this.trackingJsonPayload?.source?.primary?.asset_path;
-      return getLocalSourceUrl(path);
+    resultInputPreviewSrc() {
+      if (!this.result) {
+        return "";
+      }
+      if (this.displayMode === "base64") {
+        return resolveRecordSource(this.result.record, "before_img", "base64") || this.result.first_frame_full_url;
+      }
+      return this.result.first_frame_full_url;
     },
-    trackingLocalSequenceSources() {
+    resultPreviewImageSrc() {
+      if (!this.result) {
+        return "";
+      }
+      if (this.displayMode === "base64") {
+        return resolveRecordSource(this.result.record, "after_img", "base64") || this.result.preview_full_url;
+      }
+      return this.result.preview_full_url;
+    },
+    trackingResolvedVideoSrc() {
+      const path = this.trackingJsonPayload?.source?.primary?.asset_path;
+      return getLocalSourceUrl(path)
+        || resolveTransportSource(this.trackingJsonPayload?.source?.primary?.transport, "original")
+        || "";
+    },
+    trackingResolvedSequenceSources() {
       const sequence = this.trackingJsonPayload?.source?.sequence_asset_paths || [];
-      return sequence.map((path) => getLocalSourceUrl(path)).filter(Boolean);
+      return sequence.map((path) => getLocalSourceUrl(path) || toBackendAssetUrl(path)).filter(Boolean);
     },
     hasTrackingJsonMode() {
       return !!this.trackingJsonPayload
-        && (this.trackingLocalVideoSrc || this.trackingLocalSequenceSources.length);
+        && (this.trackingResolvedVideoSrc || this.trackingResolvedSequenceSources.length);
+    },
+    hasTrackingBase64Mode() {
+      return !!getRecordTransport(this.result?.record, "before_img")?.preview_data_url
+        || !!getRecordTransport(this.result?.record, "after_img")?.preview_data_url;
+    },
+    availableModes() {
+      const modes = ["original"];
+      if (this.hasTrackingBase64Mode) {
+        modes.push("base64");
+      }
+      if (this.hasTrackingJsonMode) {
+        modes.push("json");
+      }
+      return modes;
+    },
+    currentModeLabel() {
+      return modeLabel(this.displayMode);
+    },
+    currentModeTagType() {
+      if (this.displayMode === "json") {
+        return "success";
+      }
+      if (this.displayMode === "base64") {
+        return "warning";
+      }
+      return "info";
+    },
+    modeAvailabilityText() {
+      const supported = this.availableModes.map((mode) => modeLabel(mode)).join(" / ");
+      if (this.displayMode === "base64") {
+        return `当前结果可用链路：${supported}；Base64 仅承载静态预览图，不传输视频`;
+      }
+      return `当前结果可用链路：${supported}`;
     },
     selectedModel() {
       return this.modelPathArr.find((item) => item.model_path === this.uploadSrc.model_path) || null;
@@ -707,6 +781,9 @@ export default {
     this.revokeFirstFrameUrl();
   },
   methods: {
+    syncDisplayMode() {
+      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
+    },
     fetchModels() {
       getCustomModel("tracking").then((res) => {
         const currentModels = res.data.data || [];
@@ -1020,6 +1097,7 @@ export default {
           output_video_full_url: this.prefixUrl(data.output_video_path),
           trajectory_full_url: this.prefixUrl(data.trajectory_path),
         };
+        this.syncDisplayMode();
         await this.loadTrajectoryAnalysis(this.result.trajectory_full_url);
         this.$message.success(response.data.msg || "目标跟踪完成");
       } catch (error) {
@@ -1240,11 +1318,25 @@ export default {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .render-mode-bar__label {
   font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.render-mode-state {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.render-mode-state__text {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 

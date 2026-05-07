@@ -5,6 +5,7 @@ import App from './App.vue'
 import router from './router'
 import { initializeTheme } from '@/utils/theme'
 import { installAssetImageInterceptor } from '@/utils/assetDomInterceptor'
+import { runStartupDiagnostics } from '@/utils/startupDiagnostics'
 
 import '@/assets/font/iconfont.css'
 import './assets/css/normalize.css'
@@ -37,6 +38,9 @@ window.addEventListener("unhandledrejection", (event) => {
 
 const app = createApp(App)
 app.use(router).use(ElementPlus,{locale: zhCn}).use(JSZIP).mount('#app')
+router.isReady().then(() => {
+  runStartupDiagnostics()
+})
 app.directive('drag',{
     mounted(el, binding, vnode, prevVnode) {
         const mouseDown = (e) => {

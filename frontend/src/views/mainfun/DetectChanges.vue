@@ -488,6 +488,20 @@
     </Tabinfor>
 
     <el-card class="render-box">
+      <div v-if="resultArr.length" class="render-mode-bar">
+        <span class="render-mode-bar__label">传输 / 渲染模式</span>
+        <el-radio-group v-model="displayMode" size="small" @change="handleDisplayModeChange">
+          <el-radio-button label="original">原始图像</el-radio-button>
+          <el-radio-button label="base64" :disabled="!hasBase64Mode">备用 Base64</el-radio-button>
+          <el-radio-button label="json" :disabled="!hasJsonMode">JSON 前端可视化</el-radio-button>
+        </el-radio-group>
+      </div>
+      <div v-if="resultArr.length" class="render-mode-state">
+        <el-tag size="small" :type="currentModeTagType" effect="dark">
+          当前显示：{{ currentModeLabel }}
+        </el-tag>
+        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
+      </div>
       <div
         class="render-img-box"
       >
@@ -505,14 +519,14 @@
               class="mask-layer"
             >
               <img
-                v-if="resultArr[currentIndex]?.data.mask && !holeShow"
-                :src="resultArr[currentIndex].data.mask "
+                v-if="currentMaskSource && !holeShow"
+                :src="currentMaskSource"
                 alt="mask"
                 class="mask-img"
               >
               <img
-                v-if="resultArr[currentIndex]?.data.mask_hole && holeShow"
-                :src="resultArr[currentIndex].data.mask_hole "
+                v-if="currentMaskHoleSource && holeShow"
+                :src="currentMaskHoleSource"
                 alt="mask"
                 class="mask-img"
               >
@@ -524,8 +538,8 @@
               >
             </div>
             <img
-              v-if="resultArr[currentIndex]?.before_img"
-              :src="resultArr[currentIndex].before_img "
+              v-if="currentBeforeSource"
+              :src="currentBeforeSource"
               alt=""
             >
             <img
@@ -538,8 +552,8 @@
               :style="sliderWrapperStyle"
             >
               <img
-                v-if="resultArr[currentIndex]?.before_img1"
-                :src="resultArr[currentIndex].before_img1"
+                v-if="currentBeforeSecondSource"
+                :src="currentBeforeSecondSource"
                 alt=""
               >
               <img
@@ -570,10 +584,10 @@
               第一时期
             </p>
             <el-image
-              v-if="resultArr[currentIndex]?.before_img"
-              :preview-src-list="[resultArr[currentIndex].before_img]"
+              v-if="currentBeforeSource"
+              :preview-src-list="[currentBeforeSource]"
               :preview-teleported="true"
-              :src="resultArr[currentIndex].before_img"
+              :src="currentBeforeSource"
               fit="cover"
             />
             <el-image
@@ -590,10 +604,10 @@
               第二时期
             </p>
             <el-image
-              v-if="resultArr[currentIndex]?.before_img1"
-              :preview-src-list="[resultArr[currentIndex].before_img1]"
+              v-if="currentBeforeSecondSource"
+              :preview-src-list="[currentBeforeSecondSource]"
               :preview-teleported="true"
-              :src="resultArr[currentIndex].before_img1"
+              :src="currentBeforeSecondSource"
               fit="cover"
             />
             <el-image
@@ -609,12 +623,17 @@
             <p class="handle-words">
               预测结果
             </p>
+            <JsonImageVisualizer
+              v-if="displayMode === 'json' && hasJsonMode && currentRecord"
+              :image-src="currentBeforeSource"
+              :payload="currentJsonPayload"
+            />
             <div style="position: relative">
               <transition
                 enter-active-class="animate__animated animate__bounceIn"
                 leave-active-class="animate__animated animate__hinge"
               >
-                <div v-if="!holeShow">
+                <div v-if="displayMode !== 'json' && !holeShow">
                   <el-image
                     v-if="onRenderResult && !holeShow"
                     :preview-src-list="[onRenderResult]"
@@ -630,7 +649,7 @@
                 leave-active-class="animate__animated animate__hinge"
               >
                 <div
-                  v-if="holeShow"
+                  v-if="displayMode !== 'json' && holeShow"
                   style="position: absolute;top: 0;right: 0;"
                 >
                   <el-image
@@ -645,7 +664,7 @@
               </transition>
             </div>
             <el-image
-              v-if="!onRenderResult"
+              v-if="displayMode !== 'json' && !onRenderResult"
               :preview-src-list="[onRenderExample]"
               :preview-teleported="true"
               :src="onRenderExample"
@@ -829,7 +848,7 @@
         >
           <el-image
             v-if="resultArr[currentQroup+index]?.after_img"
-            :src="holeShow ? resultArr[currentQroup+index]?.data.hole : resultArr[currentQroup+index]?.after_img"
+            :src="resultThumbSource(resultArr[currentQroup+index])"
             :class="{'render-border':onRender===index}"
             @click="goRenderThis(index)"
           />
@@ -865,7 +884,16 @@ import {
 import { historyGetPage } from "@/api/history";
 import Tabinfor from "@/components/Tabinfor";
 import DraggableItem from "@/components/DraggableItem";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import JsonImageVisualizer from "@/components/JsonImageVisualizer";
+import {
+  getDataTransport,
+  getRecordTransport,
+  modeLabel,
+  normalizeDisplayMode,
+  resolveDataSource,
+  resolveRecordSource,
+  supportsJsonMode,
+} from "@/utils/mediaTransport";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { PieChart, BarChart } from "echarts/charts";
@@ -875,7 +903,7 @@ import {
   LegendComponent,
   GridComponent
 } from "echarts/components";
-import VChart, { THEME_KEY } from "vue-echarts";
+import VChart from "vue-echarts";
 
 use([
   CanvasRenderer,
@@ -892,7 +920,8 @@ export default {
   components: {
     Tabinfor,
     DraggableItem,
-    VChart
+    VChart,
+    JsonImageVisualizer
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -902,6 +931,7 @@ export default {
   data() {
     return {
       holeShow:true,
+      displayMode: "original",
       isSlice: false,
       sliderPosition: 50,
       isDragging: false,
@@ -1011,6 +1041,87 @@ export default {
     };
   },
   computed: {
+    currentRecord() {
+      return this.resultArr[this.currentIndex] || null;
+    },
+    hasBase64Mode() {
+      return !!getRecordTransport(this.currentRecord, "before_img")?.preview_data_url
+        || !!getRecordTransport(this.currentRecord, "before_img1")?.preview_data_url
+        || !!getRecordTransport(this.currentRecord, "after_img")?.preview_data_url
+        || !!getDataTransport(this.currentRecord, "mask")?.preview_data_url
+        || !!getDataTransport(this.currentRecord, "mask_hole")?.preview_data_url
+        || !!getDataTransport(this.currentRecord, "hole")?.preview_data_url;
+    },
+    hasJsonMode() {
+      return supportsJsonMode(this.currentRecord);
+    },
+    currentJsonPayload() {
+      const payload = this.currentRecord?.visual_payload;
+      if (!payload || !this.holeShow) {
+        return payload;
+      }
+      const result = payload.result || {};
+      return {
+        ...payload,
+        result: {
+          ...result,
+          regions: result.hole_regions || result.regions || [],
+          mask_path: result.mask_hole_path || result.mask_path || "",
+        },
+      };
+    },
+    availableModes() {
+      const modes = ["original"];
+      if (this.hasBase64Mode) {
+        modes.push("base64");
+      }
+      if (this.hasJsonMode) {
+        modes.push("json");
+      }
+      return modes;
+    },
+    currentModeLabel() {
+      return modeLabel(this.displayMode);
+    },
+    currentModeTagType() {
+      if (this.displayMode === "json") {
+        return "success";
+      }
+      if (this.displayMode === "base64") {
+        return "warning";
+      }
+      return "info";
+    },
+    modeAvailabilityText() {
+      return `当前结果可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
+    },
+    currentBeforeSource() {
+      if (!this.currentRecord) {
+        return "";
+      }
+      return resolveRecordSource(this.currentRecord, "before_img", this.assetMode) || "";
+    },
+    currentBeforeSecondSource() {
+      if (!this.currentRecord) {
+        return "";
+      }
+      return resolveRecordSource(this.currentRecord, "before_img1", this.assetMode) || "";
+    },
+    currentMaskSource() {
+      if (!this.currentRecord) {
+        return "";
+      }
+      return resolveDataSource(this.currentRecord, "mask", this.assetMode) || "";
+    },
+    currentMaskHoleSource() {
+      if (!this.currentRecord) {
+        return "";
+      }
+      return resolveDataSource(this.currentRecord, "mask_hole", this.assetMode) || "";
+    },
+    assetMode() {
+      return this.displayMode === "original" ? "original" : "base64";
+    },
     sliderWrapperStyle() {
       return {
         clipPath: `inset(0 0 0 ${this.sliderPosition}%)`,
@@ -1043,6 +1154,24 @@ export default {
     getImgArrayBuffer,
     atchDownload,
     histogramUpload,
+    syncDisplayMode() {
+      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
+    },
+    handleDisplayModeChange() {
+      this.syncDisplayMode();
+      if (this.displayMode === "json" && this.preMode !== 2) {
+        this.preMode = 2;
+      }
+      this.setOneWay(this.renderstyle, this.resultArr.length === 0, this.holeShow);
+    },
+    resultThumbSource(item) {
+      if (!item) {
+        return "";
+      }
+      return this.holeShow
+        ? (resolveDataSource(item, "hole", this.assetMode) || "")
+        : (resolveRecordSource(item, "after_img", this.assetMode) || "");
+    },
     clearQueue() {
       this.fileList1 = [];
       this.fileList2 = [];
@@ -1052,6 +1181,7 @@ export default {
       this.currentIndex = this.currentQroup;
       this.currentIndex += index;
       this.onRender = index;
+      this.syncDisplayMode();
       this.resetSliderPosition();
       this.setOneWay(this.renderstyle)
     },
@@ -1062,6 +1192,7 @@ export default {
     },
     setOneWay(style,isShowExample,holeStyle) {
       this.renderstyle = style;
+      const current = this.resultArr[this.currentIndex];
       if(isShowExample){
         switch (style){
           case '原图': this.onRenderExample = this.exampleArr[0].after_img;break
@@ -1072,21 +1203,25 @@ export default {
         }
         return
       }
+      if (!current) {
+        this.onRenderResult = "";
+        return;
+      }
       if(!holeStyle){
         switch (style){
-          case '原图': this.onRenderResult = this.resultArr[this.currentIndex].after_img;break
-          case '森林': this.onRenderResult = this.resultArr[this.currentIndex].data[2];break
-          case '霓虹': this.onRenderResult = this.resultArr[this.currentIndex].data[3];break
-          case '闪电': this.onRenderResult = this.resultArr[this.currentIndex].data[0];break
-          case '极光': this.onRenderResult = this.resultArr[this.currentIndex].data[1];break
+          case '原图': this.onRenderResult = resolveRecordSource(current, "after_img", this.assetMode);break
+          case '森林': this.onRenderResult = resolveDataSource(current, "2", this.assetMode);break
+          case '霓虹': this.onRenderResult = resolveDataSource(current, "3", this.assetMode);break
+          case '闪电': this.onRenderResult = resolveDataSource(current, "0", this.assetMode);break
+          case '极光': this.onRenderResult = resolveDataSource(current, "1", this.assetMode);break
         }
       }else{
         switch (style){
-          case '原图': this.onRenderResult = this.resultArr[this.currentIndex].data.hole;break
-          case '森林': this.onRenderResult = this.resultArr[this.currentIndex].data.hole_style[2];break
-          case '霓虹': this.onRenderResult = this.resultArr[this.currentIndex].data.hole_style[3];break
-          case '闪电': this.onRenderResult = this.resultArr[this.currentIndex].data.hole_style[0];break
-          case '极光': this.onRenderResult = this.resultArr[this.currentIndex].data.hole_style[1];break
+          case '原图': this.onRenderResult = resolveDataSource(current, "hole", this.assetMode);break
+          case '森林': this.onRenderResult = resolveDataSource(current, "hole_style.2", this.assetMode);break
+          case '霓虹': this.onRenderResult = resolveDataSource(current, "hole_style.3", this.assetMode);break
+          case '闪电': this.onRenderResult = resolveDataSource(current, "hole_style.0", this.assetMode);break
+          case '极光': this.onRenderResult = resolveDataSource(current, "hole_style.1", this.assetMode);break
         }
       }
 
@@ -1222,28 +1357,13 @@ export default {
     getMore() {
       this.historyGetPage(1, 20, "变化检测")
           .then((res) => {
-            res.data.data.forEach((item)=>{
-              item['before_img1'] = toBackendAssetUrl(item.before_img1)
-              item['before_img'] = toBackendAssetUrl(item.before_img)
-              item['after_img'] = toBackendAssetUrl(item.after_img)
-              item.data['hole'] = toBackendAssetUrl(item.data['hole'])
-              item.data['hole_style'][0] = toBackendAssetUrl(item.data['hole_style'][0])
-              item.data['hole_style'][1] = toBackendAssetUrl(item.data['hole_style'][1])
-              item.data['hole_style'][2] = toBackendAssetUrl(item.data['hole_style'][2])
-              item.data['hole_style'][3] = toBackendAssetUrl(item.data['hole_style'][3])
-              item.data[0] = toBackendAssetUrl(item.data[0])
-              item.data[1] = toBackendAssetUrl(item.data[1])
-              item.data[2] = toBackendAssetUrl(item.data[2])
-              item.data[3] = toBackendAssetUrl(item.data[3])
-              item.data['mask'] = toBackendAssetUrl(item.data.mask)
-              item.data['mask_hole'] = toBackendAssetUrl(item.data.mask_hole)
-            })
             this.resultArr = res.data.data
             if (this.resultArr.length) {
               this.currentQroup = 0;
               this.currentIndex = 0;
               this.onRender = 0;
-              this.onRenderResult = this.resultArr[0].after_img
+              this.syncDisplayMode();
+              this.onRenderResult = resolveRecordSource(this.resultArr[0], "after_img", this.assetMode)
             }
             this.resetSliderPosition();
           })
@@ -1539,6 +1659,10 @@ export default {
       this.canUpload = j === 0;
     },
     changePreMode() {
+      if (this.displayMode === "json" && this.preMode === 2) {
+        this.$message.info("JSON 前端可视化仅在单图结果模式下展示");
+        return;
+      }
       if (this.preMode === 1) {
         this.preMode = 2;
       } else {
@@ -1979,6 +2103,31 @@ export default {
   flex-direction: row;
   justify-content: space-evenly;
 }
+.render-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.render-mode-bar__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.render-mode-state {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.render-mode-state__text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .upload-box{
   display: flex;
   flex-direction:row;
