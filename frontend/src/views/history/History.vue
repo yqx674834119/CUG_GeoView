@@ -400,6 +400,7 @@ import {
 import { downloadimgWithWords } from "@/utils/download.js";
 import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { getBackendAssetPreviewDataUrl } from "@/utils/assetPreview";
+import { logFrontendDebug } from "@/utils/debugLog";
 
 import global from "@/global.vue";
 export default {
@@ -657,11 +658,33 @@ export default {
       this.getTabelInfo();
     },
     getTabelInfo() {
+      logFrontendDebug("历史记录页面", "准备请求历史记录列表", {
+        page: this.currentPage,
+        limit: 10,
+        type: this.type || "全部",
+        backendBaseUrl: this.global.BASEURL,
+      }, { always: true });
       this.historyGetPage(this.currentPage, 10, this.type).then((res) => {
         this.total = res.data.count;
         this.tableData = res.data.data;
+        logFrontendDebug("历史记录页面", "历史记录列表返回成功", {
+          page: this.currentPage,
+          type: this.type || "全部",
+          total: this.total,
+          returned: this.tableData.length,
+          sampleTypes: this.tableData.slice(0, 5).map((item) => item.type),
+          sampleIds: this.tableData.slice(0, 5).map((item) => item.id),
+        }, { always: true });
         this.loadHistoryPreviews();
-      }).catch((rej)=>{})
+      }).catch((error)=>{
+        logFrontendDebug("历史记录页面", "历史记录列表请求失败", {
+          page: this.currentPage,
+          type: this.type || "全部",
+          message: error?.message || String(error),
+          status: error?.response?.status,
+          response: error?.response?.data || null,
+        }, { error: true, always: true });
+      })
     },
     goNextPage() {
       this.getTabelInfo();

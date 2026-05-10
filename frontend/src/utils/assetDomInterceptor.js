@@ -3,16 +3,14 @@ import {
   ASSET_PREVIEW_PLACEHOLDER,
   getBackendAssetPreviewDataUrl,
 } from "@/utils/assetPreview";
-import global from "@/global";
+import { logFrontendDebug } from "@/utils/debugLog";
 
 const INSTALL_FLAG = "__GEOVIEW_ASSET_IMAGE_INTERCEPTOR_INSTALLED__";
 const imageState = new WeakMap();
 let tokenSeed = 0;
 
 function debugLog(event, payload = {}) {
-  if (global.FRONTEND_ASSET_DEBUG) {
-    console.log(`[asset-preview-dom] ${event}`, payload);
-  }
+  logFrontendDebug("DOM图片拦截", event, payload);
 }
 
 function isPreviewViewerImage(element) {
@@ -60,7 +58,7 @@ export function installAssetImageInterceptor() {
   const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
   const nativeSetAttribute = HTMLImageElement.prototype.setAttribute;
   if (!srcDescriptor || typeof srcDescriptor.set !== "function") {
-    debugLog("install-skip", { reason: "src descriptor unavailable" });
+    debugLog("安装跳过：浏览器不支持重写 img.src", { reason: "src descriptor unavailable" });
     return;
   }
 
@@ -81,23 +79,27 @@ export function installAssetImageInterceptor() {
     }
 
     const maxSize = resolveMaxSize(element);
-    debugLog("intercept", { path: value, maxSize });
+    debugLog("拦截后端图片直链，改走预览 JSON 链路", { path: value, maxSize });
     assignNative(element, ASSET_PREVIEW_PLACEHOLDER);
     getBackendAssetPreviewDataUrl(value, maxSize)
       .then((dataUrl) => {
         if (!isCurrent(element, token)) {
-          debugLog("stale-success", { path: value, maxSize });
+          debugLog("预览返回但图片节点已切换，丢弃旧结果", { path: value, maxSize });
           return;
         }
         assignNative(element, dataUrl || ASSET_PREVIEW_PLACEHOLDER);
-        debugLog("applied", { path: value, maxSize });
+        debugLog("预览图已写入 img.src", {
+          path: value,
+          maxSize,
+          dataUrlLength: String(dataUrl || "").length,
+        });
       })
       .catch((error) => {
         if (!isCurrent(element, token)) {
           return;
         }
         assignNative(element, ASSET_PREVIEW_PLACEHOLDER);
-        debugLog("fallback-placeholder", {
+        debugLog("预览失败，img.src 使用透明占位图", {
           path: value,
           maxSize,
           error: error && error.message,
@@ -124,5 +126,5 @@ export function installAssetImageInterceptor() {
   };
 
   window[INSTALL_FLAG] = true;
-  debugLog("installed");
+  debugLog("DOM 图片资源拦截器已安装");
 }

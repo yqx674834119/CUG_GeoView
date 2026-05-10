@@ -16,7 +16,8 @@ COPY docker/patches/mmseg_cugrs_ms_deform_attn.py /app/backend/model/semantic_se
 COPY PaddleRS /app/PaddleRS
 
 RUN conda run -n PaddleRS37 pip install -e /app/PaddleRS && \
-    conda run -n PaddleRS37 pip install cryptography gunicorn && \
+    conda run -n PaddleRS37 pip install -r /app/backend/requirements.txt && \
+    conda run -n PaddleRS37 pip install cryptography && \
     conda run -n PaddleRS37 pip check
 
 # ----------- FRONTEND -----------
@@ -40,7 +41,9 @@ ENV GEOVIEW_EXTERNAL_STATIC_ROOT=/data/geoview/static \
     UPLOADED_PHOTOS_DEST=/data/geoview/static/upload \
     GEOVIEW_ASSET_READ_ORDER=external,internal \
     GEOVIEW_ASSET_DEBUG=1 \
-    GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS=false
+    GEOVIEW_DEBUG_LOG=true \
+    GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS=false \
+    FLASK_CONFIG=
 
 EXPOSE 5008 3000
 

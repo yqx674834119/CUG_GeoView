@@ -44,6 +44,13 @@ class TrackingError(RuntimeError):
     pass
 
 
+def _public_source_sequence_paths(input_bundle: TrackingInputBundle,
+                                  frames: Sequence[FrameItem]) -> List[str]:
+    if input_bundle.input_mode == "video":
+        return []
+    return [up_url + frame.relative_path for frame in frames]
+
+
 VIDEO_EXTENSIONS = {
     ".mp4",
     ".avi",
@@ -216,7 +223,7 @@ def execute(model_path: str, data_path: str, out_dir: str, names: List[dict],
             "first_frame_input": input_bundle.first_frame_input,
             "source_input_path": input_bundle.source_input_path,
             "source_input_name": input_bundle.source_input_name,
-            "source_sequence_paths": [up_url + frame.relative_path for frame in frames],
+            "source_sequence_paths": _public_source_sequence_paths(input_bundle, frames),
             "input_mode": input_bundle.input_mode,
             "preview_path": generate_url + preview_name,
             "output_video_path": generate_url + video_name,
@@ -273,7 +280,7 @@ def _execute_botsort_engineering(model_path: str, out_dir: str,
         "first_frame_input": input_bundle.first_frame_input,
         "source_input_path": input_bundle.source_input_path,
         "source_input_name": input_bundle.source_input_name,
-        "source_sequence_paths": [up_url + frame.relative_path for frame in frames],
+        "source_sequence_paths": _public_source_sequence_paths(input_bundle, frames),
         "input_mode": input_bundle.input_mode,
         "preview_path": generate_url + preview_name,
         "output_video_path": generate_url + video_name,
@@ -385,7 +392,7 @@ def _execute_botsort_official(model_path: str, out_dir: str,
         "first_frame_input": input_bundle.first_frame_input,
         "source_input_path": input_bundle.source_input_path,
         "source_input_name": input_bundle.source_input_name,
-        "source_sequence_paths": [up_url + frame.relative_path for frame in frames],
+        "source_sequence_paths": _public_source_sequence_paths(input_bundle, frames),
         "input_mode": input_bundle.input_mode,
         "preview_path": generate_url + preview_name,
         "output_video_path": generate_url + video_name,

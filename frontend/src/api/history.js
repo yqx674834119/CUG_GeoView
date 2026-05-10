@@ -1,14 +1,17 @@
 import {request} from  "@/api/request.js"
 
 export function historyGetPage(page,limit,type){
+    const params = {
+        page: page,
+        limit: limit
+    }
+    if (typeof type === "string" && type.trim() !== "") {
+        params.type = type
+    }
     return request({
         method:'GET',
         url:'/api/history/list',
-        params:{
-            page:page,
-            limit:limit,
-            type:type
-        }
+        params
     })
 }
 

@@ -1,3 +1,4 @@
+import os
 import os.path as osp
 
 import paddlers.utils.logging as logging
@@ -5,6 +6,20 @@ import yaml
 from paddlers.transforms import build_transforms
 
 from applications.common.model_assets import resolve_model_dir
+
+
+def paddle_use_gpu():
+    try:
+        import paddle
+
+        if not paddle.device.is_compiled_with_cuda():
+            return False
+        if paddle.device.cuda.device_count() <= 0:
+            return False
+        visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        return visible_devices is None or str(visible_devices).strip() != ""
+    except Exception:
+        return False
 
 def get_model_info(model_dir):
     model_dir = str(resolve_model_dir(model_dir))

@@ -89,7 +89,7 @@ export function toBackendAssetUrl(path) {
   return suffix ? `${base}/${suffix}` : base;
 }
 
-export function toBackendAssetPreviewUrl(path, maxSize = 640) {
+export function toBackendAssetPreviewUrl(path, maxSize = 420) {
   const relativePath = photoAssetRelativePath(path);
   if (!relativePath) {
     return "";

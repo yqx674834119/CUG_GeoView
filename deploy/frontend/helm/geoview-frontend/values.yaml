@@ -6,8 +6,8 @@ imagePullSecrets: []
 frontend:
   replicaCount: 1
   image:
-    repository: geoview-frontend
-    tag: latest
+    repository: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend
+    tag: 20260508-frontendfix3-4837450
     pullPolicy: IfNotPresent
   runtimeConfig:
     backendUrl: "http://172.20.20.240:31839/186/5008"
@@ -15,7 +15,8 @@ frontend:
     backendHost: ""
     backendPort: ""
     backendAssetMode: buffered
-    frontendAssetDebug: false
+    frontendAssetDebug: true
+    frontendDebug: true
     minerEnabled: false
     minerUrl: ""
     baiduMapAccessKey: ""

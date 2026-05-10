@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import global from "@/global";
-import { toBackendAssetPreviewUrl } from "@/utils/backendAssetUrl";
+import { toBackendAssetPreviewUrl, toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import {
   availableDisplayModes,
   getDataTransport,
@@ -80,9 +80,10 @@ function buildFieldSnapshot(record, mode) {
     }
     snapshot[field] = {
       raw: record?.[field] || "",
-      resolved: mode === "base64" ? summarizeDataUrl(source) : source,
+      resolved: mode === "preview" ? summarizeDataUrl(source) : source,
       transport: summarizeTransport(getRecordTransport(record, field)),
       preview_api: toBackendAssetPreviewUrl(record?.[field] || ""),
+      direct_asset_url: toBackendAssetUrl(record?.[field] || ""),
     };
   });
 
@@ -93,7 +94,7 @@ function buildFieldSnapshot(record, mode) {
       const source = resolveDataSource(record, field, mode);
       snapshot.data[field] = {
         raw: record?.data?.[field],
-        resolved: mode === "base64" ? summarizeDataUrl(source) : source,
+        resolved: mode === "preview" ? summarizeDataUrl(source) : source,
         transport: summarizeTransport(getDataTransport(record, field)),
       };
     });
@@ -142,7 +143,6 @@ async function fetchHistorySample() {
     params: {
       page: 1,
       limit: HISTORY_PAGE_SIZE,
-      type: "",
     },
     timeout: 10000,
   });
@@ -183,8 +183,67 @@ async function fetchHistorySample() {
   console.groupEnd();
 
   logModeSnapshot(record, "original");
-  logModeSnapshot(record, "base64");
+  logModeSnapshot(record, "preview");
   logModeSnapshot(record, "json");
+  await probeSampleAssets(record);
+}
+
+async function probeAssetUrl(label, url) {
+  if (!url) {
+    return;
+  }
+  const startedAt = Date.now();
+  try {
+    const response = await axios.get(url, {
+      responseType: "blob",
+      timeout: 20000,
+    });
+    const headerLength = Number(response.headers?.["content-length"] || 0);
+    const blobSize = response.data?.size || 0;
+    const lengthMatches = !headerLength || headerLength === blobSize;
+    const payload = {
+      label,
+      url,
+      status: response.status,
+      contentType: response.headers?.["content-type"],
+      contentLengthHeader: response.headers?.["content-length"],
+      blobSize,
+      lengthMatches,
+      requestId: response.headers?.["x-geoview-request-id"],
+      elapsedMs: Date.now() - startedAt,
+    };
+    if (!lengthMatches) {
+      console.error(logPrefix("资源直连"), "Content-Length 与实际 blob 大小不一致，这是历史图片不显示的关键证据:", payload);
+    } else {
+      console.log(logPrefix("资源直连"), "资源直连下载完成:", payload);
+    }
+  } catch (error) {
+    console.error(logPrefix("资源直连"), "资源直连下载失败，可能对应 ERR_CONTENT_LENGTH_MISMATCH 或后端传输中断:", {
+      label,
+      url,
+      message: error?.message || String(error),
+      status: error?.response?.status,
+      response: error?.response?.data || null,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+}
+
+async function probeSampleAssets(record) {
+  const candidates = [
+    ["before_img", record?.before_img],
+    ["before_img1", record?.before_img1],
+    ["after_img", record?.after_img],
+  ].filter(([, value]) => value && !String(value).startsWith("data:"));
+
+  if (!candidates.length) {
+    console.warn(logPrefix("资源直连"), "样例记录没有可直连测试的图片字段。");
+    return;
+  }
+
+  for (const [field, value] of candidates.slice(0, 3)) {
+    await probeAssetUrl(field, toBackendAssetUrl(value));
+  }
 }
 
 export async function runStartupDiagnostics() {
@@ -199,6 +258,11 @@ export async function runStartupDiagnostics() {
   console.log("资源输出模式:", global.BACKEND_ASSET_MODE);
   console.log("前端资源调试开关:", global.FRONTEND_ASSET_DEBUG);
   console.log("运行时配置:", window.__GEOVIEW_RUNTIME_CONFIG__ || {});
+  console.log("浏览器信息:", {
+    userAgent: window.navigator.userAgent,
+    language: window.navigator.language,
+    online: window.navigator.onLine,
+  });
   console.groupEnd();
 
   try {

@@ -12,8 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
     MAMBA_DOCKERFILE_ACTIVATE=1
 
-RUN sed -i 's|archive.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
-    && sed -i 's|security.ubuntu.com|mirrors.aliyun.com|g' /etc/apt/sources.list \
+RUN sed -i 's|mirrors.aliyun.com|archive.ubuntu.com|g' /etc/apt/sources.list \
+    && sed -i 's|archive.ubuntu.com/ubuntu focal-security|security.ubuntu.com/ubuntu focal-security|g' /etc/apt/sources.list \
     && rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -221,7 +221,7 @@ RUN python /app/sync_model_assets.py --quiet && \
 
 ENV PATH=/opt/conda/envs/PaddleRS37/bin:/opt/conda/bin:${PATH} \
     CONDA_DEFAULT_ENV=PaddleRS37 \
-    FLASK_CONFIG=embedded \
+    GEOVIEW_CONFIG=embedded \
     DATABASE_BACKEND=sqlite \
     SQLITE_DATABASE_PATH=/app/backend/static/geoview.sqlite3 \
     HF_HOME=/root/.cache/huggingface \

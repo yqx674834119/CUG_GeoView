@@ -67,7 +67,7 @@ def build_visual_payload(analysis_type: str,
             "legacy_render_available": True,
             "frontend_renderable": True,
             "requires_local_source": True,
-            "transport_modes": ["original", "base64", "json"],
+            "transport_modes": ["original", "preview", "json"],
             **(capabilities or {}),
         },
         "legacy_assets": legacy_assets or {},
@@ -322,7 +322,7 @@ def normalize_analysis_record(item: Dict[str, Any]) -> Dict[str, Any]:
     normalized["media_transports"] = build_record_media_transports(normalized, preview_max_size=420)
     normalized["visualization_modes"] = ["original"]
     if _has_base64_transport(normalized["media_transports"]):
-        normalized["visualization_modes"].append("base64")
+        normalized["visualization_modes"].append("preview")
     if payload:
         normalized["visualization_modes"].append("json")
     return normalized

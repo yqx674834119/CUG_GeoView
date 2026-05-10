@@ -6,6 +6,8 @@ import router from './router'
 import { initializeTheme } from '@/utils/theme'
 import { installAssetImageInterceptor } from '@/utils/assetDomInterceptor'
 import { runStartupDiagnostics } from '@/utils/startupDiagnostics'
+import global from '@/global'
+import { logFrontendDebug } from '@/utils/debugLog'
 
 import '@/assets/font/iconfont.css'
 import './assets/css/normalize.css'
@@ -19,6 +21,14 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 initializeTheme()
 installAssetImageInterceptor()
+logFrontendDebug("前端启动", "Vue 应用开始初始化", {
+  page: window.location.href,
+  backendBaseUrl: global.BASEURL,
+  backendAssetMode: global.BACKEND_ASSET_MODE,
+  frontendAssetDebug: global.FRONTEND_ASSET_DEBUG,
+  runtimeConfig: window.__GEOVIEW_RUNTIME_CONFIG__ || {},
+  userAgent: window.navigator.userAgent,
+}, { always: true })
 
 const RESIZE_OBSERVER_NOISE = "ResizeObserver loop completed with undelivered notifications."
 
@@ -39,6 +49,10 @@ window.addEventListener("unhandledrejection", (event) => {
 const app = createApp(App)
 app.use(router).use(ElementPlus,{locale: zhCn}).use(JSZIP).mount('#app')
 router.isReady().then(() => {
+  logFrontendDebug("前端启动", "路由就绪，开始执行启动诊断", {
+    route: router.currentRoute.value.fullPath,
+    backendBaseUrl: global.BASEURL,
+  }, { always: true })
   runStartupDiagnostics()
 })
 app.directive('drag',{

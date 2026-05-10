@@ -1,11 +1,7 @@
-from flask import Flask
-
 from .init_dotenv import init_dotenv
-from .init_sqlalchemy import db, ma, init_databases
-from .init_upload import init_upload
+from .init_sqlalchemy import SessionLocal, db, init_databases, ma
 
 
-def init_plugs(app: Flask) -> None:
-    init_databases(app)
-    init_upload(app)
+def init_plugs(app=None) -> None:
     init_dotenv()
+    init_databases(app)

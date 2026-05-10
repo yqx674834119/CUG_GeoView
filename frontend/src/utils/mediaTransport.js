@@ -1,7 +1,7 @@
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { getLocalSourceUrl } from "@/utils/localSourceRegistry";
 
-export const DISPLAY_MODES = ["original", "base64", "json"];
+export const DISPLAY_MODES = ["original", "preview", "json"];
 export const JSON_RENDERERS = new Set([
   "object_detection",
   "semantic_segmentation",
@@ -54,7 +54,7 @@ export function resolveTransportSource(transport, mode = "original") {
   if (!transport) {
     return "";
   }
-  if (mode === "base64" && transport.preview_data_url) {
+  if ((mode === "preview" || mode === "base64") && transport.preview_data_url) {
     return transport.preview_data_url;
   }
   return normalizeResolvedValue(transport.original_url || transport.buffered_url || transport.asset_path || "");
@@ -93,7 +93,7 @@ export function availableDisplayModes(record, fields = ["before_img", "after_img
     return transport?.preview_data_url;
   });
   if (hasBase64) {
-    base.push("base64");
+    base.push("preview");
   }
   if (supportsJsonMode(record)) {
     base.push("json");
@@ -111,7 +111,7 @@ export function normalizeDisplayMode(currentMode, availableModes = ["original"])
   return availableModes[0] || "original";
 }
 
-export function resolveJsonBaseSource(record, preferredMode = "base64") {
+export function resolveJsonBaseSource(record, preferredMode = "preview") {
   const assetPath = record?.visual_payload?.source?.primary?.asset_path || record?.before_img || "";
   const localSource = getLocalSourceUrl(assetPath);
   if (localSource) {
@@ -133,8 +133,8 @@ export function modeLabel(mode) {
   if (mode === "original") {
     return "原始图像/视频";
   }
-  if (mode === "base64") {
-    return "备用 Base64";
+  if (mode === "preview" || mode === "base64") {
+    return "备用预览";
   }
   return "JSON 前端可视化";
 }

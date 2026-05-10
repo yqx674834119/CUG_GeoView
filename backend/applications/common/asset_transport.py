@@ -10,8 +10,55 @@ from applications.common.storage import resolve_asset_path, safe_asset_relative_
 
 MIN_PREVIEW_SIZE = 64
 MAX_PREVIEW_SIZE = 1600
-DEFAULT_PREVIEW_SIZE = 640
-DEFAULT_PREVIEW_QUALITY = 82
+DEFAULT_PREVIEW_SIZE = 420
+DEFAULT_PREVIEW_QUALITY = 75
+TRANSPORT_ASSET_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".gif",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".mkv",
+    ".m4v",
+    ".webm",
+    ".mpg",
+    ".mpeg",
+    ".json",
+    ".txt",
+    ".csv",
+}
+ASSET_URL_PREFIXES = (
+    "/api/file/assets/photos/",
+    "/api/file/assets-buffered/photos/",
+    "/api/file/assets-preview/photos/",
+    "/_uploads/photos/",
+    "/static/upload/",
+)
+
+
+def _looks_like_asset_reference(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.replace("\\", "/").strip()
+    if not normalized:
+        return False
+    if normalized.startswith(("http://", "https://", "data:", "blob:")):
+        return True
+    if normalized.startswith(ASSET_URL_PREFIXES):
+        return True
+    marker = "/static/upload/"
+    if marker in normalized:
+        return True
+    if "/" not in normalized:
+        return False
+    _, ext = os.path.splitext(normalized.split("?", 1)[0])
+    return ext.lower() in TRANSPORT_ASSET_EXTENSIONS
 
 
 def normalize_transport_path(value: Any) -> str:
@@ -30,14 +77,7 @@ def normalize_transport_path(value: Any) -> str:
 
 def _transport_relative_path(value: Any) -> str:
     normalized = normalize_transport_path(value)
-    prefixes = (
-        "/api/file/assets/photos/",
-        "/api/file/assets-buffered/photos/",
-        "/api/file/assets-preview/photos/",
-        "/_uploads/photos/",
-        "/static/upload/",
-    )
-    for prefix in prefixes:
+    for prefix in ASSET_URL_PREFIXES:
         if normalized.startswith(prefix):
             return normalized[len(prefix):].lstrip("/")
     return ""
@@ -91,7 +131,11 @@ def _image_preview_payload(absolute_path: str, max_size: int = DEFAULT_PREVIEW_S
 
 def build_asset_transport(value: Any,
                           preview_max_size: int = DEFAULT_PREVIEW_SIZE,
-                          quality: int = DEFAULT_PREVIEW_QUALITY) -> Dict[str, Any]:
+                          quality: int = DEFAULT_PREVIEW_QUALITY,
+                          include_preview_data: bool = False) -> Dict[str, Any]:
+    if not _looks_like_asset_reference(value):
+        return {}
+
     normalized = normalize_transport_path(value)
     if not normalized:
         return {}
@@ -141,10 +185,10 @@ def build_asset_transport(value: Any,
         "kind": kind,
         "mimetype": mimetype,
         "supports_base64": kind == "image",
-        "modes": ["original", "base64"] if kind == "image" else ["original"],
+        "modes": ["original", "preview"] if kind == "image" else ["original"],
     }
 
-    if kind == "image" and absolute_path and os.path.isfile(absolute_path):
+    if include_preview_data and kind == "image" and absolute_path and os.path.isfile(absolute_path):
         try:
             preview_payload = _image_preview_payload(absolute_path, max_size=preview_max_size, quality=quality)
             transport.update({
@@ -162,37 +206,60 @@ def build_asset_transport(value: Any,
 
 def attach_transports_to_value(value: Any,
                                preview_max_size: int = DEFAULT_PREVIEW_SIZE,
-                               quality: int = DEFAULT_PREVIEW_QUALITY) -> Any:
+                               quality: int = DEFAULT_PREVIEW_QUALITY,
+                               include_preview_data: bool = False) -> Any:
     if isinstance(value, dict):
-        return {key: attach_transports_to_value(item, preview_max_size, quality) for key, item in value.items()}
+        return {
+            key: attach_transports_to_value(item, preview_max_size, quality, include_preview_data)
+            for key, item in value.items()
+        }
     if isinstance(value, list):
-        return [attach_transports_to_value(item, preview_max_size, quality) for item in value]
-    transport = build_asset_transport(value, preview_max_size=preview_max_size, quality=quality)
+        return [
+            attach_transports_to_value(item, preview_max_size, quality, include_preview_data)
+            for item in value
+        ]
+    transport = build_asset_transport(
+        value,
+        preview_max_size=preview_max_size,
+        quality=quality,
+        include_preview_data=include_preview_data,
+    )
     return transport or value
 
 
 def build_record_media_transports(record: Dict[str, Any],
                                   preview_max_size: int = DEFAULT_PREVIEW_SIZE,
-                                  quality: int = DEFAULT_PREVIEW_QUALITY) -> Dict[str, Any]:
+                                  quality: int = DEFAULT_PREVIEW_QUALITY,
+                                  include_preview_data: bool = False) -> Dict[str, Any]:
     transports: Dict[str, Any] = {}
     for field in ("before_img", "before_img1", "after_img"):
         if record.get(field):
-            transports[field] = build_asset_transport(record.get(field), preview_max_size=preview_max_size, quality=quality)
+            transports[field] = build_asset_transport(
+                record.get(field),
+                preview_max_size=preview_max_size,
+                quality=quality,
+                include_preview_data=include_preview_data,
+            )
 
     data = record.get("data") if isinstance(record.get("data"), dict) else {}
     data_transports = {}
     for key, value in data.items():
         if isinstance(value, dict):
-            nested = attach_transports_to_value(value, preview_max_size, quality)
+            nested = attach_transports_to_value(value, preview_max_size, quality, include_preview_data)
             if nested != value:
                 data_transports[key] = nested
             continue
         if isinstance(value, list):
-            nested = attach_transports_to_value(value, preview_max_size, quality)
+            nested = attach_transports_to_value(value, preview_max_size, quality, include_preview_data)
             if nested != value:
                 data_transports[key] = nested
             continue
-        transport = build_asset_transport(value, preview_max_size=preview_max_size, quality=quality)
+        transport = build_asset_transport(
+            value,
+            preview_max_size=preview_max_size,
+            quality=quality,
+            include_preview_data=include_preview_data,
+        )
         if transport:
             data_transports[key] = transport
     if data_transports:

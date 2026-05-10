@@ -1,0 +1,277 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - menubar [ref=e6]:
+      - generic [ref=e7]:
+        - img "logo" [ref=e8] [cursor=pointer]
+        - generic [ref=e9] [cursor=pointer]: 智能遥感解译系统
+      - generic [ref=e12]: 分析工具
+      - menuitem "时序变化分析" [ref=e13] [cursor=pointer]:
+        - heading "时序变化分析" [level=3] [ref=e14]: 时序变化分析
+      - menuitem "智能目标识别" [ref=e16] [cursor=pointer]:
+        - heading "智能目标识别" [level=3] [ref=e17]: 智能目标识别
+      - menuitem "地表覆盖分类" [ref=e19] [cursor=pointer]:
+        - heading "地表覆盖分类" [level=3] [ref=e20]: 地表覆盖分类
+      - menuitem "场景智能识别" [ref=e22] [cursor=pointer]:
+        - heading "场景智能识别" [level=3] [ref=e23]: 场景智能识别
+      - menuitem "影像超分重建" [ref=e25] [cursor=pointer]:
+        - heading "影像超分重建" [level=3] [ref=e26]: 影像超分重建
+      - menuitem "多模态自动配准" [ref=e28] [cursor=pointer]:
+        - heading "多模态自动配准" [level=3] [ref=e29]: 多模态自动配准
+      - menuitem "全域目标跟踪" [ref=e31] [cursor=pointer]:
+        - heading "全域目标跟踪" [level=3] [ref=e32]: 全域目标跟踪
+      - generic [ref=e36]: 历史记录
+      - menuitem "分析历史记录" [ref=e37] [cursor=pointer]:
+        - heading "分析历史记录" [level=3] [ref=e38]: 分析历史记录
+  - main [ref=e42]:
+    - generic [ref=e44]:
+      - button [ref=e45] [cursor=pointer]
+      - generic [ref=e47]:
+        - generic [ref=e49]: 智能遥感解译系统
+        - button "切换深色" [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: 切换深色
+    - generic [ref=e282]:
+      - generic [ref=e283]: 当前浏览功能区：全部
+      - generic [ref=e285]:
+        - table [ref=e287]:
+          - rowgroup [ref=e295]:
+            - row "日期 功能区 原图 结果图/预测结果 操作" [ref=e296]:
+              - columnheader [ref=e297]:
+                - generic [ref=e300] [cursor=pointer]:
+                  - checkbox
+              - columnheader "日期" [ref=e302]:
+                - generic [ref=e303]: 日期
+              - columnheader "功能区" [ref=e304]:
+                - generic [ref=e305]: 功能区
+              - columnheader "原图" [ref=e306]:
+                - generic [ref=e307]: 原图
+              - columnheader "结果图/预测结果" [ref=e308]:
+                - generic [ref=e309]: 结果图/预测结果
+              - columnheader "操作" [ref=e310]:
+                - generic [ref=e311]: 操作
+        - table [ref=e316]:
+          - rowgroup [ref=e324]:
+            - row "2026-05-08 17:21:28 目标跟踪 原图 结果图 删除 预览 视频 轨迹 下载" [ref=e325]:
+              - cell [ref=e326]:
+                - generic [ref=e329] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:21:28" [ref=e331]:
+                - generic [ref=e332]: 2026-05-08 17:21:28
+              - cell "目标跟踪" [ref=e333]:
+                - generic [ref=e335] [cursor=pointer]: 目标跟踪
+              - cell "原图" [ref=e337]:
+                - img "原图" [ref=e339] [cursor=pointer]
+              - cell "结果图" [ref=e340]:
+                - img "结果图" [ref=e342] [cursor=pointer]
+              - cell "删除 预览 视频 轨迹 下载" [ref=e343]:
+                - generic [ref=e344]:
+                  - button "删除" [ref=e345] [cursor=pointer]:
+                    - generic [ref=e346]: 删除
+                  - button "预览" [ref=e347] [cursor=pointer]:
+                    - generic [ref=e348]: 预览
+                  - button "视频" [ref=e349] [cursor=pointer]:
+                    - generic [ref=e350]: 视频
+                  - button "轨迹" [ref=e351] [cursor=pointer]:
+                    - generic [ref=e352]: 轨迹
+                  - button "下载" [ref=e353] [cursor=pointer]:
+                    - generic [ref=e354]: 下载
+            - row "2026-05-08 17:20:53  目标检测 原图 结果图 删除 预览 下载" [ref=e355]:
+              - cell [ref=e356]:
+                - generic [ref=e359] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:20:53" [ref=e361]:
+                - generic [ref=e362]: 2026-05-08 17:20:53
+              - cell " 目标检测" [ref=e363]:
+                - generic [ref=e365] [cursor=pointer]:
+                  - generic [ref=e366]: 
+                  - text: 目标检测
+              - cell "原图" [ref=e367]:
+                - img "原图" [ref=e369] [cursor=pointer]
+              - cell "结果图" [ref=e370]:
+                - img "结果图" [ref=e372] [cursor=pointer]
+              - cell "删除 预览 下载" [ref=e373]:
+                - generic [ref=e374]:
+                  - button "删除" [ref=e375] [cursor=pointer]:
+                    - generic [ref=e376]: 删除
+                  - button "预览" [ref=e377] [cursor=pointer]:
+                    - generic [ref=e378]: 预览
+                  - button "下载" [ref=e379] [cursor=pointer]:
+                    - generic [ref=e380]: 下载
+            - row "2026-05-08 17:19:31 目标跟踪 原图 结果图 删除 预览 视频 轨迹 下载" [ref=e381]:
+              - cell [ref=e382]:
+                - generic [ref=e385] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:31" [ref=e387]:
+                - generic [ref=e388]: 2026-05-08 17:19:31
+              - cell "目标跟踪" [ref=e389]:
+                - generic [ref=e391] [cursor=pointer]: 目标跟踪
+              - cell "原图" [ref=e393]:
+                - img "原图" [ref=e395] [cursor=pointer]
+              - cell "结果图" [ref=e396]:
+                - img "结果图" [ref=e398] [cursor=pointer]
+              - cell "删除 预览 视频 轨迹 下载" [ref=e399]:
+                - generic [ref=e400]:
+                  - button "删除" [ref=e401] [cursor=pointer]:
+                    - generic [ref=e402]: 删除
+                  - button "预览" [ref=e403] [cursor=pointer]:
+                    - generic [ref=e404]: 预览
+                  - button "视频" [ref=e405] [cursor=pointer]:
+                    - generic [ref=e406]: 视频
+                  - button "轨迹" [ref=e407] [cursor=pointer]:
+                    - generic [ref=e408]: 轨迹
+                  - button "下载" [ref=e409] [cursor=pointer]:
+                    - generic [ref=e410]: 下载
+            - row "2026-05-08 17:19:31 自动配准 原图原图 结果图 删除 预览 叠加 下载" [ref=e411]:
+              - cell [ref=e412]:
+                - generic [ref=e415] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:31" [ref=e417]:
+                - generic [ref=e418]: 2026-05-08 17:19:31
+              - cell "自动配准" [ref=e419]:
+                - generic [ref=e421] [cursor=pointer]: 自动配准
+              - cell "原图原图" [ref=e423]:
+                - generic [ref=e424]:
+                  - img "原图" [ref=e425] [cursor=pointer]
+                  - img "原图" [ref=e426] [cursor=pointer]
+              - cell "结果图" [ref=e427]:
+                - img "结果图" [ref=e429] [cursor=pointer]
+              - cell "删除 预览 叠加 下载" [ref=e430]:
+                - generic [ref=e431]:
+                  - button "删除" [ref=e432] [cursor=pointer]:
+                    - generic [ref=e433]: 删除
+                  - button "预览" [ref=e434] [cursor=pointer]:
+                    - generic [ref=e435]: 预览
+                  - button "叠加" [ref=e436] [cursor=pointer]:
+                    - generic [ref=e437]: 叠加
+                  - button "下载" [ref=e438] [cursor=pointer]:
+                    - generic [ref=e439]: 下载
+            - row "2026-05-08 17:19:31  影像超分重建 原图 结果图 删除 预览 下载" [ref=e440]:
+              - cell [ref=e441]:
+                - generic [ref=e444] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:31" [ref=e446]:
+                - generic [ref=e447]: 2026-05-08 17:19:31
+              - cell " 影像超分重建" [ref=e448]:
+                - generic [ref=e450] [cursor=pointer]:
+                  - generic [ref=e451]: 
+                  - text: 影像超分重建
+              - cell "原图" [ref=e452]:
+                - img "原图" [ref=e454] [cursor=pointer]
+              - cell "结果图" [ref=e455]:
+                - img "结果图" [ref=e457] [cursor=pointer]
+              - cell "删除 预览 下载" [ref=e458]:
+                - generic [ref=e459]:
+                  - button "删除" [ref=e460] [cursor=pointer]:
+                    - generic [ref=e461]: 删除
+                  - button "预览" [ref=e462] [cursor=pointer]:
+                    - generic [ref=e463]: 预览
+                  - button "下载" [ref=e464] [cursor=pointer]:
+                    - generic [ref=e465]: 下载
+            - 'row "2026-05-08 17:19:30  场景分类 原图 label: 机场 删除 预览" [ref=e466]':
+              - cell [ref=e467]:
+                - generic [ref=e470] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:30" [ref=e472]:
+                - generic [ref=e473]: 2026-05-08 17:19:30
+              - cell " 场景分类" [ref=e474]:
+                - generic [ref=e476] [cursor=pointer]:
+                  - generic [ref=e477]: 
+                  - text: 场景分类
+              - cell "原图" [ref=e478]:
+                - img "原图" [ref=e480] [cursor=pointer]
+              - 'cell "label: 机场" [ref=e481]':
+                - generic [ref=e483]: "label: 机场"
+              - cell "删除 预览" [ref=e484]:
+                - generic [ref=e485]:
+                  - button "删除" [ref=e486] [cursor=pointer]:
+                    - generic [ref=e487]: 删除
+                  - button "预览" [ref=e488] [cursor=pointer]:
+                    - generic [ref=e489]: 预览
+            - row "2026-05-08 17:19:30  地物分类 原图 结果图 删除 预览 下载" [ref=e490]:
+              - cell [ref=e491]:
+                - generic [ref=e494] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:30" [ref=e496]:
+                - generic [ref=e497]: 2026-05-08 17:19:30
+              - cell " 地物分类" [ref=e498]:
+                - generic [ref=e500] [cursor=pointer]:
+                  - generic [ref=e501]: 
+                  - text: 地物分类
+              - cell "原图" [ref=e502]:
+                - img "原图" [ref=e504] [cursor=pointer]
+              - cell "结果图" [ref=e505]:
+                - img "结果图" [ref=e507] [cursor=pointer]
+              - cell "删除 预览 下载" [ref=e508]:
+                - generic [ref=e509]:
+                  - button "删除" [ref=e510] [cursor=pointer]:
+                    - generic [ref=e511]: 删除
+                  - button "预览" [ref=e512] [cursor=pointer]:
+                    - generic [ref=e513]: 预览
+                  - button "下载" [ref=e514] [cursor=pointer]:
+                    - generic [ref=e515]: 下载
+            - row "2026-05-08 17:19:30  目标检测 原图 结果图 删除 预览 下载" [ref=e516]:
+              - cell [ref=e517]:
+                - generic [ref=e520] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:30" [ref=e522]:
+                - generic [ref=e523]: 2026-05-08 17:19:30
+              - cell " 目标检测" [ref=e524]:
+                - generic [ref=e526] [cursor=pointer]:
+                  - generic [ref=e527]: 
+                  - text: 目标检测
+              - cell "原图" [ref=e528]:
+                - img "原图" [ref=e530] [cursor=pointer]
+              - cell "结果图" [ref=e531]:
+                - img "结果图" [ref=e533] [cursor=pointer]
+              - cell "删除 预览 下载" [ref=e534]:
+                - generic [ref=e535]:
+                  - button "删除" [ref=e536] [cursor=pointer]:
+                    - generic [ref=e537]: 删除
+                  - button "预览" [ref=e538] [cursor=pointer]:
+                    - generic [ref=e539]: 预览
+                  - button "下载" [ref=e540] [cursor=pointer]:
+                    - generic [ref=e541]: 下载
+            - row "2026-05-08 17:19:30  变化检测 原图原图 结果图 删除 预览 下载" [ref=e542]:
+              - cell [ref=e543]:
+                - generic [ref=e546] [cursor=pointer]:
+                  - checkbox
+              - cell "2026-05-08 17:19:30" [ref=e548]:
+                - generic [ref=e549]: 2026-05-08 17:19:30
+              - cell " 变化检测" [ref=e550]:
+                - generic [ref=e552] [cursor=pointer]:
+                  - generic [ref=e553]: 
+                  - text: 变化检测
+              - cell "原图原图" [ref=e554]:
+                - generic [ref=e555]:
+                  - img "原图" [ref=e556] [cursor=pointer]
+                  - img "原图" [ref=e557] [cursor=pointer]
+              - cell "结果图" [ref=e558]:
+                - img "结果图" [ref=e560] [cursor=pointer]
+              - cell "删除 预览 下载" [ref=e561]:
+                - generic [ref=e562]:
+                  - button "删除" [ref=e563] [cursor=pointer]:
+                    - generic [ref=e564]: 删除
+                  - button "预览" [ref=e565] [cursor=pointer]:
+                    - generic [ref=e566]: 预览
+                  - button "下载" [ref=e567] [cursor=pointer]:
+                    - generic [ref=e568]: 下载
+      - text: 
+      - generic [ref=e569]:
+        - button "全选" [ref=e570] [cursor=pointer]:
+          - generic [ref=e571]: 全选
+        - button "取消选择" [ref=e572] [cursor=pointer]:
+          - generic [ref=e573]: 取消选择
+        - button "删除" [ref=e574] [cursor=pointer]:
+          - generic [ref=e575]: 删除
+        - button "下载" [ref=e576] [cursor=pointer]:
+          - generic [ref=e577]: 下载
+      - generic "pagination" [ref=e580]:
+        - button [disabled] [ref=e581]:
+          - img [ref=e583]
+        - list [ref=e585]:
+          - listitem [ref=e586]: "1"
+        - button [disabled] [ref=e587]:
+          - img [ref=e589]
+        - generic [ref=e591]:
+          - text: 前往
+          - spinbutton [ref=e594]: "1"
+          - text: 页

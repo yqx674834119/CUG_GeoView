@@ -4,18 +4,18 @@ import pymysql
 import sqlparse
 from dotenv import dotenv_values
 
-_dotenv = dotenv_values('.flaskenv')
+_dotenv = dotenv_values('.env')
 
 
 def _config(key: str, default: str) -> str:
-    """Read configuration value from environment first, then .flaskenv, fallback to default."""
+    """Read configuration value from environment first, then .env, fallback to default."""
     return os.getenv(key) or _dotenv.get(key) or default
 
 
 # MySql配置信息
 HOST = _config('MYSQL_HOST', '127.0.0.1')
 PORT = int(_config('MYSQL_PORT', 3306))
-DATABASE = _config('MYSQL_DATABASE', 'AdminFlask')
+DATABASE = _config('MYSQL_DATABASE', 'GeoView')
 USERNAME = _config('MYSQL_USERNAME', 'root')
 PASSWORD = _config('MYSQL_PASSWORD', '123456')
 

@@ -2,5 +2,5 @@ apiVersion: v2
 name: geoview-frontend
 description: GeoView frontend-only Helm chart
 type: application
-version: 0.1.1
-appVersion: "20260428-final"
+version: 0.1.6
+appVersion: "20260508-frontendfix3-4837450"

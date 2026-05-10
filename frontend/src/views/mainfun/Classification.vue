@@ -197,7 +197,8 @@ export default {
       document.querySelector("#folder").click();
     },
     beforeUpload(file) {
-      this.cutVisible = this.$refs.cut.checked;
+      const cutRef = this.$refs && this.$refs.cut;
+      this.cutVisible = Boolean(cutRef && cutRef.checked);
       const fileSuffix = file.name.substring(file.name.lastIndexOf(".") + 1)
       // 支持 TIFF 格式用于遥感影像
       const whiteList = ['jpg', 'jpeg', 'png', 'JPG', 'JPEG', 'tif', 'tiff', 'TIF', 'TIFF']
@@ -213,7 +214,8 @@ export default {
       }
     },
     select() {
-      this.isNotCut = this.$refs.cut.checked;
+      const cutRef = this.$refs && this.$refs.cut;
+      this.isNotCut = Boolean(cutRef && cutRef.checked);
     },
   },
 };

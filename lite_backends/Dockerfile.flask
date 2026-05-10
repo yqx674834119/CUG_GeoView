@@ -1,0 +1,28 @@
+ARG BASE_IMAGE=geoview-lite-fastapi-chunked:latest
+FROM ${BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=5102 \
+    GEOVIEW_LITE_VARIANT=flask-wsgi \
+    GEOVIEW_TRANSFER_MODE=chunked \
+    GEOVIEW_OMIT_CONTENT_LENGTH=true \
+    GEOVIEW_DEBUG_LOG=true
+
+WORKDIR /app
+COPY lite_backends/requirements /app/requirements
+RUN python3 -m pip install --break-system-packages --no-cache-dir -r /app/requirements/flask.txt
+
+COPY lite_backends /app/lite_backends
+COPY TestData/CD/Val1/val_1.png /app/sample_assets/cd_val1_2_3mb.png
+COPY TestData/CD/Val2/val_1.png /app/sample_assets/cd_val2_2_0mb.png
+COPY TestData/val_1_2X.png /app/sample_assets/scene_7_7mb.png
+COPY TestData/Seg/aircraft_4.jpg /app/sample_assets/aircraft_100kb.jpg
+COPY TestData/Dec/aircraft_4.jpg /app/sample_assets/aircraft_200kb.jpg
+COPY TestData/Seg/2.tif /app/sample_assets/seg_787kb.tif
+COPY TestData/Seg/output/mask_2.png /app/sample_assets/mask_8kb.png
+COPY TestData/Seg/output/pred_2.png /app/sample_assets/pred_440kb.png
+COPY TestData/Tracking/official_mot17_02_frcnn_180frames_raw.mp4 /app/sample_assets/tracking_12mb.mp4
+
+EXPOSE 5102
+CMD ["sh", "-c", "gunicorn -b 0.0.0.0:${PORT:-5008} --workers ${GEOVIEW_WORKERS:-1} --threads 4 --access-logfile - --error-logfile - lite_backends.apps.flask_app:app"]

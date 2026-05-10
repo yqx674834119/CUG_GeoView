@@ -1,13 +1,13 @@
-from flask import Blueprint, jsonify
+from fastapi import APIRouter
 
-task_api = Blueprint("task_api", __name__, url_prefix="/api/v1/api/task")
+task_api = APIRouter(prefix="/api/v1/api/task", tags=["task"])
 
 
-@task_api.post("/model/deploy")
-def deploy_online_service():
-    return jsonify({
+@task_api.get("/list")
+def task_list():
+    return {
         "code": 200,
-        "success": False,
-        "msg": "暂未实现",
-        "data": False,
-    }), 200
+        "success": True,
+        "msg": "OK",
+        "data": {"records": [], "total": 0, "curPage": 1, "pageSize": 10},
+    }

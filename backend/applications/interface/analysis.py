@@ -732,15 +732,19 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         "runtime_variant": result.get("runtime_variant"),
         "mot_result_path": result.get("mot_result_path"),
     }
-    trajectory_frames = []
+    trajectory_frame_count = 0
+    trajectory_sample = []
     trajectory_abs_path = resolve_generated_path(metadata.get("trajectory_path"))
     if trajectory_abs_path and os.path.exists(trajectory_abs_path):
         try:
             with open(trajectory_abs_path, "r", encoding="utf-8") as file:
                 trajectory_payload = json.load(file)
             trajectory_frames = trajectory_payload.get("frames", [])
+            trajectory_frame_count = len(trajectory_frames)
+            trajectory_sample = trajectory_frames[:5]
         except Exception:
-            trajectory_frames = []
+            trajectory_frame_count = 0
+            trajectory_sample = []
     payload = build_visual_payload(
         analysis_type="目标跟踪",
         renderer="tracking",
@@ -752,7 +756,9 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         },
         result={
             "rect": rect,
-            "frames": trajectory_frames,
+            "trajectory_frame_count": trajectory_frame_count,
+            "trajectory_sample": trajectory_sample,
+            "trajectory_path": metadata.get("trajectory_path"),
         },
         metrics=metadata.get("summary") or {},
         legacy_assets=_legacy_asset_bundle(

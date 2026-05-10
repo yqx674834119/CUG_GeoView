@@ -1,14 +1,13 @@
 import os
 import os.path as osp
+import shutil
 import uuid
 
-from flask import current_app
 from sqlalchemy import desc
 
 from applications.common.curd import model_to_dicts
-from applications.common.storage import mirror_file
+from applications.common.storage import mirror_file, primary_upload_root
 from applications.extensions import db
-from applications.extensions.init_upload import photos
 from applications.models import Photo
 from applications.schemas import PhotoOutSchema
 
@@ -34,13 +33,22 @@ def upload_one(photo, mime, type_=0, enable_slicing=False):
     返回: List[(url, id, display_name)]
     """
     from applications.common.utils.tiff_processor import is_tiff_file, process_uploaded_tiff
-    
-    filename = photos.save(photo, name=str(uuid.uuid4()) + ".")
-    upload_url = current_app.config.get("UPLOADED_PHOTOS_DEST")
+
+    upload_url = primary_upload_root()
+    os.makedirs(upload_url, exist_ok=True)
+    original_filename = getattr(photo, 'filename', '') or str(uuid.uuid4())
+    _, suffix = os.path.splitext(original_filename)
+    filename = f"{uuid.uuid4()}{suffix or '.bin'}"
     full_path = os.path.join(upload_url, filename)
-    
-    # 原始文件名 (用于前端配对展示)
-    original_filename = getattr(photo, 'filename', filename)
+    source_file = getattr(photo, "file", None)
+    if source_file is None and hasattr(photo, "read"):
+        source_file = photo
+    if source_file is None:
+        raise ValueError("上传文件对象无效")
+    with open(full_path, "wb") as target:
+        shutil.copyfileobj(source_file, target)
+    if hasattr(source_file, "seek"):
+        source_file.seek(0)
     
     # 如果是 TIFF 文件，进行预处理 (可能切片)
     processed_files = []
@@ -124,7 +132,7 @@ def delete_photo_by_id(_id):
     photo_name = Photo.query.filter_by(id=_id).first().name
     photo = Photo.query.filter_by(id=_id).delete()
     db.session.commit()
-    upload_url = current_app.config.get("UPLOADED_PHOTOS_DEST")
+    upload_url = primary_upload_root()
     os.remove(upload_url + '/' + photo_name)
     return photo
 

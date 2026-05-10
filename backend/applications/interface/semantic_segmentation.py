@@ -10,6 +10,7 @@ from skimage.io import imsave
 
 from applications.common.model_assets import infer_model_backend, resolve_model_dir
 from applications.common.path_global import md5_name, generate_url
+from applications.interface.utils import paddle_use_gpu
 
 
 def is_mmseg_model(model_path: str) -> bool:
@@ -37,7 +38,7 @@ def execute_paddle(model_path, data_path, out_dir, test_names):
     """使用 PaddleRS 执行语义分割推理"""
     image_list = [osp.join(data_path, name) for name in test_names]
     predictor = pdrs.deploy.Predictor(str(resolve_model_dir(model_path)),
-                                      use_gpu=True)
+                                      use_gpu=paddle_use_gpu())
     pred = predictor.predict(image_list)
     ims = [i['label_map'] for i in pred]
     temps = list()

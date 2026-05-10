@@ -38,7 +38,7 @@ class BaseConfig:
     MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD') or "123456"
     MYSQL_HOST = os.getenv('MYSQL_HOST') or "127.0.0.1"
     MYSQL_PORT = int(os.getenv('MYSQL_PORT') or 3306)
-    MYSQL_DATABASE = os.getenv('MYSQL_DATABASE') or "AdminFlask"
+    MYSQL_DATABASE = os.getenv('MYSQL_DATABASE') or "GeoView"
 
     # mysql 数据库的配置信息
     SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USERNAME}:{quote_plus(MYSQL_PASSWORD)}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}?charset=utf8mb4"

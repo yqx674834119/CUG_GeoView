@@ -1,0 +1,5 @@
+-r common.txt
+quart==0.20.0
+hypercorn==0.17.3
+python-multipart==0.0.20
+

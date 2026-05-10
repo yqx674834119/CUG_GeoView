@@ -3,6 +3,7 @@ import { showFullScreenLoading } from "@/utils/loading";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { hydrateAssetPreviews } from "@/utils/assetPreview";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
+import { buildUploadFormData } from "@/utils/uploadFormData";
 
 function getUploadImg(type) {
   historyGetPage(1, 20, type).then((res) => {
@@ -30,15 +31,11 @@ function upload(type, funUrl) {
   if (this.fileList.length === 0) {
     this.$message.error("请上传图片！");
   } else {
-    let formData = new FormData();
+    let formData = buildUploadFormData(this.fileList, type, {
+      isSlice: this.isSlice,
+      scope: "文件上传",
+    });
     let _this = this;
-    for (const item of this.fileList) {
-      formData.append("files", item) || formData.append('files', item.raw);
-      formData.append("type", type);
-      if (this.isSlice) {
-        formData.append("isSlice", this.isSlice);
-      }
-    }
     this.createSrc(formData).then((res) => {
       const uploadedItems = res.data.data || [];
       registerUploadedSources(uploadedItems, this.fileList);

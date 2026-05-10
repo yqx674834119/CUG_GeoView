@@ -1,56 +1,111 @@
 import json
-import os
+import time
 
-import cv2
-from flask import Blueprint, request
+from fastapi import APIRouter, Body, Query
 from sqlalchemy import desc
 
+from applications.common.debug_logging import compact_json_bytes, log_debug, summarize_value
 from applications.common.curd import model_to_dicts
 from applications.common.model_assets import infer_model_backend
-from applications.common.path_global import up_dir, generate_dir, fun_type_1, fun_type_4, fun_type_5, fun_type_3, \
-    fun_type_2, generate_url
-from applications.common.visualization import normalize_analysis_record
+from applications.common.path_global import (
+    fun_type_1,
+    fun_type_2,
+    fun_type_3,
+    fun_type_4,
+    fun_type_5,
+    generate_dir,
+    up_dir,
+)
 from applications.common.utils import type_utils
 from applications.common.utils.http import fail_api, success_api, table_api
 from applications.common.utils.upload import img_url_handle
+from applications.common.visualization import normalize_analysis_record
 from applications.extensions import db
 from applications.image_processing import histogram_match
-from applications.interface.analysis import change_detection, object_detection, terrain_classification, hole_handle, \
-    handle, classification, image_restoration, registration, tracking
-from applications.interface.compute_variation import compute_variation
-from applications.interface.draw_mask import draw_masks
-from applications.interface.utils import get_model_info
 from applications.models.analysis import Analysis
 from applications.schemas import AnalysisSchema
 
-analysis_api = Blueprint('analysis_api', __name__, url_prefix='/api/analysis')
-"""
-    结果展示
-"""
+analysis_api = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
-@analysis_api.get('/show/<string:type>')
-def show_result(type):
-    # orm查询
-    # 使用分页获取data需要.items
+def _get_model_info(model_path):
+    from applications.interface.utils import get_model_info
+
+    return get_model_info(model_path)
+
+
+def _analysis_functions():
+    from applications.interface.analysis import (
+        change_detection,
+        classification,
+        handle,
+        image_restoration,
+        object_detection,
+        registration,
+        terrain_classification,
+        tracking,
+    )
+
+    return {
+        "change_detection": change_detection,
+        "classification": classification,
+        "handle": handle,
+        "image_restoration": image_restoration,
+        "object_detection": object_detection,
+        "registration": registration,
+        "terrain_classification": terrain_classification,
+        "tracking": tracking,
+    }
+
+
+def _paginate(query, page: int, limit: int):
+    page = max(page, 1)
+    limit = max(min(limit, 100), 1)
+    total = query.count()
+    items = query.offset((page - 1) * limit).limit(limit).all()
+    return total, items
+
+
+def _analysis_debug(route_name, req_json, **extra):
+    payload_summary = {
+        key: summarize_value(req_json.get(key))
+        for key in ("model_path", "list", "prehandle", "denoise", "window_size", "stride", "type", "rect")
+        if key in req_json
+    }
+    payload_summary.update(extra)
+    log_debug(
+        "模型推理",
+        "收到推理请求",
+        route=route_name,
+        payload_summary=payload_summary,
+        estimated_request_bytes=compact_json_bytes(req_json),
+    )
+
+
+def _analysis_done(route_name, started_at, **extra):
+    log_debug(
+        "模型推理",
+        "推理请求处理完成",
+        route=route_name,
+        elapsed_ms=int((time.time() - started_at) * 1000),
+        **extra,
+    )
+
+
+@analysis_api.get("/show/{type}")
+def show_result(type: str, page: int = Query(default=1), limit: int = Query(default=10)):
     to_type = type_utils.str_to_type(type)
-    log = Analysis.query.filter_by(
-        type=to_type).order_by(desc(Analysis.create_time)).layui_paginate()
-    count = log.total
-    dicts = model_to_dicts(schema=AnalysisSchema, data=log.items)
+    query = Analysis.query.filter_by(type=to_type).order_by(desc(Analysis.create_time))
+    count, items = _paginate(query, page, limit)
+    dicts = model_to_dicts(schema=AnalysisSchema, data=items)
     dicts = [normalize_analysis_record(item) for item in dicts]
-    return table_api(
-        data=dicts, count=count)
+    return table_api(data=dicts, count=count, limit=limit)
 
 
-"""
-    变化检测
-"""
-
-
-@analysis_api.post('/change_detection')
-def change_detection_api():
-    req_json = request.json
+@analysis_api.post("/change_detection")
+def change_detection_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("change_detection", req_json)
     model_path = req_json["model_path"]
     window_size = int(req_json.get("window_size", 256))
     stride = int(req_json.get("stride", 128))
@@ -59,258 +114,189 @@ def change_detection_api():
     if window_size < stride:
         return fail_api("步长必须小于等于窗口大小")
     try:
-        model_info = get_model_info(model_path)
+        model_info = _get_model_info(model_path)
         if model_info["_Attributes"]["model_type"] != "change_detector":
             return fail_api("模型类型不正确，请检查")
-    except:
+    except Exception:
         return fail_api("模型不存在，请检查")
     list_ = req_json["list"]
     step1_ = req_json["prehandle"]
     step2_ = req_json["denoise"]
-    if step1_ is None or step1_ is None or step1_ not in (
-            0, fun_type_1, fun_type_4) or step2_ not in (0, fun_type_3,
-                                                         fun_type_5):
+    if step1_ not in (0, fun_type_1, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
     if list_ is None:
         return fail_api("请上传图片")
-
     for pair in list_:
-        if "first" not in pair or "second" not in pair or pair[
-                "first"] == "" or pair["second"] == "":
+        if "first" not in pair or "second" not in pair or pair["first"] == "" or pair["second"] == "":
             return fail_api("请求参数异常")
-    print("----------------->change_detection" + json.dumps(req_json))
-    type_ = 1
-    records = change_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
-                               type_, window_size, stride)
+    log_debug("模型推理", "change_detection 参数校验通过，开始执行模型推理", model_path=model_path, list_count=len(list_))
+    records = _analysis_functions()["change_detection"](model_path, up_dir, generate_dir, list_, step1_, step2_, 1, window_size, stride)
+    _analysis_done("change_detection", started_at, record_count=len(records), model_path=model_path)
     return success_api(data={"records": records})
 
 
-"""
-    目标检测
-"""
-
-
-@analysis_api.post('/object_detection')
-def object_detection_api():
-    req_json = request.json
+@analysis_api.post("/object_detection")
+def object_detection_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("object_detection", req_json)
     model_path = req_json["model_path"]
     model_backend = infer_model_backend(model_path)
-
     if model_backend is None:
         return fail_api("模型不存在，请检查")
-
     if model_backend not in ("huggingface", "mmrotate"):
         try:
-            model_info = get_model_info(model_path)
+            model_info = _get_model_info(model_path)
             if model_info["_Attributes"]["model_type"] != "detector":
                 return fail_api("模型类型不正确，请检查")
-        except:
+        except Exception:
             return fail_api("模型不存在，请检查")
     list_ = req_json["list"]
     step1_ = req_json["prehandle"]
     step2_ = req_json["denoise"]
-    if step1_ is None or step1_ is None or step1_ not in (
-            0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3,
-                                                         fun_type_5):
+    if step1_ not in (0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
     if list_ is None:
         return fail_api("请上传图片")
-    type_ = 2
-    records = object_detection(model_path, up_dir, generate_dir, list_, step1_, step2_,
-                               type_)
-
+    records = _analysis_functions()["object_detection"](model_path, up_dir, generate_dir, list_, step1_, step2_, 2)
+    _analysis_done("object_detection", started_at, record_count=len(records), model_path=model_path)
     return success_api(data={"records": records})
 
 
-"""
-    地物分类
-"""
-
-
-@analysis_api.post('/semantic_segmentation')
-def semantic_segmentation_api():
-    """
-    地物分类/语义分割推理接口
-    
-    支持两种模型:
-    - Paddle 模型: model_path 为本地目录路径
-    - MMSegmentation 模型: model_path 为显式本地目录路径
-    """
-    req_json = request.json
+@analysis_api.post("/semantic_segmentation")
+def semantic_segmentation_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("semantic_segmentation", req_json)
     model_path = req_json.get("model_path")
-    
     if not model_path:
         return fail_api("请指定模型路径")
-    
     model_backend = infer_model_backend(model_path)
     if model_backend is None:
         return fail_api("模型不存在，请检查")
-
     if model_backend != "mmsegmentation":
-        # Paddle 模型 - 验证模型信息
         try:
-            model_info = get_model_info(model_path)
+            model_info = _get_model_info(model_path)
             if model_info["_Attributes"]["model_type"] != "segmenter":
                 return fail_api("模型类型不正确，请检查")
-        except:
+        except Exception:
             return fail_api("模型不存在，请检查")
-    
     list_ = req_json.get("list")
     step1_ = req_json.get("prehandle", 0)
     step2_ = req_json.get("denoise", 0)
-    
     if step1_ not in (0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
     if not list_:
         return fail_api("请上传图片")
-    
-    type_ = 3
     try:
-        records = terrain_classification(model_path, up_dir, generate_dir, list_, step1_,
-                                         step2_, type_)
+        records = _analysis_functions()["terrain_classification"](model_path, up_dir, generate_dir, list_, step1_, step2_, 3)
+        _analysis_done("semantic_segmentation", started_at, record_count=len(records), model_path=model_path)
         return success_api(data={"records": records})
-    except Exception as e:
-        return fail_api(f"推理失败: {str(e)}")
+    except Exception as exc:
+        return fail_api(f"推理失败: {str(exc)}")
 
 
-"""
-    场景分类
-"""
-
-
-@analysis_api.post('/classification')
-def classification_api():
-    req_json = request.json
+@analysis_api.post("/classification")
+def classification_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("classification", req_json)
     model_path = req_json["model_path"]
     try:
-        model_info = get_model_info(model_path)
+        model_info = _get_model_info(model_path)
         if model_info["_Attributes"]["model_type"] != "classifier":
             return fail_api("模型类型不正确，请检查")
-    except:
+    except Exception:
         return fail_api("模型不存在，请检查")
     img_list = req_json["list"]
     if img_list is None:
         return fail_api("请上传图片")
-    type_ = 4
-    records = classification(model_path, up_dir, img_list, type_)
+    records = _analysis_functions()["classification"](model_path, up_dir, img_list, 4)
+    _analysis_done("classification", started_at, record_count=len(records), model_path=model_path)
     return success_api(data={"records": records})
 
 
-"""
-    图像还原
-"""
-
-
-@analysis_api.post('/image_restoration')
-def image_restoration_api():
-    """
-    图像还原/超分辨率推理接口
-    
-    支持两种模型:
-    - Paddle 模型: model_path 为本地目录路径
-    - HuggingFace 模型: model_path 为显式本地目录路径
-    """
-    req_json = request.json
+@analysis_api.post("/image_restoration")
+def image_restoration_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("image_restoration", req_json)
     model_path = req_json.get("model_path")
-    
     if not model_path:
         return fail_api("请指定模型路径")
-    
     img_list = req_json.get("list")
     if not img_list:
         return fail_api("请上传图片")
-    
     model_backend = infer_model_backend(model_path)
     if model_backend is None:
         return fail_api("模型不存在，请检查")
-
     if model_backend != "huggingface":
-        # Paddle 模型 - 验证模型信息
         try:
-            model_info = get_model_info(model_path)
+            model_info = _get_model_info(model_path)
             if model_info["_Attributes"]["model_type"] != "restorer":
                 return fail_api("模型类型不正确，请检查")
-        except:
+        except Exception:
             return fail_api("模型不存在，请检查")
-    
-    type_ = 5
     try:
-        # image_restoration 函数现在会自动路由到 Paddle 或 HuggingFace
-        records = image_restoration(model_path, up_dir, generate_dir, img_list, type_)
+        records = _analysis_functions()["image_restoration"](model_path, up_dir, generate_dir, img_list, 5)
+        _analysis_done("image_restoration", started_at, record_count=len(records), model_path=model_path)
         return success_api(data={"records": records})
-    except Exception as e:
-        return fail_api(f"推理失败: {str(e)}")
+    except Exception as exc:
+        return fail_api(f"推理失败: {str(exc)}")
 
 
-"""
-    多模态自动配准
-"""
-
-
-@analysis_api.post('/registration')
-def registration_api():
-    req_json = request.json
+@analysis_api.post("/registration")
+def registration_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("registration", req_json)
     list_ = req_json.get("list")
-    model_path = req_json.get("model_path",
-                              "backend/model/registration/auto")
-    
+    model_path = req_json.get("model_path", "backend/model/registration/auto")
     if not list_:
         return fail_api("请上传图片")
-        
     for pair in list_:
-        if ("first" not in pair or "second" not in pair or not pair["first"]
-                or not pair["second"]):
+        if "first" not in pair or "second" not in pair or not pair["first"] or not pair["second"]:
             return fail_api("请求参数异常")
-            
     try:
-        records = registration(model_path, up_dir, generate_dir, list_, type_=6)
-        success_count = len(records)
+        records = _analysis_functions()["registration"](model_path, up_dir, generate_dir, list_, type_=6)
         return success_api(
-            msg=f"配准完成，共 {success_count}/{len(list_)} 对成功",
+            msg=f"配准完成，共 {len(records)}/{len(list_)} 对成功",
             data={
                 "records": records,
                 "summary": {
                     "total_pairs": len(list_),
-                    "success_pairs": success_count,
-                    "failed_pairs": len(list_) - success_count,
+                    "success_pairs": len(records),
+                    "failed_pairs": len(list_) - len(records),
                     "model_path": model_path,
-                }
+                },
             },
         )
-    except Exception as e:
-        return fail_api(f"配准失败: {str(e)}")
+    except Exception as exc:
+        return fail_api(f"配准失败: {str(exc)}")
+    finally:
+        try:
+            _analysis_done("registration", started_at, record_count=len(records) if 'records' in locals() else 0, model_path=model_path)
+        except Exception:
+            pass
 
 
-"""
-    全域静态目标跟踪与预警
-"""
-
-
-@analysis_api.post('/tracking')
-def tracking_api():
-    req_json = request.json
+@analysis_api.post("/tracking")
+def tracking_api(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("tracking", req_json)
     model_path = req_json.get("model_path", "backend/model/tracking/auto")
     list_ = req_json.get("list")
     rect = req_json.get("rect")
-
     if not list_:
         return fail_api("请提供上传后的图像序列或单个视频文件")
     from applications.interface.tracking import requires_initial_rect
 
     try:
         need_initial_rect = requires_initial_rect(model_path)
-    except Exception as e:
-        return fail_api(f"跟踪失败: {str(e)}")
-
+    except Exception as exc:
+        return fail_api(f"跟踪失败: {str(exc)}")
     if need_initial_rect:
         if not rect or len(rect) != 4:
             return fail_api("请提供初始跟踪框")
-
         try:
             rect = [int(value) for value in rect]
         except Exception:
             return fail_api("初始跟踪框格式错误")
-
         if rect[2] <= 0 or rect[3] <= 0:
             return fail_api("初始跟踪框宽高必须大于0")
     elif rect:
@@ -318,22 +304,18 @@ def tracking_api():
             rect = [int(value) for value in rect]
         except Exception:
             rect = None
-
     try:
-        res = tracking(model_path, up_dir, generate_dir, list_, rect, type_=7)
-        return success_api(data=res)
-    except Exception as e:
-        return fail_api(f"跟踪失败: {str(e)}")
+        result = _analysis_functions()["tracking"](model_path, up_dir, generate_dir, list_, rect, type_=7)
+        _analysis_done("tracking", started_at, record_count=len(result) if hasattr(result, "__len__") else -1, model_path=model_path)
+        return success_api(data=result)
+    except Exception as exc:
+        return fail_api(f"跟踪失败: {str(exc)}")
 
 
-"""
-    直图处理
-"""
-
-
-@analysis_api.post('/histogram_match')
-def pre_handle():
-    req_json = request.json
+@analysis_api.post("/histogram_match")
+def pre_handle(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("histogram_match", req_json)
     list_ = req_json["list"]
     step1_ = req_json["prehandle"]
     if list_ is None:
@@ -341,57 +323,46 @@ def pre_handle():
     if step1_ not in (1, 4):
         return fail_api("请求参数异常")
     for pair in list_:
-        if "first" not in pair or "second" not in pair or pair[
-                "first"] == "" or pair["second"] == "":
+        if "first" not in pair or "second" not in pair or pair["first"] == "" or pair["second"] == "":
             return fail_api("请求参数异常")
         pair["first"] = img_url_handle(pair["first"])
-        pair['second'] = img_url_handle(pair['second'])
-    match = list()
+        pair["second"] = img_url_handle(pair["second"])
     if step1_ == fun_type_1:
         match = histogram_match.gram_match(list_, up_dir, generate_dir)
     else:
+        match = []
         for pair in list_:
             temps = [pair["first"], pair["second"]]
-            imgs1 = handle(fun_type_4, temps, up_dir, generate_dir)
-            match.append({
-                "first": generate_url + imgs1[0],
-                "second": generate_url + imgs1[1]
-            })
+            imgs1 = _analysis_functions()["handle"](fun_type_4, temps, up_dir, generate_dir)
+            match.append({"first": pair["first"], "first1": imgs1[0], "second": pair["second"], "second1": imgs1[1]})
+    _analysis_done("histogram_match", started_at, record_count=len(match))
     return success_api(data=match)
 
 
-@analysis_api.post('/image_pre')
-def image_pre():
-    req_json = request.json
+@analysis_api.post("/image_pre")
+def image_pre(req_json: dict = Body(...)):
+    started_at = time.time()
+    _analysis_debug("image_pre", req_json)
     list_ = req_json["list"]
     step1_ = req_json["prehandle"]
-    type = req_json["type"]
+    type_ = req_json["type"]
     if list_ is None:
         return fail_api("请上传图片")
     if step1_ not in (2, 4):
         return fail_api("请求参数异常")
-    imgs = list()
-    if type == 1:
+    imgs = []
+    if type_ == 1:
         for pair in list_:
-            if "first" not in pair or "second" not in pair or pair[
-                    "first"] == "" or pair["second"] == "":
+            if "first" not in pair or "second" not in pair or pair["first"] == "" or pair["second"] == "":
                 return fail_api("请求参数异常")
         for pair in list_:
-            temps = [
-                img_url_handle(pair["first"]), img_url_handle(pair["second"])
-            ]
+            temps = [img_url_handle(pair["first"]), img_url_handle(pair["second"])]
             imgs1 = handle(fun_type_4, temps, up_dir, generate_dir)
-            imgs.append({
-                "first": pair["first"],
-                "first1": imgs1[0],
-                "second": pair["second"],
-                "second1": imgs1[1]
-            })
+            imgs.append({"first": pair["first"], "first1": imgs1[0], "second": pair["second"], "second1": imgs1[1]})
     else:
-        temps = list()
-        for pair in list_:
-            temps.append(img_url_handle(pair))
-        imgs = handle(step1_, temps, up_dir, generate_dir)
+        temps = [img_url_handle(pair) for pair in list_]
+        imgs = _analysis_functions()["handle"](step1_, temps, up_dir, generate_dir)
         for i, img in enumerate(imgs):
-            imgs[i] = generate_url + img
+            imgs[i] = f"/api/file/assets/photos/res/{img}"
+    _analysis_done("image_pre", started_at, record_count=len(imgs))
     return success_api(data=imgs)

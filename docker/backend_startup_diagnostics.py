@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import base64
 import json
 import os
 import subprocess
@@ -8,12 +7,6 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import suppress
-
-
-PNG_BYTES = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
-    "/w8AAgMBgJ8L8JQAAAAASUVORK5CYII="
-)
 
 VIDEO_HEADERS = {"Range": "bytes=0-255"}
 
@@ -28,8 +21,10 @@ def ensure_parent(path):
 
 def write_probe_png(path):
     ensure_parent(path)
-    with open(path, "wb") as file:
-        file.write(PNG_BYTES)
+    from PIL import Image
+
+    image = Image.new("RGB", (16, 16), (32, 96, 160))
+    image.save(path, format="PNG")
 
 
 def write_probe_mp4(path):
@@ -113,10 +108,11 @@ def wait_for_ping(base_url, timeout_seconds):
 def evaluate_binary_response(result, expected_status, expected_length=None,
                              require_range=False):
     headers = {key.lower(): value for key, value in result.get("headers", {}).items()}
-    content_length = int(headers.get("content-length", "0") or "0")
+    raw_content_length = headers.get("content-length")
+    content_length = int(raw_content_length or "0")
     checks = {
         "status_ok": result.get("status") == expected_status,
-        "body_length_matches_header": content_length == result.get("body_length"),
+        "body_length_matches_header": True if raw_content_length is None else content_length == result.get("body_length"),
     }
     if expected_length is not None:
         checks["body_length_matches_expected"] = result.get(

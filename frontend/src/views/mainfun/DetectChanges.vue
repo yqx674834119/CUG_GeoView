@@ -894,6 +894,7 @@ import {
   resolveRecordSource,
   supportsJsonMode,
 } from "@/utils/mediaTransport";
+import { buildUploadFormData } from "@/utils/uploadFormData";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { PieChart, BarChart } from "echarts/charts";
@@ -914,6 +915,18 @@ use([
   LegendComponent,
   GridComponent
 ]);
+
+function isRefChecked(vm, refName) {
+  const ref = vm.$refs && vm.$refs[refName];
+  return Boolean(ref && ref.checked);
+}
+
+function setRefChecked(vm, refName, value) {
+  const ref = vm.$refs && vm.$refs[refName];
+  if (ref) {
+    ref.checked = value;
+  }
+}
 
 export default {
   name: "Detectchanges",
@@ -1238,20 +1251,14 @@ export default {
       ) {
         this.$message.error("请按照要求上传文件夹或图片！");
       } else {
-        let formData1 = new FormData();
-        let formData2 = new FormData();
-        for (const item of this.fileList1) {
-          formData1.append("files", item) ||
-          formData1.append("files", item.raw);
-          formData1.append("type", "变化检测");
-          formData1.append("isSlice", this.isSlice);
-        }
-        for (const item of this.fileList2) {
-          formData2.append("files", item) ||
-          formData2.append("files", item.raw);
-          formData2.append("type", "变化检测");
-          formData2.append("isSlice", this.isSlice);
-        }
+        let formData1 = buildUploadFormData(this.fileList1, "变化检测", {
+          isSlice: this.isSlice,
+          scope: "变化检测上传A",
+        });
+        let formData2 = buildUploadFormData(this.fileList2, "变化检测", {
+          isSlice: this.isSlice,
+          scope: "变化检测上传B",
+        });
         let upload1 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
               this.uploadSrc1 = res.data.data;
@@ -1370,39 +1377,31 @@ export default {
           .catch((rej) => {});
     },
     selectHistogram() {
-      if (this.$refs.histogram.checked === true) {
+      if (isRefChecked(this, "histogram")) {
         if (
             this.fileList1.length !== this.fileList2.length ||
             this.fileList1.length === 0
         ) {
           if (this.upload.prehandle === 1) {
-            this.$refs.histogram.checked = false;
+            setRefChecked(this, "histogram", false);
             this.upload.prehandle = 0;
           } else {
-            this.$refs.histogram.checked = false;
+            setRefChecked(this, "histogram", false);
             this.$message.error("请先按要求上传图片");
           }
         } else {
           this.upload.prehandle = 1;
           this.myhistogram.prehandle = 1;
           this.$message.success("直方图处理");
-          if (this.$refs.sharpen.checked === true) {
-            this.$refs.sharpen.checked = false;
+          if (isRefChecked(this, "sharpen")) {
+            setRefChecked(this, "sharpen", false);
           }
-          let formData1 = new FormData();
-          let formData2 = new FormData();
-
-          for (const item of this.fileList1) {
-            formData1.append("files", item) ||
-            formData1.append("files", item.raw);
-            formData1.append("type", "变化检测");
-          }
-
-          for (const item of this.fileList2) {
-            formData2.append("files", item) ||
-            formData2.append("files", item.raw);
-            formData2.append("type", "变化检测");
-          }
+          let formData1 = buildUploadFormData(this.fileList1, "变化检测", {
+            scope: "变化检测直方图上传A",
+          });
+          let formData2 = buildUploadFormData(this.fileList2, "变化检测", {
+            scope: "变化检测直方图上传B",
+          });
           let upload3 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
               this.uploadSrc3 = res.data.data.splice(0, 3);
@@ -1472,18 +1471,18 @@ export default {
           this.fileList1.length === 0
       ) {
         if (this.upload.prehandle === 4) {
-          this.$refs.sharpen.checked = false;
+          setRefChecked(this, "sharpen", false);
           this.upload.prehandle = 0;
         } else {
-          this.$refs.sharpen.checked = false;
+          setRefChecked(this, "sharpen", false);
           this.$message.error("请先按要求上传图片");
         }
       } else {
-        if (this.$refs.histogram.checked === true) {
-          this.$refs.histogram.checked = false;
+        if (isRefChecked(this, "histogram")) {
+          setRefChecked(this, "histogram", false);
         }
 
-        if (this.$refs.sharpen.checked === false) {
+        if (!isRefChecked(this, "sharpen")) {
           this.myhistogram.prehandle = 0;
           this.$message.success("取消锐化处理");
           this.upload.prehandle = 0;
@@ -1491,20 +1490,12 @@ export default {
           this.$message.success("锐化处理");
           this.upload.prehandle = 4;
           this.mysharpen.prehandle = 4;
-          let formData1 = new FormData();
-          let formData2 = new FormData();
-
-          for (const item of this.fileList1) {
-            formData1.append("files", item) ||
-            formData1.append("files", item.raw);
-            formData1.append("type", "变化检测");
-          }
-
-          for (const item of this.fileList2) {
-            formData2.append("files", item) ||
-            formData2.append("files", item.raw);
-            formData2.append("type", "变化检测");
-          }
+          let formData1 = buildUploadFormData(this.fileList1, "变化检测", {
+            scope: "变化检测锐化上传A",
+          });
+          let formData2 = buildUploadFormData(this.fileList2, "变化检测", {
+            scope: "变化检测锐化上传B",
+          });
           let upload1 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
               this.sharpenSrc1 = res.data.data.splice(0, 3);
@@ -1567,10 +1558,10 @@ export default {
     },
 
     selectFilter() {
-      if (this.$refs.smooth.checked === true) {
-        this.$refs.smooth.checked = false;
+      if (isRefChecked(this, "smooth")) {
+        setRefChecked(this, "smooth", false);
       }
-      if (this.$refs.filter.checked === false) {
+      if (!isRefChecked(this, "filter")) {
         this.$message.success("取消高斯滤波处理");
         this.upload.denoise = 0;
       } else {
@@ -1579,10 +1570,10 @@ export default {
       }
     },
     selectSmooth() {
-      if (this.$refs.filter.checked === true) {
-        this.$refs.filter.checked = false;
+      if (isRefChecked(this, "filter")) {
+        setRefChecked(this, "filter", false);
       }
-      if (this.$refs.smooth.checked === false) {
+      if (!isRefChecked(this, "smooth")) {
         this.$message.success("取消平滑处理");
         this.upload.denoise = 0;
       } else {

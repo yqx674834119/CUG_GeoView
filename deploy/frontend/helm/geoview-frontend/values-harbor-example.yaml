@@ -1,7 +1,7 @@
 frontend:
   image:
     repository: 172.20.20.107:8443/your-project/geoview-frontend
-    tag: "20260428-final"
+    tag: "20260508-frontendfix3-4837450"
     pullPolicy: IfNotPresent
   runtimeConfig:
     backendUrl: "http://172.20.20.240:31839/186/5008"

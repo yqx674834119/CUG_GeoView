@@ -39,6 +39,8 @@ spec:
               value: {{ .Values.frontend.runtimeConfig.backendAssetMode | quote }}
             - name: GEOVIEW_FRONTEND_ASSET_DEBUG
               value: {{ .Values.frontend.runtimeConfig.frontendAssetDebug | quote }}
+            - name: GEOVIEW_FRONTEND_DEBUG
+              value: {{ .Values.frontend.runtimeConfig.frontendDebug | quote }}
             - name: GEOVIEW_MINER_ENABLED
               value: {{ .Values.frontend.runtimeConfig.minerEnabled | quote }}
             - name: GEOVIEW_MINER_URL

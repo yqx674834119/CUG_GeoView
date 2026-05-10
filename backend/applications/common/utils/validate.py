@@ -1,20 +1,25 @@
-# xss过滤
-from flask import abort, make_response, jsonify
+from fastapi import HTTPException
 
 
 def xss_escape(s: str):
     if s is None:
         return None
-    else:
-        return s.replace("&", "&amp;").replace(">", "&gt;").replace(
-            "<", "&lt;").replace("'", "&#39;").replace('"', "&#34;")
+    return (
+        s.replace("&", "&amp;")
+        .replace(">", "&gt;")
+        .replace("<", "&lt;")
+        .replace("'", "&#39;")
+        .replace('"', "&#34;")
+    )
 
 
 def check_data(schema, data):
     errors = schema.validate(data)
-    for k, v in errors.items():
-        for i in v:
-            # print("{}{}".format(k, i))
-            msg = "{}{}".format(k, i)
-    if errors:
-        abort(make_response(jsonify(result=False, msg=msg), 200))
+    if not errors:
+        return
+    msg = "参数校验失败"
+    for key, values in errors.items():
+        if values:
+            msg = f"{key}{values[0]}"
+            break
+    raise HTTPException(status_code=400, detail=msg)

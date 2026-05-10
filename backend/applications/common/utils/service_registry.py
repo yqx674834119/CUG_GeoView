@@ -5,9 +5,6 @@ from contextlib import contextmanager
 from threading import Lock
 from typing import Dict, List, Optional
 
-from flask import current_app
-
-
 _STORE_LOCK = Lock()
 
 
@@ -19,7 +16,7 @@ def _default_store_path() -> str:
 
 
 def get_store_path() -> str:
-    configured = current_app.config.get("ONLINE_SERVICE_STORE")
+    configured = os.getenv("ONLINE_SERVICE_STORE")
     path = configured or _default_store_path()
     parent = os.path.dirname(path)
     if parent:

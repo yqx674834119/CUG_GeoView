@@ -1,0 +1,44 @@
+[    1051ms] [LOG] [GeoView前端调试][DOM图片拦截] DOM 图片资源拦截器已安装 {} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1052ms] [LOG] [GeoView前端调试][前端启动] Vue 应用开始初始化 {page: http://127.0.0.1:3101/#/detectobjects, backendBaseUrl: http://127.0.0.1:5101/, backendAssetMode: buffered, frontendAssetDebug: true, runtimeConfig: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1425ms] [LOG] [GeoView前端调试][前端启动] 路由就绪，开始执行启动诊断 {route: /detectobjects, backendBaseUrl: http://127.0.0.1:5101/} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 当前页面: http://127.0.0.1:3101/#/detectobjects @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 后端基础地址: http://127.0.0.1:5101/ @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 资源输出模式: buffered @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 前端资源调试开关: true @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 运行时配置: {backendUrl: http://127.0.0.1:5101/, backendProtocol: http, backendHost: , backendPort: , backendAssetMode: buffered} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1426ms] [LOG] 浏览器信息: {userAgent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36…ike Gecko) HeadlessChrome/148.0.0.0 Safari/537.36, language: en-US, online: true} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1429ms] [LOG] [GeoView前端调试][JSON请求] 准备发送请求 {method: GET, baseURL: http://127.0.0.1:5101/, url: /api/history/list, params: Object, payload: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1431ms] [LOG] [GeoView前端调试][JSON请求] 准备发送请求 {method: GET, baseURL: http://127.0.0.1:5101/, url: /api/model/list/object_detection, params: Object, payload: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1448ms] [LOG] [前端启动诊断][运行时] {runtimeDiagnosticsUrl: http://127.0.0.1:3101/runtime-diagnostics.json, payload: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1483ms] [LOG] [GeoView前端调试][JSON请求] 收到后端响应 {method: GET, url: /api/model/list/object_detection, status: 200, code: 0, msg: 成功} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1495ms] [LOG] [GeoView前端调试][JSON请求] 收到后端响应 {method: GET, url: /api/history/list, status: 200, code: 0, msg: } @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1499ms] [LOG] [GeoView前端调试][图片预览] 请求后端预览接口 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1500ms] [LOG] [GeoView前端调试][图片预览] 请求后端预览接口 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1501ms] [LOG] [GeoView前端调试][图片预览] 请求后端预览接口 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1502ms] [LOG] [GeoView前端调试][图片预览] 请求后端预览接口 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1535ms] [LOG] [前端启动诊断][历史记录] {requestUrl: http://127.0.0.1:5101/api/history/list, code: 0, count: 7, pageSize: 7} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1535ms] [LOG] 记录摘要: {id: 7, type: 目标跟踪, create_time: 2026-05-08 17:19:31, before_img: /api/file/assets/photos/res/tracking_preview.png, before_img1: } @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1535ms] [LOG] media_transports 摘要: {before_img: Object, before_img1: null, after_img: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1536ms] [LOG] 模式可用: true @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1536ms] [LOG] 后端声明的可视化模式: [original, preview, json] @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1536ms] [LOG] 字段解析结果: {before_img: Object, after_img: Object, data: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] 模式可用: true @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] 后端声明的可视化模式: [original, preview, json] @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] 字段解析结果: {before_img: Object, after_img: Object, data: Object} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] 模式可用: true @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] 后端声明的可视化模式: [original, preview, json] @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] JSON 渲染器: tracking @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] JSON 模式是否受支持: true @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] JSON 基础底图: http://127.0.0.1:5101/api/file/assets-buffered/photos/res/tracking_preview.png @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1537ms] [LOG] visual_payload 摘要: {schema: geoview-lite-transport-diagnostics, renderer: tracking, transport_modes: Array(3), has_source: true, has_result: true} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1688ms] [LOG] [GeoView前端调试][图片预览] 预览接口返回成功 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420, sourceStore: lite, originalSize: 208387} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1688ms] [LOG] [GeoView前端调试][图片预览] 请求后端预览接口 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1690ms] [LOG] [GeoView前端调试][图片预览] 命中预览缓存 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1691ms] [LOG] [GeoView前端调试][图片预览] 预览接口返回成功 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420, sourceStore: lite, originalSize: 208387} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1691ms] [LOG] [GeoView前端调试][图片预览] 预览接口返回成功 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420, sourceStore: lite, originalSize: 208387} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1692ms] [LOG] [GeoView前端调试][图片预览] 命中预览缓存 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1692ms] [LOG] [GeoView前端调试][图片预览] 命中预览缓存 {path: /api/file/assets/photos/res/object_result_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/res/object_result_200kb.jpg?max_size=420, maxSize: 420} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1876ms] [LOG] [前端启动诊断][资源直连] 资源直连下载完成: {label: before_img, url: http://127.0.0.1:5101/api/file/assets-buffered/photos/res/tracking_preview.png, status: 200, contentType: image/png, contentLengthHeader: undefined} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1878ms] [LOG] [GeoView前端调试][图片预览] 预览接口返回成功 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420, sourceStore: lite, originalSize: 208387} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    1944ms] [LOG] [GeoView前端调试][图片预览] 预览接口返回成功 {path: /api/file/assets/photos/aircraft_200kb.jpg, previewUrl: http://127.0.0.1:5101/api/file/assets-preview/photos/aircraft_200kb.jpg?max_size=420, maxSize: 420, sourceStore: lite, originalSize: 208387} @ http://127.0.0.1:3101/js/app.def4984a.js:0
+[    2045ms] [LOG] [前端启动诊断][资源直连] 资源直连下载完成: {label: after_img, url: http://127.0.0.1:5101/api/file/assets-buffered/photos/res/tracking_preview.png, status: 200, contentType: image/png, contentLengthHeader: undefined} @ http://127.0.0.1:3101/js/app.def4984a.js:0

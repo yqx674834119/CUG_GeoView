@@ -1,0 +1,119 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - menubar [ref=e6]:
+        - generic [ref=e7]:
+          - img "logo" [ref=e8] [cursor=pointer]
+          - generic [ref=e9] [cursor=pointer]: 智能遥感解译系统
+        - generic [ref=e12]: 分析工具
+        - menuitem "时序变化分析" [ref=e13] [cursor=pointer]:
+          - heading "时序变化分析" [level=3] [ref=e14]: 时序变化分析
+        - menuitem "智能目标识别" [ref=e16] [cursor=pointer]:
+          - heading "智能目标识别" [level=3] [ref=e17]: 智能目标识别
+        - menuitem "地表覆盖分类" [ref=e19] [cursor=pointer]:
+          - heading "地表覆盖分类" [level=3] [ref=e20]: 地表覆盖分类
+        - menuitem "场景智能识别" [ref=e22] [cursor=pointer]:
+          - heading "场景智能识别" [level=3] [ref=e23]: 场景智能识别
+        - menuitem "影像超分重建" [ref=e25] [cursor=pointer]:
+          - heading "影像超分重建" [level=3] [ref=e26]: 影像超分重建
+        - menuitem "多模态自动配准" [ref=e28] [cursor=pointer]:
+          - heading "多模态自动配准" [level=3] [ref=e29]: 多模态自动配准
+        - menuitem "全域目标跟踪" [ref=e31] [cursor=pointer]:
+          - heading "全域目标跟踪" [level=3] [ref=e32]: 全域目标跟踪
+        - generic [ref=e36]: 历史记录
+        - menuitem "分析历史记录" [ref=e37] [cursor=pointer]:
+          - heading "分析历史记录" [level=3] [ref=e38]: 分析历史记录
+    - main [ref=e42]:
+      - generic [ref=e44]:
+        - button [ref=e45] [cursor=pointer]
+        - generic [ref=e47]:
+          - generic [ref=e49]: 智能遥感解译系统
+          - button "切换深色" [ref=e51] [cursor=pointer]:
+            - generic [ref=e52]: 切换深色
+      - generic [ref=e54]:
+        - generic [ref=e58] [cursor=pointer]: 智能目标识别
+        - paragraph [ref=e61]:
+          - text: 请选择待识别的影像数据文件夹
+          - text: 或影像文件
+        - generic [ref=e67]:
+          - generic [ref=e68]:
+            - generic [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: 
+              - generic [ref=e72]:
+                - text: 将文件拖到此处，或
+                - emphasis [ref=e73]: 点击上传
+              - generic [ref=e74]: 只能上传一张或多张图片，请在下方上传文件夹
+            - list
+          - generic [ref=e76] [cursor=pointer]: 上传文件夹
+          - paragraph [ref=e78]:
+            - generic [ref=e79]:
+              - checkbox "上传时编辑图片 "
+              - generic [ref=e81]: 上传时编辑图片
+              - generic [ref=e82] [cursor=pointer]: 
+          - generic [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]:
+              - checkbox "开启大图切分"
+            - generic [ref=e87]: 开启大图切分
+          - generic [ref=e88]:
+            - generic [ref=e89] [cursor=pointer]: 
+            - paragraph [ref=e90]: 图像增强：
+            - paragraph [ref=e91]:
+              - generic [ref=e92]:
+                - checkbox "CLAHE"
+                - generic [ref=e94]: CLAHE
+            - paragraph [ref=e95]:
+              - generic [ref=e96]:
+                - checkbox "锐化"
+                - generic [ref=e98]: 锐化
+          - generic [ref=e99]:
+            - generic [ref=e100] [cursor=pointer]: 
+            - paragraph [ref=e101]: 降噪处理：
+            - paragraph [ref=e102]:
+              - generic [ref=e103]:
+                - checkbox "平滑"
+                - generic [ref=e105]: 平滑
+              - generic [ref=e106]:
+                - checkbox "滤波"
+                - generic [ref=e108]: 滤波
+          - generic [ref=e110]:
+            - text: 可选训练模型：
+            - radio "轻量目标检测诊断模型" [checked] [ref=e111] [cursor=pointer]:
+              - radio [checked] [ref=e114]
+              - generic [ref=e116]: 轻量目标检测诊断模型
+          - button "开始处理" [ref=e118] [cursor=pointer]:
+            - generic [ref=e119]: 开始处理
+        - generic [ref=e124] [cursor=pointer]:
+          - text: 结果图预览
+          - generic [ref=e125]: 
+        - generic [ref=e127]:
+          - paragraph [ref=e130]:
+            - text: 点击图片即可预览
+            - generic [ref=e131] [cursor=pointer]: 
+            - generic [ref=e132]: 滑轮滚动即可放大缩小
+          - paragraph [ref=e135]: 结果图打包
+          - generic [ref=e139] [cursor=pointer]: 
+        - generic [ref=e142]:
+          - generic [ref=e143]:
+            - generic [ref=e144]: 传输 / 渲染模式
+            - radiogroup [ref=e145]:
+              - radio "原始图像/视频" [checked] [ref=e146]:
+                - radio "原始图像/视频" [checked] [ref=e147]
+                - generic [ref=e148] [cursor=pointer]: 原始图像/视频
+              - radio "备用 Base64" [ref=e149]:
+                - radio "备用 Base64" [ref=e150]
+                - generic [ref=e151] [cursor=pointer]: 备用 Base64
+              - radio "JSON 前端可视化" [ref=e152]:
+                - radio "JSON 前端可视化" [ref=e153]
+                - generic [ref=e154] [cursor=pointer]: JSON 前端可视化
+          - generic [ref=e155]:
+            - generic [ref=e157]: 当前显示：原始图像/视频
+            - generic [ref=e158]: 当前批次可用链路：原始图像/视频 / 备用预览 / JSON 前端可视化
+          - generic [ref=e160]:
+            - generic [ref=e162]: 第2组
+            - generic [ref=e166]: 原图
+            - generic [ref=e173]:
+              - text: 预测结果
+              - generic [ref=e175] [cursor=pointer]: 
+  - generic [ref=e177]:
+    - img [ref=e178]
+    - paragraph [ref=e180]: 努力加载中...
