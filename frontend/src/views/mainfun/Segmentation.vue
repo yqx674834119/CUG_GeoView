@@ -360,7 +360,6 @@
 <script>
 import { atchDownload, downloadimgWithWords, getImgArrayBuffer } from "@/utils/download.js";
 import { imgUpload, createSrc ,getCustomModel } from "@/api/upload";
-import { historyGetPage } from "@/api/history";
 import { getUploadImg, goCompress, upload } from "@/utils/getUploadImg";
 import { selectClahe, selectFilter, selectSharpen, selectSmooth, } from "@/utils/preHandle";
 import ImgShow from "@/components/ImgShow";
@@ -429,7 +428,6 @@ export default {
     atchDownload,
     imgUpload,
     getCustomModel,
-    historyGetPage,
     createSrc,
     getUploadImg,
     upload,
@@ -461,7 +459,12 @@ export default {
 
       }
     },
-    getMore() {
+    getMore(records) {
+      if (Array.isArray(records) && records.length) {
+        this.imgArr = records;
+        this.isUpload = true;
+        return;
+      }
       this.getUploadImg("地物分类");
     },
     fileClick() {

@@ -12,6 +12,7 @@ import os
 import os.path as osp
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List
 
@@ -26,6 +27,24 @@ MMSEG_CONDA_ENV = "MMSeg310"
 # MMSegmentation 推理脚本路径
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 MMSEG_SCRIPT = os.path.join(_curr_dir, "mmseg_segmentation.py")
+
+
+def _text_tail(value: str, max_chars: int = 1600) -> str:
+    value = value or ""
+    return value[-max_chars:] if len(value) > max_chars else value
+
+
+def _log_subprocess_result(scope: str, result, elapsed_sec: float):
+    print(
+        f"[{scope}] subprocess completed returncode={result.returncode} "
+        f"elapsed_sec={elapsed_sec:.3f} stdout_bytes={len(result.stdout or '')} "
+        f"stderr_bytes={len(result.stderr or '')}",
+        flush=True,
+    )
+    if result.stdout:
+        print(f"[{scope}] stdout tail:\n{_text_tail(result.stdout)}", flush=True)
+    if result.stderr:
+        print(f"[{scope}] stderr tail:\n{_text_tail(result.stderr)}", file=sys.stderr, flush=True)
 
 
 def _find_mmseg_python() -> str:
@@ -134,6 +153,7 @@ def call_mmseg_inference(
     env["GEOVIEW_MMSEG_MODEL_DIR"] = model_dir
 
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -142,6 +162,7 @@ def call_mmseg_inference(
             cwd=_curr_dir,
             env=env,
         )
+        _log_subprocess_result("MMSeg-Caller", result, time.time() - started_at)
         
         if result.returncode != 0:
             print(f"[MMSeg-Caller] Error output: {result.stderr}", file=sys.stderr)
@@ -287,6 +308,7 @@ def call_mmrotate_inference(
     print(f"[MMRotate-Caller] Executing: {' '.join(cmd)}", flush=True)
 
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -294,6 +316,7 @@ def call_mmrotate_inference(
             timeout=timeout,
             cwd=_curr_dir
         )
+        _log_subprocess_result("MMRotate-Caller", result, time.time() - started_at)
 
         if result.returncode != 0:
             print(f"[MMRotate-Caller] Error output: {result.stderr}", file=sys.stderr)

@@ -15,8 +15,9 @@ def register_images(img1_path, img2_path, output_path):
     img1 = K.io.load_image(img1_path, K.io.ImageLoadType.RGB32)[None, ...]
     img2 = K.io.load_image(img2_path, K.io.ImageLoadType.RGB32)[None, ...]
     
-    # Move to GPU if available
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing CPU inference")
+    device = torch.device('cuda')
     img1 = img1.to(device)
     img2 = img2.to(device)
     

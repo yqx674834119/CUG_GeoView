@@ -4,18 +4,6 @@ import FileSaver from 'file-saver'
 
 import {hideFullScreenLoading} from "@/utils/loading";
 import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
-import { getBackendAssetPreviewDataUrl } from "@/utils/assetPreview";
-
-function dataUrlToBlob(dataUrl) {
-  const [meta, encoded] = String(dataUrl || "").split(",");
-  const mimetype = (meta.match(/data:(.*?);base64/) || [])[1] || "application/octet-stream";
-  const binary = atob(encoded || "");
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: mimetype });
-}
 
 function saveBlob(blob, filename) {
   const url = window.URL.createObjectURL(blob);
@@ -36,8 +24,14 @@ function buildDownloadName(index, funtype) {
 function downloadimgWithWords(index, src, funtype) {
   const filename = buildDownloadName(index, funtype);
   if (isBackendPhotoAssetPath(src)) {
-    getBackendAssetPreviewDataUrl(src, 1400)
-      .then((dataUrl) => saveBlob(dataUrlToBlob(dataUrl), filename))
+    fetch(toBackendAssetUrl(src))
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`download failed: ${response.status}`);
+        }
+        return response.blob();
+      })
+      .then((blob) => saveBlob(blob, filename))
       .catch(() => {});
     return;
   }
@@ -53,7 +47,12 @@ function downloadimgWithWords(index, src, funtype) {
 }
 function getImgArrayBuffer(url) {
   if (isBackendPhotoAssetPath(url)) {
-    return getBackendAssetPreviewDataUrl(url, 1400).then(dataUrlToBlob);
+    return fetch(toBackendAssetUrl(url)).then((response) => {
+      if (!response.ok) {
+        throw new Error(`download failed: ${response.status}`);
+      }
+      return response.blob();
+    });
   }
 
   return new Promise((resolve, reject) => {

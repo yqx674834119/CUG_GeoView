@@ -32,10 +32,7 @@ function photoAssetRelativePath(path) {
   }
 
   const value = normalizeBackendAssetPath(String(path)).split(/[?#]/)[0];
-  const prefixes = [
-    "/api/file/assets-buffered/photos/",
-    "/api/file/assets/photos/",
-  ];
+  const prefixes = ["/api/file/assets/photos/"];
 
   for (const prefix of prefixes) {
     if (value.startsWith(prefix)) {
@@ -57,24 +54,12 @@ export function isBackendPhotoAssetPath(path) {
   return Boolean(photoAssetRelativePath(path));
 }
 
-function applyAssetMode(path) {
-  if (global.BACKEND_ASSET_MODE !== "buffered") {
-    return path;
-  }
-
-  if (path.startsWith("/api/file/assets/photos/")) {
-    return `/api/file/assets-buffered/photos/${path.slice("/api/file/assets/photos/".length)}`;
-  }
-
-  return path;
-}
-
 export function toBackendAssetUrl(path) {
   if (!path) {
     return "";
   }
 
-  const value = applyAssetMode(normalizeBackendAssetPath(String(path)));
+  const value = normalizeBackendAssetPath(String(path));
   if (isAbsoluteUrl(value)) {
     return value;
   }
@@ -89,7 +74,7 @@ export function toBackendAssetUrl(path) {
   return suffix ? `${base}/${suffix}` : base;
 }
 
-export function toBackendAssetPreviewUrl(path, maxSize = 420) {
+export function toBackendAssetPreviewUrl(path) {
   const relativePath = photoAssetRelativePath(path);
   if (!relativePath) {
     return "";
@@ -100,7 +85,7 @@ export function toBackendAssetPreviewUrl(path, maxSize = 420) {
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/");
-  const suffix = `api/file/assets-preview/photos/${encodedPath}?max_size=${encodeURIComponent(maxSize)}`;
+  const suffix = `api/file/assets/photos/${encodedPath}`;
 
   return base ? `${base}/${suffix}` : `/${suffix}`;
 }

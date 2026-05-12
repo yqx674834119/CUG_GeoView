@@ -30,8 +30,8 @@ up_url = FILE_ASSET_API_PREFIX
 def md5_name(name):
     nname = hashlib.md5(str(random.random()).encode()).hexdigest() + "_" + name
     if len(nname) > 100:
-        nname = hashlib.md5(str(random.random()).encode()).hexdigest(
-        ) + "." + name.split(".")[1]
+        extension = os.path.splitext(str(name))[1] or ""
+        nname = hashlib.md5(str(random.random()).encode()).hexdigest() + extension
     return nname
 
 

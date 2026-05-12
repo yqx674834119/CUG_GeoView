@@ -4,7 +4,7 @@ window.__GEOVIEW_RUNTIME_CONFIG__ = Object.assign(
     backendProtocol: "http",
     backendHost: "",
     backendPort: "5008",
-    backendAssetMode: "buffered",
+    backendAssetMode: "sendfile",
     frontendAssetDebug: "false",
     minerEnabled: "false",
     minerUrl: "",

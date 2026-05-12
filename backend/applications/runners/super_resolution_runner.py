@@ -12,8 +12,9 @@ def super_resolve(img_path, output_path):
     processor = Swin2SRImageProcessor.from_pretrained(model_name)
     model = Swin2SRForImageSuperResolution.from_pretrained(model_name)
     
-    # Move to GPU if available
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing CPU inference")
+    device = torch.device('cuda')
     model = model.to(device)
 
     inputs = processor(image, return_tensors="pt").to(device)

@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument("--proximity_thresh", type=float, default=0.5)
     parser.add_argument("--appearance_thresh", type=float, default=0.25)
     parser.add_argument("--fps", type=int, default=6)
-    parser.add_argument("--device", default="auto")
+    parser.add_argument("--device", default="cuda")
     return parser.parse_args()
 
 
@@ -263,11 +263,13 @@ def main():
                                           self.nmsthre)
                 return outputs, img_info
 
-        device = "cuda" if args.device == "auto" and torch.cuda.is_available() else args.device
+        device = "cuda" if args.device == "auto" else args.device
         if device == "gpu":
             device = "cuda"
+        if str(device).lower() == "cpu":
+            raise RuntimeError("GPU-only inference requires CUDA device, got cpu")
         if device.startswith("cuda") and not torch.cuda.is_available():
-            device = "cpu"
+            raise RuntimeError("CUDA requested but not available; refusing CPU inference")
         torch_device = torch.device(device)
 
         model = exp.get_model().to(torch_device)

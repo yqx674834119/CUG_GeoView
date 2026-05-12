@@ -6,23 +6,6 @@
     />
 
     <div v-else>
-      <div
-        class="render-mode-bar"
-      >
-        <span class="render-mode-bar__label">传输 / 渲染模式</span>
-        <el-radio-group v-model="displayMode" size="small">
-          <el-radio-button label="original">原始图像/视频</el-radio-button>
-          <el-radio-button label="base64" :disabled="!hasAnyBase64Mode">备用 Base64</el-radio-button>
-          <el-radio-button label="json" :disabled="!hasAnyJsonMode">JSON 前端可视化</el-radio-button>
-        </el-radio-group>
-      </div>
-      <div class="render-mode-state">
-        <el-tag size="small" :type="currentModeTagType" effect="dark">
-          当前显示：{{ currentModeLabel }}
-        </el-tag>
-        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
-      </div>
-
       <div v-if="overviewStats" class="analysis-shell">
         <div class="analysis-shell__head">
           <div>
@@ -101,9 +84,10 @@
               class="img-display"
               :src="displaySrc(item, 'before_img')"
               :fit="fit"
-              :lazy="true"
+              :lazy="false"
               :preview-src-list="[displaySrc(item, 'before_img')]"
               :preview-teleported="true"
+              @error="onImageLoadError(item, 'before_img')"
             />
 
             <div class="img-infor">
@@ -111,13 +95,7 @@
             </div>
           </div>
           <div class="img-display-item__result">
-            <div v-if="useJsonModeFor(item)">
-              <JsonImageVisualizer
-                :image-src="jsonBaseSource(item)"
-                :payload="item.visual_payload"
-              />
-            </div>
-            <div v-else-if="item.type!=='场景分类'">
+            <div v-if="item.type!=='场景分类'">
               <div style="display: flex;">
                 <div>
                   <el-image
@@ -125,9 +103,10 @@
                     class="img-display"
                     :src="displaySrc(item, 'after_img')"
                     :fit="fit"
-                    :lazy="true"
+                    :lazy="false"
                     :preview-src-list="[displaySrc(item, 'after_img')]"
                     :preview-teleported="true"
+                    @error="onImageLoadError(item, 'after_img')"
                   />
                   <div class="img-infor">
                     <span>预测结果</span>
@@ -247,7 +226,6 @@ import VChart from "vue-echarts";
 
 import { downloadimgWithWords } from "@/utils/download.js";
 import { ASSET_PREVIEW_PLACEHOLDER, hydrateAssetPreviews } from "@/utils/assetPreview";
-import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import {
   analyzeClassificationRecord,
   analyzeDetectionRecord,
@@ -258,14 +236,8 @@ import {
   summarizeRestoration,
   summarizeSegmentation,
 } from "@/utils/frontAnalysis";
-import {
-  getRecordTransport,
-  modeLabel,
-  normalizeDisplayMode,
-  resolveJsonBaseSource,
-  resolveRecordSource,
-  supportsJsonMode,
-} from "@/utils/mediaTransport";
+import { resolveRecordSource } from "@/utils/mediaTransport";
+import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 use([
   CanvasRenderer,
@@ -282,7 +254,6 @@ export default {
   name: "Imgshow",
   components: {
     VChart,
-    JsonImageVisualizer,
   },
   props: {
     imgArr: {
@@ -301,7 +272,6 @@ export default {
       analysisLoading: false,
       analysisError: "",
       analysisToken: 0,
-      displayMode: "original",
     };
   },
   computed: {
@@ -536,37 +506,6 @@ export default {
 
       return [];
     },
-    hasAnyBase64Mode() {
-      return this.childImgArr.some((item) => !!getRecordTransport(item, "before_img")?.preview_data_url || !!getRecordTransport(item, "after_img")?.preview_data_url);
-    },
-    hasAnyJsonMode() {
-      return this.childImgArr.some((item) => supportsJsonMode(item));
-    },
-    availableModes() {
-      const modes = ["original"];
-      if (this.hasAnyBase64Mode) {
-        modes.push("base64");
-      }
-      if (this.hasAnyJsonMode) {
-        modes.push("json");
-      }
-      return modes;
-    },
-    currentModeLabel() {
-      return modeLabel(this.displayMode);
-    },
-    currentModeTagType() {
-      if (this.displayMode === "json") {
-        return "success";
-      }
-      if (this.displayMode === "base64") {
-        return "warning";
-      }
-      return "info";
-    },
-    modeAvailabilityText() {
-      return `当前批次可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
-    },
   },
   mounted() {
     this.syncAndAnalyze(this.imgArr);
@@ -589,25 +528,39 @@ export default {
       return `${item.id ?? index}`;
     },
     displaySrc(item, field) {
-      const preferredMode = this.displayMode === "base64" ? "base64" : "original";
-      const source = resolveRecordSource(item, field, preferredMode);
+      const source = resolveRecordSource(item, field);
       if (source) {
         return source;
       }
+      const fallback = this.visualPayloadAsset(item, field);
+      if (fallback) {
+        return fallback;
+      }
       return (item && item[`_${field}_preview`]) || ASSET_PREVIEW_PLACEHOLDER;
     },
-    jsonBaseSource(item) {
-      return resolveJsonBaseSource(item, this.displayMode === "original" ? "original" : "base64") || this.displaySrc(item, "before_img");
-    },
-    useJsonModeFor(item) {
-      if (this.displayMode !== "json") {
-        return false;
+    visualPayloadAsset(item, field) {
+      const legacyAssets = item?.visual_payload?.legacy_assets || {};
+      const source = item?.visual_payload?.source || {};
+      const result = item?.visual_payload?.result || {};
+      if (field === "before_img") {
+        return toBackendAssetUrl(legacyAssets.source_primary || source.primary?.asset_path || "");
       }
-      return supportsJsonMode(item) && !!this.jsonBaseSource(item);
+      if (field === "after_img") {
+        return toBackendAssetUrl(legacyAssets.primary_result || result.mask_path || "");
+      }
+      return "";
+    },
+    onImageLoadError(item, field) {
+      const url = this.displaySrc(item, field);
+      console.error("[GeoView] image load failed", {
+        field,
+        url,
+        recordId: item?.id,
+        type: item?.type,
+      });
     },
     async syncAndAnalyze(value) {
       this.childImgArr = Array.isArray(value) ? value : [];
-      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
       await this.refreshPreviews();
       this.refreshAnalysis();
     },

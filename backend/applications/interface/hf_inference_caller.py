@@ -12,6 +12,7 @@ import os
 import os.path as osp
 import subprocess
 import sys
+import time
 from typing import List, Optional
 
 from applications.common.path_global import generate_url
@@ -24,6 +25,24 @@ OFFICIAL_BOTSORT_CONDA_ENV = "BoTSORTOfficial37"
 # HuggingFace 推理脚本路径
 _curr_dir = os.path.dirname(os.path.abspath(__file__))
 HF_SR_SCRIPT = os.path.join(_curr_dir, "hf_super_resolution.py")
+
+
+def _text_tail(value: str, max_chars: int = 1600) -> str:
+    value = value or ""
+    return value[-max_chars:] if len(value) > max_chars else value
+
+
+def _log_subprocess_result(scope: str, result, elapsed_sec: float):
+    print(
+        f"[{scope}] subprocess completed returncode={result.returncode} "
+        f"elapsed_sec={elapsed_sec:.3f} stdout_bytes={len(result.stdout or '')} "
+        f"stderr_bytes={len(result.stderr or '')}",
+        flush=True,
+    )
+    if result.stdout:
+        print(f"[{scope}] stdout tail:\n{_text_tail(result.stdout)}", flush=True)
+    if result.stderr:
+        print(f"[{scope}] stderr tail:\n{_text_tail(result.stderr)}", file=sys.stderr, flush=True)
 
 
 def _parse_json_from_stdout(stdout: str) -> dict:
@@ -55,7 +74,7 @@ def call_hf_super_resolution(
     data_path: str,
     out_dir: str,
     names: List[str],
-    device: str = "auto",
+    device: str = "cuda",
     timeout: int = 600
 ) -> List[dict]:
     """
@@ -65,7 +84,7 @@ def call_hf_super_resolution(
     :param data_path: 输入图片文件夹路径
     :param out_dir: 结果保存路径
     :param names: 待处理文件名列表
-    :param device: 设备选择 ('auto', 'cuda', 'cpu')
+    :param device: 设备选择 ('cuda')
     :param timeout: 超时时间（秒）
     :return: 生成的图片 URL 列表
     """
@@ -103,6 +122,7 @@ def call_hf_super_resolution(
     print(f"[HF-Caller] Executing: {' '.join(cmd)}", flush=True)
     
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -110,6 +130,7 @@ def call_hf_super_resolution(
             timeout=timeout,
             cwd=_curr_dir
         )
+        _log_subprocess_result("HF-Caller", result, time.time() - started_at)
         
         if result.returncode != 0:
             print(f"[HF-Caller] Error output: {result.stderr}", file=sys.stderr)
@@ -158,7 +179,7 @@ def execute(
     data_path: str,
     out_dir: str,
     names: List[str],
-    device: str = "auto"
+    device: str = "cuda"
 ) -> List[dict]:
     """
     统一的执行接口，与 Paddle 推理模块保持一致
@@ -201,7 +222,7 @@ def call_hf_object_detection(
     data_path: str,
     out_dir: str,
     names: List[str],
-    device: str = "auto",
+    device: str = "cuda",
     timeout: int = 600
 ) -> List[dict]:
     """
@@ -239,6 +260,7 @@ def call_hf_object_detection(
     print(f"[HF-Caller] Executing OD: {' '.join(cmd)}", flush=True)
     
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -246,6 +268,7 @@ def call_hf_object_detection(
             timeout=timeout,
             cwd=_curr_dir
         )
+        _log_subprocess_result("HF-Caller:OD", result, time.time() - started_at)
         
         if result.returncode != 0:
             print(f"[HF-Caller] OD Error output: {result.stderr}", file=sys.stderr)
@@ -293,7 +316,7 @@ def call_hf_registration(
     data_path: str,
     out_dir: str,
     pairs: List[dict],
-    device: str = "auto",
+    device: str = "cuda",
     timeout: int = 600
 ) -> List[str]:
     """
@@ -332,6 +355,7 @@ def call_hf_registration(
     print(f"[HF-Caller] Executing Reg: {' '.join(cmd)}", flush=True)
     
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -339,6 +363,7 @@ def call_hf_registration(
             timeout=timeout,
             cwd=_curr_dir
         )
+        _log_subprocess_result("HF-Caller:Reg", result, time.time() - started_at)
         
         if result.returncode != 0:
             print(f"[HF-Caller] Reg Error output: {result.stderr}", file=sys.stderr)
@@ -396,7 +421,7 @@ def call_hf_tracking(
     input_path: str,
     output_path: str,
     rect: List[int],
-    device: str = "auto",
+    device: str = "cuda",
     timeout: int = 1200
 ) -> str:
     """
@@ -437,6 +462,7 @@ def call_hf_tracking(
     print(f"[HF-Caller] Executing Track: {' '.join(cmd)}", flush=True)
     
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -444,6 +470,7 @@ def call_hf_tracking(
             timeout=timeout,
             cwd=_curr_dir
         )
+        _log_subprocess_result("HF-Caller:Track", result, time.time() - started_at)
         
         if result.returncode != 0:
             print(f"[HF-Caller] Track Error output: {result.stderr}", file=sys.stderr)
@@ -476,7 +503,7 @@ def call_hf_botsort_tracking(
     threshold: float = 0.25,
     iou: float = 0.45,
     imgsz: int = 1280,
-    device: str = "auto",
+    device: str = "cuda",
     timeout: int = 3600,
 ) -> dict:
     abs_input_dir = os.path.abspath(input_dir)
@@ -525,6 +552,7 @@ def call_hf_botsort_tracking(
     print(f"[HF-Caller] Executing BoT-SORT: {' '.join(cmd)}", flush=True)
 
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -532,6 +560,7 @@ def call_hf_botsort_tracking(
             timeout=timeout,
             cwd=_curr_dir,
         )
+        _log_subprocess_result("HF-Caller:BoT-SORT", result, time.time() - started_at)
         if result.returncode != 0:
             print(f"[HF-Caller] BoT-SORT stderr: {result.stderr}", file=sys.stderr)
             raise RuntimeError(f"BoT-SORT inference failed: {result.stderr}")
@@ -570,7 +599,7 @@ def call_botsort_official_tracking(
     aspect_ratio_thresh: float = 1.6,
     proximity_thresh: float = 0.5,
     appearance_thresh: float = 0.25,
-    device: str = "auto",
+    device: str = "cuda",
     fps: int = 6,
     timeout: int = 3600,
 ) -> dict:
@@ -643,6 +672,7 @@ def call_botsort_official_tracking(
     print(f"[HF-Caller] Executing Official BoT-SORT: {' '.join(cmd)}", flush=True)
 
     try:
+        started_at = time.time()
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -650,6 +680,7 @@ def call_botsort_official_tracking(
             timeout=timeout,
             cwd=_curr_dir,
         )
+        _log_subprocess_result("HF-Caller:Official-BoT-SORT", result, time.time() - started_at)
         if result.returncode != 0:
             print(f"[HF-Caller] Official BoT-SORT stderr: {result.stderr}", file=sys.stderr)
             raise RuntimeError(f"Official BoT-SORT inference failed: {result.stderr}")

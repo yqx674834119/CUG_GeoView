@@ -8,7 +8,6 @@ cugrs 后端 API 接口全面测试脚本
 2. 模型管理接口
 3. 分析功能接口（变化检测、目标检测、语义分割、场景分类、图像复原）
 4. 图像预处理接口
-5. 历史记录接口
 
 使用方法：
 1. 确保后端服务已启动 (python app.py)
@@ -583,49 +582,9 @@ class cugrsAPITester(TestCase):
             
             time.sleep(1)
 
-    # ==================== 历史记录接口测试 ====================
-    
-    def test_16_history_list(self):
-        """测试获取历史记录列表"""
-        print("\n🧪 测试获取历史记录列表")
-        
-        # 测试基础历史记录查询
-        result = self._make_request('GET', '/api/history/list')
-        self.assertTrue(result['success'], "获取历史记录失败")
-        print(f"✅ 获取历史记录成功: {len(result['data'].get('data', []))} 条记录")
-        
-        # 测试分页查询
-        params = {'page': 1, 'limit': 5}
-        result = self._make_request('GET', '/api/history/list', params=params)
-        self.assertTrue(result['success'], "分页查询历史记录失败")
-        print(f"✅ 分页查询成功")
-        
-        # 测试按类型查询
-        analysis_types = ["变化检测", "目标检测", "地物分类", "场景分类", "图像复原"]
-        for analysis_type in analysis_types:
-            params = {'type': analysis_type}
-            result = self._make_request('GET', '/api/history/list', params=params)
-            if result['success']:
-                count = len(result['data'].get('data', []))
-                print(f"  {analysis_type}: {count} 条记录")
-    
-    def test_17_show_analysis_results(self):
-        """测试获取特定类型分析结果"""
-        print("\n🧪 测试获取特定类型分析结果")
-        
-        analysis_types = ["变化检测", "目标检测", "地物分类", "场景分类", "图像复原"]
-        
-        for analysis_type in analysis_types:
-            result = self._make_request('GET', f'/api/analysis/show/{analysis_type}')
-            if result['success']:
-                data = result['data'].get('data', [])
-                print(f"  {analysis_type}: {len(data)} 条结果")
-            else:
-                print(f"  {analysis_type}: 查询失败 - {result['data']}")
-
     # ==================== 错误处理测试 ====================
     
-    def test_18_error_handling(self):
+    def test_16_error_handling(self):
         """测试错误处理"""
         print("\n🧪 测试错误处理")
         
@@ -678,7 +637,7 @@ class cugrsAPITester(TestCase):
 
     # ==================== 性能测试 ====================
     
-    def test_19_performance_concurrent_requests(self):
+    def test_17_performance_concurrent_requests(self):
         """测试并发请求性能"""
         print("\n🧪 测试并发请求性能")
         

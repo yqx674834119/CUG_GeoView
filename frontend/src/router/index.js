@@ -7,7 +7,6 @@ const Segmentation = () => import('@/views/mainfun/Segmentation.vue')
 const Classification = () => import('@/views/mainfun/Classification')
 const RestoreImgs = () => import('@/views/mainfun/RestoreImgs')
 // 在线地图模块已删除
-const History = () => import('@/views/history/History.vue')
 const NotFound = () => import('@/views/NotFound.vue')
 const routes = [
   {
@@ -53,11 +52,6 @@ const routes = [
         name: 'Tracking',
         component: () => import('@/views/mainfun/Tracking.vue')
       },
-      {
-        path: '/history',
-        name: 'history',
-        component: History,
-      }
       // 在线地图路由已删除
     ]
   },

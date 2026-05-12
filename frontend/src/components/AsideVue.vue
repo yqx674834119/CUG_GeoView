@@ -124,26 +124,6 @@
       <span
         v-show="!isCollapse"
         class="divider-title"
-      >历史记录</span>
-    </el-divider>
-
-    <el-menu-item
-      index="/history"
-      @click="goHistory"
-    >
-      <i
-        v-show="isCollapse"
-        class="icon-history-new"
-      />
-      <h3 v-show="!isCollapse">
-        <i class="icon-history-new" />分析历史记录
-      </h3>
-    </el-menu-item>
-
-    <el-divider content-position="center">
-      <span
-        v-show="!isCollapse"
-        class="divider-title"
       />
     </el-divider>
   </el-menu>
@@ -156,7 +136,6 @@ import {
   goSegmentation,
   goClassification,
   goRestoreImgs,
-  goHistory,
   goRegistration,
   goTracking
 } from "@/utils/gosomewhere.js";
@@ -178,7 +157,6 @@ export default {
     goSegmentation,
     goClassification,
     goRestoreImgs,
-    goHistory,
     goRegistration,
     goTracking,
     // goOnlineMap 已删除

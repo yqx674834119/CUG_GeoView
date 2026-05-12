@@ -106,7 +106,6 @@
 </template>
 <script>
 import { createSrc, imgUpload, getCustomModel } from "@/api/upload";
-import { historyGetPage } from "@/api/history";
 import { getUploadImg, upload } from "@/utils/getUploadImg";
 import ImgShow from '@/components/ImgShow'
 import Tabinfor from "@/components/Tabinfor";
@@ -165,7 +164,6 @@ export default {
   methods: {
     imgUpload,
     getCustomModel,
-    historyGetPage,
     createSrc,
     getUploadImg,
     upload,
@@ -180,7 +178,12 @@ export default {
       this.cutVisible = false;
       this.fileList = [];
     },
-    getMore() {
+    getMore(records) {
+      if (Array.isArray(records) && records.length) {
+        this.imgArr = records;
+        this.isUpload = true;
+        return;
+      }
       this.getUploadImg("场景分类");
     },
     uploadMore() {

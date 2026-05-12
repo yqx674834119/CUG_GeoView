@@ -95,8 +95,6 @@ def _relative_to_known_upload_root(path):
 def safe_asset_relative_path(value):
     normalized = str(value or "").replace("\\", "/").strip()
     prefixes = (
-        "/api/file/assets-preview/photos/",
-        "/api/file/assets-buffered/photos/",
         "/api/file/assets/photos/",
         "/_uploads/photos/",
         "/static/upload/",
@@ -218,4 +216,3 @@ def mirror_upload_tree():
     duration_ms = int((time.time() - start) * 1000)
     log_asset(f"tree mirror completed copied={copied} failed={failed} duration_ms={duration_ms}", "info")
     return {"copied": copied, "failed": failed, "duration_ms": duration_ms}
-

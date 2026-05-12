@@ -2,8 +2,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Body, Query
-from fastapi.responses import JSONResponse
+from flask import Blueprint, jsonify, request
 
 from applications.common.utils.service_registry import (
     find_service,
@@ -12,15 +11,15 @@ from applications.common.utils.service_registry import (
     next_service_id,
 )
 
-service_api = APIRouter(prefix="/api/v1/api/service", tags=["service"])
+service_api = Blueprint("service_api", __name__, url_prefix="/api/v1/api/service")
 
 
 def _ok(data=None, msg: str = "OK", status_code: int = 200):
-    return JSONResponse({"code": status_code, "success": True, "msg": msg, "data": data}, status_code=status_code)
+    return jsonify({"code": status_code, "success": True, "msg": msg, "data": data}), status_code
 
 
 def _error(msg: str, status_code: int = 400):
-    return JSONResponse({"code": status_code, "success": False, "msg": msg}, status_code=status_code)
+    return jsonify({"code": status_code, "success": False, "msg": msg}), status_code
 
 
 def _now_iso() -> str:
@@ -138,16 +137,26 @@ def _int_or_none(value):
         return None
 
 
-@service_api.get("/list")
-def service_list(
-    curPage: int = Query(1),
-    pageSize: int = Query(10),
-    sequence: Optional[int] = Query(None),
-    serviceStatus: Optional[int] = Query(None),
-    taskType: Optional[int] = Query(None),
-    serviceCreator: Optional[str] = Query(None),
-    serviceName: Optional[str] = Query(None),
-):
+def _json_payload():
+    return request.get_json(silent=True) or {}
+
+
+def _query_int(name, default=None):
+    value = request.args.get(name)
+    if value in (None, ""):
+        return default
+    return int(value)
+
+
+@service_api.route("/list", methods=["GET"])
+def service_list():
+    curPage = _query_int("curPage", 1)
+    pageSize = _query_int("pageSize", 10)
+    sequence = _query_int("sequence")
+    serviceStatus = _query_int("serviceStatus")
+    taskType = _query_int("taskType")
+    serviceCreator = request.args.get("serviceCreator")
+    serviceName = request.args.get("serviceName")
     services = load_services()
     filtered = []
     for service in services:
@@ -166,8 +175,9 @@ def service_list(
     return _ok({"records": ordered[start:start + pageSize], "total": total, "curPage": curPage, "pageSize": pageSize})
 
 
-@service_api.post("/restart")
-def service_restart(payload: dict = Body(default={})):
+@service_api.route("/restart", methods=["POST"])
+def service_restart():
+    payload = _json_payload()
     try:
         ids = _extract_restart_ids(payload)
     except ValueError as exc:
@@ -187,8 +197,9 @@ def service_restart(payload: dict = Body(default={})):
     return _ok(True, "服务重启成功") if updated else _error("未找到待重启的服务", 404)
 
 
-@service_api.post("/stop")
-def service_stop(payload: dict = Body(default={})):
+@service_api.route("/stop", methods=["POST"])
+def service_stop():
+    payload = _json_payload()
     try:
         ids = _extract_stop_ids(payload)
         dispatch_id = _extract_dispatch_id(payload)
@@ -210,8 +221,9 @@ def service_stop(payload: dict = Body(default={})):
     return _ok(True, "服务停止成功") if updated else _error("未找到待停止的服务", 404)
 
 
-@service_api.post("/update")
-def service_update(payload: dict = Body(default={})):
+@service_api.route("/update", methods=["POST"])
+def service_update():
+    payload = _json_payload()
     payload = _extract_nested_payload(payload, "serviceInfoDTO")
     if not payload:
         return _error("缺少 serviceInfoDTO", 400)
@@ -232,8 +244,9 @@ def service_update(payload: dict = Body(default={})):
     return _ok(True, "服务更新成功")
 
 
-@service_api.delete("/delete")
-def service_delete(ids: Optional[str] = Query(None)):
+@service_api.route("/delete", methods=["DELETE"])
+def service_delete():
+    ids = request.args.get("ids")
     try:
         parsed_ids = _parse_ids_from_value(ids)
     except ValueError as exc:
@@ -258,14 +271,14 @@ def _service_detail_impl(service_id):
     return _ok(service) if service is not None else _error("服务不存在", 404)
 
 
-@service_api.get("/detail")
-def service_detail_get(serviceId: Optional[str] = Query(None)):
-    return _service_detail_impl(serviceId)
+@service_api.route("/detail", methods=["GET"])
+def service_detail_get():
+    return _service_detail_impl(request.args.get("serviceId"))
 
 
-@service_api.post("/detail")
-def service_detail_post(payload: dict = Body(default={})):
-    return _service_detail_impl(payload.get("serviceId"))
+@service_api.route("/detail", methods=["POST"])
+def service_detail_post():
+    return _service_detail_impl(_json_payload().get("serviceId"))
 
 
 def seed_service_record(service_info: Dict):

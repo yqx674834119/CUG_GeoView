@@ -2,19 +2,14 @@
 set -euo pipefail
 
 CONFIG_PATH="${CONFIG_PATH:-/app/config.yaml}"
-REQUIRE_GPU="${REQUIRE_GPU:-true}"
+REQUIRE_GPU="${REQUIRE_GPU:-false}"
 RUNTIME_LOG_DIR="${RUNTIME_LOG_DIR:-/tmp/geoview-logs}"
 GEOVIEW_CONFIG="${GEOVIEW_CONFIG:-embedded}"
-GEOVIEW_STARTUP_DIAGNOSTICS="${GEOVIEW_STARTUP_DIAGNOSTICS:-true}"
-GEOVIEW_STRICT_STARTUP_DIAGNOSTICS="${GEOVIEW_STRICT_STARTUP_DIAGNOSTICS:-true}"
-GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS="${GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS:-false}"
-GEOVIEW_DIAGNOSTICS_WAIT_TIMEOUT="${GEOVIEW_DIAGNOSTICS_WAIT_TIMEOUT:-60}"
-GEOVIEW_BACKEND_DIAGNOSTICS_PATH="${GEOVIEW_BACKEND_DIAGNOSTICS_PATH:-${RUNTIME_LOG_DIR}/backend-startup-diagnostics.json}"
 GEOVIEW_EXTERNAL_STATIC_ROOT="${GEOVIEW_EXTERNAL_STATIC_ROOT:-/data/geoview/static}"
 GEOVIEW_INTERNAL_STATIC_ROOT="${GEOVIEW_INTERNAL_STATIC_ROOT:-/app/backend/static}"
 GEOVIEW_ASSET_READ_ORDER="${GEOVIEW_ASSET_READ_ORDER:-external,internal}"
-GEOVIEW_ASSET_DEBUG="${GEOVIEW_ASSET_DEBUG:-1}"
-GEOVIEW_DEBUG_LOG="${GEOVIEW_DEBUG_LOG:-true}"
+GEOVIEW_ASSET_DEBUG="${GEOVIEW_ASSET_DEBUG:-0}"
+GEOVIEW_DEBUG_LOG="${GEOVIEW_DEBUG_LOG:-false}"
 UPLOADED_PHOTOS_DEST="${UPLOADED_PHOTOS_DEST:-${GEOVIEW_EXTERNAL_STATIC_ROOT}/upload}"
 
 source /opt/conda/etc/profile.d/conda.sh
@@ -46,8 +41,7 @@ default_cfg = {
     "port": {"backend": 5008, "frontend": 3000},
     "miner": {"enabled": False, "frontend_port": 4000, "backend_port": 8000},
     "database": {"backend": "sqlite", "sqlite_path": "/app/backend/static/geoview.sqlite3"},
-    "services": {"backend": True, "frontend": False, "miner": False},
-    "assets": {"serve_mode": "buffered", "chunk_size": 1048576},
+    "services": {"backend": True, "frontend": True, "miner": False},
 }
 
 try:
@@ -76,16 +70,12 @@ database_cfg = {**default_cfg["database"], **(cfg.get("database") or {})}
 database_backend = str(database_cfg.get("backend", "sqlite")).lower()
 sqlite_path = database_cfg.get("sqlite_path", "/app/backend/static/geoview.sqlite3")
 services_cfg = {**default_cfg["services"], **(cfg.get("services") or {})}
-assets_cfg = {**default_cfg["assets"], **(cfg.get("assets") or {})}
 backend_override = env_flag("GEOVIEW_BACKEND_ENABLED")
 frontend_override = env_flag("GEOVIEW_FRONTEND_ENABLED")
 miner_override = env_flag("GEOVIEW_MINER_SERVICE_ENABLED")
 backend_enabled = "true" if (services_cfg.get("backend", True) if backend_override is None else backend_override) else "false"
-frontend_enabled = "true" if (services_cfg.get("frontend", False) if frontend_override is None else frontend_override) else "false"
+frontend_enabled = "true" if (services_cfg.get("frontend", True) if frontend_override is None else frontend_override) else "false"
 miner_service_enabled = "true" if (services_cfg.get("miner", False) if miner_override is None else miner_override) else "false"
-asset_serve_mode = str(os.environ.get("GEOVIEW_PHOTO_ASSET_SERVE_MODE") or assets_cfg.get("serve_mode", "sendfile")).lower()
-asset_chunk_size = int(os.environ.get("GEOVIEW_PHOTO_ASSET_CHUNK_SIZE") or assets_cfg.get("chunk_size", 1048576))
-omit_asset_content_length = os.environ.get("GEOVIEW_OMIT_ASSET_CONTENT_LENGTH", "true")
 
 print(f"BACKEND_HOST={backend_host}")
 print(f"BACKEND_PORT={backend_port}")
@@ -100,18 +90,11 @@ print(f"SQLITE_DATABASE_PATH={sqlite_path}")
 print(f"BACKEND_ENABLED={backend_enabled}")
 print(f"FRONTEND_ENABLED={frontend_enabled}")
 print(f"MINER_SERVICE_ENABLED={miner_service_enabled}")
-print(f"GEOVIEW_PHOTO_ASSET_SERVE_MODE={asset_serve_mode}")
-print(f"GEOVIEW_PHOTO_ASSET_CHUNK_SIZE={asset_chunk_size}")
-print(f"GEOVIEW_OMIT_ASSET_CONTENT_LENGTH={omit_asset_content_length}")
 PY
 )
 
 eval "${CONFIG_EXPORTS}"
 export GEOVIEW_CONFIG DATABASE_BACKEND SQLITE_DATABASE_PATH
-export GEOVIEW_PHOTO_ASSET_SERVE_MODE GEOVIEW_PHOTO_ASSET_CHUNK_SIZE GEOVIEW_OMIT_ASSET_CONTENT_LENGTH
-export GEOVIEW_STARTUP_DIAGNOSTICS GEOVIEW_STRICT_STARTUP_DIAGNOSTICS
-export GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS
-export GEOVIEW_DIAGNOSTICS_WAIT_TIMEOUT GEOVIEW_BACKEND_DIAGNOSTICS_PATH
 export GEOVIEW_EXTERNAL_STATIC_ROOT GEOVIEW_INTERNAL_STATIC_ROOT
 export GEOVIEW_ASSET_READ_ORDER GEOVIEW_ASSET_DEBUG GEOVIEW_DEBUG_LOG UPLOADED_PHOTOS_DEST
 
@@ -120,21 +103,11 @@ mkdir -p \
   "${GEOVIEW_EXTERNAL_STATIC_ROOT}/upload/res" \
   "${GEOVIEW_INTERNAL_STATIC_ROOT}/upload/res" \
   "$(dirname "${SQLITE_DATABASE_PATH}")"
-echo "[GeoView后端容器调试] 后端容器启动参数已解析"
-echo "[GeoView后端容器调试] asset external static root=${GEOVIEW_EXTERNAL_STATIC_ROOT}"
-echo "[GeoView后端容器调试] asset internal static root=${GEOVIEW_INTERNAL_STATIC_ROOT}"
-echo "[GeoView后端容器调试] asset upload dest=${UPLOADED_PHOTOS_DEST}"
-echo "[GeoView后端容器调试] asset read order=${GEOVIEW_ASSET_READ_ORDER}"
-echo "[GeoView后端容器调试] photo asset serve mode=${GEOVIEW_PHOTO_ASSET_SERVE_MODE}"
-echo "[GeoView后端容器调试] photo asset chunk size=${GEOVIEW_PHOTO_ASSET_CHUNK_SIZE}"
-echo "[GeoView后端容器调试] omit non-range asset content-length=${GEOVIEW_OMIT_ASSET_CONTENT_LENGTH}"
-echo "[GeoView后端容器调试] debug log enabled=${GEOVIEW_DEBUG_LOG}"
-echo "[GeoView后端容器调试] require binary asset diagnostics=${GEOVIEW_REQUIRE_BINARY_ASSET_DIAGNOSTICS}"
+echo "[GeoView] backend=${BACKEND_HOST}:${BACKEND_PORT} frontend_enabled=${FRONTEND_ENABLED} upload_dir=${UPLOADED_PHOTOS_DEST}"
 if ! touch "${GEOVIEW_EXTERNAL_STATIC_ROOT}/.geoview-write-test" 2>/dev/null; then
-  echo "[GeoView后端容器调试] 警告：外部静态目录不可写，上传/历史图片可能失败：${GEOVIEW_EXTERNAL_STATIC_ROOT}" >&2
+  echo "[GeoView] warning: upload root is not writable: ${GEOVIEW_EXTERNAL_STATIC_ROOT}" >&2
 else
   rm -f "${GEOVIEW_EXTERNAL_STATIC_ROOT}/.geoview-write-test" 2>/dev/null || true
-  echo "[GeoView后端容器调试] 外部静态目录写入检查通过"
 fi
 
 # Write GeoView frontend .env (include Miner toggle)
@@ -164,16 +137,11 @@ PY
 fi
 
 if [ "${BACKEND_ENABLED}" = "true" ] && [ "${GPU_COUNT:-0}" = "0" ]; then
-  if [ "${REQUIRE_GPU}" = "true" ]; then
-    echo "[entrypoint] ERROR: GPU is required, but no usable GPU was detected inside the container." >&2
-    echo "[entrypoint] Check the host NVIDIA driver, container runtime, and docker compose GPU settings." >&2
-    exit 1
-  fi
   unset CUDA_VISIBLE_DEVICES || true
   unset FLAGS_selected_gpus || true
-  echo "[entrypoint] No GPU detected, forcing Paddle to use CPU." >&2
+  echo "[GeoView] no GPU detected; backend will start and models may fall back or fail per model."
 else
-  echo "[GeoView后端容器调试] 检测到 ${GPU_COUNT} 块 GPU。"
+  echo "[GeoView] gpu_count=${GPU_COUNT}"
 fi
 
 if [ "${BACKEND_ENABLED}" = "true" ]; then
@@ -182,7 +150,7 @@ fi
 
 if [ "${BACKEND_ENABLED}" = "true" ] && { [ "${DATABASE_BACKEND}" = "sqlite" ] || [ "${GEOVIEW_CONFIG}" = "embedded" ]; }; then
   export GEOVIEW_CONFIG=embedded
-  echo "[GeoView后端容器调试] 使用内置 SQLite 数据库：${SQLITE_DATABASE_PATH}，跳过 MySQL 等待。"
+  echo "[GeoView] sqlite=${SQLITE_DATABASE_PATH}"
 elif [ "${BACKEND_ENABLED}" = "true" ]; then
   python - <<'PY'
 import os
@@ -216,7 +184,6 @@ BACKEND_PID=""
 if [ "${BACKEND_ENABLED}" = "true" ]; then
   cd /app/backend
   gunicorn app:app \
-    --worker-class uvicorn.workers.UvicornWorker \
     --bind "${BACKEND_HOST}:${BACKEND_PORT}" \
     --workers "${GEOVIEW_BACKEND_WORKERS:-1}" \
     --timeout "${GEOVIEW_BACKEND_TIMEOUT:-3600}" \
@@ -224,18 +191,6 @@ if [ "${BACKEND_ENABLED}" = "true" ]; then
     --access-logfile - \
     --error-logfile - &
   BACKEND_PID=$!
-
-  if [ "${GEOVIEW_STARTUP_DIAGNOSTICS}" = "true" ]; then
-    echo "[GeoView后端容器调试] 开始执行后端启动资产诊断..."
-    if ! python /usr/local/bin/backend_startup_diagnostics.py; then
-      echo "[GeoView后端容器调试] 后端启动资产诊断失败。" >&2
-      kill -TERM "${BACKEND_PID}" 2>/dev/null || true
-      wait "${BACKEND_PID}" 2>/dev/null || true
-      exit 1
-    fi
-  else
-    echo "[GeoView后端容器调试] 后端启动资产诊断已关闭。"
-  fi
 fi
 
 FRONTEND_PID=""

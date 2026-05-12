@@ -186,7 +186,7 @@ def main():
     parser.add_argument("--input_dir", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--file_names", type=str, required=True)
-    parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--threshold", type=float, default=0.7)
     
     args = parser.parse_args()
@@ -195,10 +195,11 @@ def main():
     
     # Check device
     import torch
-    if args.device == "auto":
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    else:
-        device = args.device
+    device = "cuda" if args.device == "auto" else args.device
+    if not str(device).startswith("cuda"):
+        raise RuntimeError(f"GPU-only inference requires CUDA device, got {device}")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing CPU inference")
     log(f"Device: {device}")
     
     os.makedirs(args.output_dir, exist_ok=True)

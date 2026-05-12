@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import time
 
 import cv2
 import numpy as np
@@ -54,6 +55,55 @@ MMSEG_SEGMENTATION_PALETTE = [
     [255, 0, 255],
     [0, 191, 255],
 ]
+
+
+def _compact_list(values, max_items=5):
+    items = list(values or [])
+    return {
+        "count": len(items),
+        "sample": items[:max_items],
+    }
+
+
+def _compact_results(results, max_items=5):
+    compact = []
+    for item in list(results or [])[:max_items]:
+        if isinstance(item, dict):
+            compact.append({
+                key: item.get(key)
+                for key in ("after_img", "mask_path", "image_size", "class_names")
+                if item.get(key) not in (None, "", [])
+            })
+        else:
+            compact.append(item)
+    return {
+        "count": len(results or []),
+        "sample": compact,
+    }
+
+
+def _compact_records(records, max_items=5):
+    compact = []
+    for item in list(records or [])[:max_items]:
+        compact.append({
+            "id": item.get("id"),
+            "type": item.get("type"),
+            "before_img": item.get("before_img"),
+            "before_img1": item.get("before_img1"),
+            "after_img": item.get("after_img"),
+        })
+    return {
+        "count": len(records or []),
+        "sample": compact,
+    }
+
+
+def _inference_log(scope, stage, **fields):
+    try:
+        payload = json.dumps(fields, ensure_ascii=False, default=str, separators=(",", ":"))
+    except Exception:
+        payload = str(fields)
+    print(f"[GeoView推理][{scope}] {stage} {payload}", flush=True)
 
 
 def save_analysis(type_,
@@ -199,6 +249,8 @@ def change_detection(model_path,
     :return:
     """
     print("变化检测----------------->start")
+    started_at = time.time()
+    _inference_log("变化检测", "request", model_path=model_path, prehandle=step1, denoise=step2, window_size=window_size, stride=stride, pairs=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     imgs1 = list()
     temp_names = copy.deepcopy(names)
@@ -207,6 +259,7 @@ def change_detection(model_path,
         pair['second'] = img_url_handle(pair['second'])
         imgs.append(pair["first"])
         imgs1.append(pair["second"])
+    _inference_log("变化检测", "input-normalized", first_files=_compact_list(imgs), second_files=_compact_list(imgs1))
 
     # 1.直图or锐化
     if step1 != 0:
@@ -215,20 +268,24 @@ def change_detection(model_path,
         else:
             imgs = handle(step1, imgs, data_path, data_path)
             imgs1 = handle(step1, imgs1, data_path, data_path)
+        _inference_log("变化检测", "preprocess-primary", mode=step1, first_files=_compact_list(imgs), second_files=_compact_list(imgs1))
     # 2.平滑or滤波
     if step2 != 0:
         imgs = handle(step2, imgs, data_path, data_path)
         imgs1 = handle(step2, imgs1, data_path, data_path)
+        _inference_log("变化检测", "preprocess-denoise", mode=step2, first_files=_compact_list(imgs), second_files=_compact_list(imgs1))
 
     # 3.resize
     resizes = resize(data_path, data_path, imgs, mode=0)
     resizes1 = resize(data_path, data_path, imgs1, mode=0)
+    _inference_log("变化检测", "preprocess-resize", first_files=_compact_list(resizes), second_files=_compact_list(resizes1))
     i = 0
     for pair in names:
         pair["first"] = resizes[i]
         pair["second"] = resizes1[i]
         i += 1
     # 3.检测对比，带地址的文件名，纯文件名
+    _inference_log("变化检测", "model-execute-start", model_path=model_path, pairs=_compact_list(names), window_size=window_size, stride=stride)
     retPics, filenames = CD.execute(
         model_path,
         data_path,
@@ -236,8 +293,10 @@ def change_detection(model_path,
         names,
         window_size=window_size,
         stride=stride)
+    _inference_log("变化检测", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), result_images=_compact_list(retPics), mask_files=_compact_list(filenames))
     # 4.检测渲染
     res = handle(fun_type_6, filenames, out_dir, out_dir)
+    _inference_log("变化检测", "render-done", rendered=_compact_list(res))
     # 5.入库
     records = []
     i = 0
@@ -358,6 +417,7 @@ def change_detection(model_path,
             checked=str(step1) + "," + str(step2),
             is_hole=True))
         i += 1
+    _inference_log("变化检测", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("变化检测----------------->end")
     return records
 
@@ -388,31 +448,34 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
     :return:
     """
     print("目标检测----------------->start", flush=True)
-    print("[OD-DEBUG] 参数: model_path=", model_path, " data_path=", data_path, " out_dir=", out_dir, flush=True)
-    print("[OD-DEBUG] 原始输入数量:", len(names), flush=True)
+    started_at = time.time()
+    _inference_log("目标检测", "request", model_path=model_path, prehandle=step1, denoise=step2, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     temp_names = copy.deepcopy(names)
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
         imgs.append(names[j])
+    _inference_log("目标检测", "input-normalized", files=_compact_list(imgs))
 
     # 3.resize
     resizes = resize(data_path, data_path, imgs, mode=3)
     for i, pair in enumerate(imgs):
         imgs[i] = resizes[i]
+    _inference_log("目标检测", "preprocess-resize", files=_compact_list(resizes))
 
     # 1.CLAHE or 锐化
     if step1 != 0:
         imgs = handle(step1, imgs, data_path, data_path)
+        _inference_log("目标检测", "preprocess-primary", mode=step1, files=_compact_list(imgs))
     # 2.平滑or滤波
     if step2 != 0:
         imgs = handle(step2, imgs, data_path, data_path)
+        _inference_log("目标检测", "preprocess-denoise", mode=step2, files=_compact_list(imgs))
 
-    print("[OD-DEBUG] 预处理后图片数量:", len(imgs), flush=True)
-    print("[OD-DEBUG] step1=", step1, " step2=", step2, flush=True)
     # 4. 目标检测
+    _inference_log("目标检测", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
     retPics = OD.execute(model_path, data_path, out_dir, imgs)
-    print("[OD-DEBUG] 目标检测返回数量:", len(retPics), flush=True)
+    _inference_log("目标检测", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     # 5.入库
     records = []
     for i, pair in enumerate(resizes):
@@ -447,6 +510,7 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
             pic2="",
             data=data,
             checked=str(step1) + "," + str(step2)))
+    _inference_log("目标检测", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("目标检测----------------->end", flush=True)
     return records
 
@@ -461,25 +525,33 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
     :return:
     """
     print("地物分类----------------->start")
+    started_at = time.time()
+    _inference_log("地物分类", "request", model_path=model_path, prehandle=step1, denoise=step2, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     temp_names = copy.deepcopy(names)
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
         imgs.append(names[j])
+    _inference_log("地物分类", "input-normalized", files=_compact_list(imgs))
     # 3.resize
     resizes = resize(data_path, data_path, imgs, mode=2)
     for i, pair in enumerate(imgs):
         imgs[i] = resizes[i]
+    _inference_log("地物分类", "preprocess-resize", files=_compact_list(resizes))
 
     # 1.CLAHE or 锐化
     if step1 != 0:
         imgs = handle(step1, imgs, data_path, data_path)
+        _inference_log("地物分类", "preprocess-primary", mode=step1, files=_compact_list(imgs))
     # 2.平滑or滤波
     if step2 != 0:
         imgs = handle(step2, imgs, data_path, data_path)
+        _inference_log("地物分类", "preprocess-denoise", mode=step2, files=_compact_list(imgs))
 
     # 4. 地物分类
+    _inference_log("地物分类", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
     retPics = SS.execute(model_path, data_path, out_dir, imgs)
+    _inference_log("地物分类", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     
     # 5.入库
     records = []
@@ -527,6 +599,7 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
             pic2="",
             data=data,
             checked=str(step1) + "," + str(step2)))
+    _inference_log("地物分类", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("地物分类----------------->end")
     return records
 
@@ -541,12 +614,17 @@ def classification(model_path, data_path, names, type):
     :return:
     """
     print("场景分类----------------->start")
+    started_at = time.time()
+    _inference_log("场景分类", "request", model_path=model_path, input=_compact_list(names), data_path=data_path)
     imgs = list()
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
         imgs.append(names[j])
+    _inference_log("场景分类", "input-normalized", files=_compact_list(imgs))
     # 1. 场景分类
+    _inference_log("场景分类", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
     result = C.execute(model_path, data_path, imgs)
+    _inference_log("场景分类", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_list(result))
     # 2.入库
     records = []
     for i, pair in enumerate(names):
@@ -572,6 +650,7 @@ def classification(model_path, data_path, names, type):
         )
         data = json.dumps(attach_visual_payload(ret, payload), ensure_ascii=False)
         records.append(save_analysis(type, first_, "", pic2="", data=data))
+    _inference_log("场景分类", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("场景分类----------------->end")
     return records
 
@@ -585,13 +664,18 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
     :return:
     """
     print("图像复原----------------->start")
+    started_at = time.time()
+    _inference_log("图像复原", "request", model_path=model_path, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
         imgs.append(names[j])
+    _inference_log("图像复原", "input-normalized", files=_compact_list(imgs))
 
     # 1. 图像复原
+    _inference_log("图像复原", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
     retPics = IR.execute(model_path, data_path, out_dir, imgs)
+    _inference_log("图像复原", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     # 2.入库
     records = []
     for i, pair in enumerate(names):
@@ -615,12 +699,13 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
             metrics=metrics,
             capabilities={
                 "frontend_render_exact": False,
-                "frontend_render_note": "JSON 模式使用浏览器端近似放大预览，不等同模型真实输出像素。",
+                "frontend_render_note": "前端展示后端生成的结果资源 URL。",
             },
             legacy_assets=_legacy_asset_bundle(before_img=first_, after_img=retPic),
         )
         data = json.dumps(attach_visual_payload({}, payload), ensure_ascii=False)
         records.append(save_analysis(type_, first_, retPic, pic2="", data=data))
+    _inference_log("图像复原", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("图像复原----------------->end")
     return records
 
@@ -632,12 +717,17 @@ def registration(model_path, data_path, out_dir, names, type_):
     import applications.interface.registration as REG
     
     print("自动配准----------------->start")
+    started_at = time.time()
+    _inference_log("自动配准", "request", model_path=model_path, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     for j, pair in enumerate(names):
         names[j]["first"] = img_url_handle(pair["first"])
         names[j]["second"] = img_url_handle(pair["second"])
+    _inference_log("自动配准", "input-normalized", pairs=_compact_list(names))
         
     # Execute registration
+    _inference_log("自动配准", "model-execute-start", model_path=model_path, pairs=_compact_list(names))
     results = REG.execute(model_path, data_path, out_dir, names)
+    _inference_log("自动配准", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(results))
     
     # Save to database
     records = []
@@ -703,6 +793,7 @@ def registration(model_path, data_path, out_dir, names, type_):
             data=data,
         ))
         
+    _inference_log("自动配准", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("自动配准----------------->end")
     return records
 
@@ -714,8 +805,19 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
     import applications.interface.tracking as TRACK
     
     print("目标跟踪----------------->start")
+    started_at = time.time()
+    _inference_log("目标跟踪", "request", model_path=model_path, input=_compact_list(names), rect=rect, data_path=data_path, output_dir=out_dir)
 
+    _inference_log("目标跟踪", "model-execute-start", model_path=model_path, input=_compact_list(names))
     result = TRACK.execute(model_path, data_path, out_dir, names, rect)
+    _inference_log("目标跟踪", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs={
+        "preview_path": result.get("preview_path"),
+        "output_video_path": result.get("output_video_path"),
+        "trajectory_path": result.get("trajectory_path"),
+        "summary": result.get("summary"),
+        "method_used": result.get("method_used"),
+        "runtime_variant": result.get("runtime_variant"),
+    })
 
     first_frame = result.get("first_frame_input")
     preview_path = result.get("preview_path")
@@ -778,6 +880,7 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         data=data,
     )
     
+    _inference_log("目标跟踪", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records([record]))
     print("目标跟踪----------------->end")
     return {
         **result,

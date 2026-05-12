@@ -8,11 +8,7 @@ export function createSrc(formdata) {
     })
 }
 export function createVideoPreview(formdata) {
-    return requestfile({
-        method: 'POST',
-        url: '/api/file/upload-video-preview',
-        data: formdata
-    })
+    return createSrc(formdata)
 }
 export function imgUpload(data,funUrl){
     return request({

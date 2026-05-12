@@ -488,20 +488,6 @@
     </Tabinfor>
 
     <el-card class="render-box">
-      <div v-if="resultArr.length" class="render-mode-bar">
-        <span class="render-mode-bar__label">传输 / 渲染模式</span>
-        <el-radio-group v-model="displayMode" size="small" @change="handleDisplayModeChange">
-          <el-radio-button label="original">原始图像</el-radio-button>
-          <el-radio-button label="base64" :disabled="!hasBase64Mode">备用 Base64</el-radio-button>
-          <el-radio-button label="json" :disabled="!hasJsonMode">JSON 前端可视化</el-radio-button>
-        </el-radio-group>
-      </div>
-      <div v-if="resultArr.length" class="render-mode-state">
-        <el-tag size="small" :type="currentModeTagType" effect="dark">
-          当前显示：{{ currentModeLabel }}
-        </el-tag>
-        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
-      </div>
       <div
         class="render-img-box"
       >
@@ -623,17 +609,12 @@
             <p class="handle-words">
               预测结果
             </p>
-            <JsonImageVisualizer
-              v-if="displayMode === 'json' && hasJsonMode && currentRecord"
-              :image-src="currentBeforeSource"
-              :payload="currentJsonPayload"
-            />
             <div style="position: relative">
               <transition
                 enter-active-class="animate__animated animate__bounceIn"
                 leave-active-class="animate__animated animate__hinge"
               >
-                <div v-if="displayMode !== 'json' && !holeShow">
+                <div v-if="!holeShow">
                   <el-image
                     v-if="onRenderResult && !holeShow"
                     :preview-src-list="[onRenderResult]"
@@ -649,7 +630,7 @@
                 leave-active-class="animate__animated animate__hinge"
               >
                 <div
-                  v-if="displayMode !== 'json' && holeShow"
+                  v-if="holeShow"
                   style="position: absolute;top: 0;right: 0;"
                 >
                   <el-image
@@ -664,7 +645,7 @@
               </transition>
             </div>
             <el-image
-              v-if="displayMode !== 'json' && !onRenderResult"
+              v-if="!onRenderResult"
               :preview-src-list="[onRenderExample]"
               :preview-teleported="true"
               :src="onRenderExample"
@@ -881,18 +862,11 @@ import {
   getImgArrayBuffer,
   atchDownload,
 } from "@/utils/download.js";
-import { historyGetPage } from "@/api/history";
 import Tabinfor from "@/components/Tabinfor";
 import DraggableItem from "@/components/DraggableItem";
-import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import {
-  getDataTransport,
-  getRecordTransport,
-  modeLabel,
-  normalizeDisplayMode,
   resolveDataSource,
   resolveRecordSource,
-  supportsJsonMode,
 } from "@/utils/mediaTransport";
 import { buildUploadFormData } from "@/utils/uploadFormData";
 import { use } from "echarts/core";
@@ -934,7 +908,6 @@ export default {
     Tabinfor,
     DraggableItem,
     VChart,
-    JsonImageVisualizer
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -944,7 +917,6 @@ export default {
   data() {
     return {
       holeShow:true,
-      displayMode: "original",
       isSlice: false,
       sliderPosition: 50,
       isDragging: false,
@@ -1057,83 +1029,29 @@ export default {
     currentRecord() {
       return this.resultArr[this.currentIndex] || null;
     },
-    hasBase64Mode() {
-      return !!getRecordTransport(this.currentRecord, "before_img")?.preview_data_url
-        || !!getRecordTransport(this.currentRecord, "before_img1")?.preview_data_url
-        || !!getRecordTransport(this.currentRecord, "after_img")?.preview_data_url
-        || !!getDataTransport(this.currentRecord, "mask")?.preview_data_url
-        || !!getDataTransport(this.currentRecord, "mask_hole")?.preview_data_url
-        || !!getDataTransport(this.currentRecord, "hole")?.preview_data_url;
-    },
-    hasJsonMode() {
-      return supportsJsonMode(this.currentRecord);
-    },
-    currentJsonPayload() {
-      const payload = this.currentRecord?.visual_payload;
-      if (!payload || !this.holeShow) {
-        return payload;
-      }
-      const result = payload.result || {};
-      return {
-        ...payload,
-        result: {
-          ...result,
-          regions: result.hole_regions || result.regions || [],
-          mask_path: result.mask_hole_path || result.mask_path || "",
-        },
-      };
-    },
-    availableModes() {
-      const modes = ["original"];
-      if (this.hasBase64Mode) {
-        modes.push("base64");
-      }
-      if (this.hasJsonMode) {
-        modes.push("json");
-      }
-      return modes;
-    },
-    currentModeLabel() {
-      return modeLabel(this.displayMode);
-    },
-    currentModeTagType() {
-      if (this.displayMode === "json") {
-        return "success";
-      }
-      if (this.displayMode === "base64") {
-        return "warning";
-      }
-      return "info";
-    },
-    modeAvailabilityText() {
-      return `当前结果可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
-    },
     currentBeforeSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveRecordSource(this.currentRecord, "before_img", this.assetMode) || "";
+      return resolveRecordSource(this.currentRecord, "before_img") || "";
     },
     currentBeforeSecondSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveRecordSource(this.currentRecord, "before_img1", this.assetMode) || "";
+      return resolveRecordSource(this.currentRecord, "before_img1") || "";
     },
     currentMaskSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveDataSource(this.currentRecord, "mask", this.assetMode) || "";
+      return resolveDataSource(this.currentRecord, "mask") || "";
     },
     currentMaskHoleSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveDataSource(this.currentRecord, "mask_hole", this.assetMode) || "";
-    },
-    assetMode() {
-      return this.displayMode === "original" ? "original" : "base64";
+      return resolveDataSource(this.currentRecord, "mask_hole") || "";
     },
     sliderWrapperStyle() {
       return {
@@ -1160,30 +1078,19 @@ export default {
 
   methods: {
     downloadimgWithWords,
-    historyGetPage,
     imgUpload,
     getCustomModel,
     createSrc,
     getImgArrayBuffer,
     atchDownload,
     histogramUpload,
-    syncDisplayMode() {
-      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
-    },
-    handleDisplayModeChange() {
-      this.syncDisplayMode();
-      if (this.displayMode === "json" && this.preMode !== 2) {
-        this.preMode = 2;
-      }
-      this.setOneWay(this.renderstyle, this.resultArr.length === 0, this.holeShow);
-    },
     resultThumbSource(item) {
       if (!item) {
         return "";
       }
       return this.holeShow
-        ? (resolveDataSource(item, "hole", this.assetMode) || "")
-        : (resolveRecordSource(item, "after_img", this.assetMode) || "");
+        ? (resolveDataSource(item, "hole") || "")
+        : (resolveRecordSource(item, "after_img") || "");
     },
     clearQueue() {
       this.fileList1 = [];
@@ -1222,19 +1129,19 @@ export default {
       }
       if(!holeStyle){
         switch (style){
-          case '原图': this.onRenderResult = resolveRecordSource(current, "after_img", this.assetMode);break
-          case '森林': this.onRenderResult = resolveDataSource(current, "2", this.assetMode);break
-          case '霓虹': this.onRenderResult = resolveDataSource(current, "3", this.assetMode);break
-          case '闪电': this.onRenderResult = resolveDataSource(current, "0", this.assetMode);break
-          case '极光': this.onRenderResult = resolveDataSource(current, "1", this.assetMode);break
+          case '原图': this.onRenderResult = resolveRecordSource(current, "after_img");break
+          case '森林': this.onRenderResult = resolveDataSource(current, "2");break
+          case '霓虹': this.onRenderResult = resolveDataSource(current, "3");break
+          case '闪电': this.onRenderResult = resolveDataSource(current, "0");break
+          case '极光': this.onRenderResult = resolveDataSource(current, "1");break
         }
       }else{
         switch (style){
-          case '原图': this.onRenderResult = resolveDataSource(current, "hole", this.assetMode);break
-          case '森林': this.onRenderResult = resolveDataSource(current, "hole_style.2", this.assetMode);break
-          case '霓虹': this.onRenderResult = resolveDataSource(current, "hole_style.3", this.assetMode);break
-          case '闪电': this.onRenderResult = resolveDataSource(current, "hole_style.0", this.assetMode);break
-          case '极光': this.onRenderResult = resolveDataSource(current, "hole_style.1", this.assetMode);break
+          case '原图': this.onRenderResult = resolveDataSource(current, "hole");break
+          case '森林': this.onRenderResult = resolveDataSource(current, "hole_style.2");break
+          case '霓虹': this.onRenderResult = resolveDataSource(current, "hole_style.3");break
+          case '闪电': this.onRenderResult = resolveDataSource(current, "hole_style.0");break
+          case '极光': this.onRenderResult = resolveDataSource(current, "hole_style.1");break
         }
       }
 
@@ -1306,7 +1213,11 @@ export default {
                       this.fileList2 = [];
                       this.$message.success("上传成功");
                       this.isUpload = true;
+                      this.resultArr = res?.data?.data?.records || [];
+                      this.currentIndex = 0;
+                      this.currentQroup = 0;
                       this.getMore();
+                      this.setOneWay(this.renderstyle, this.resultArr.length === 0, this.holeShow);
                       if (this.upload.list.length >= 10) {
                         this.$confirm(
                             "上传图片过多，是否压缩?",
@@ -1352,29 +1263,10 @@ export default {
       return  afterData;
     },
     goCompress(num) {
-      this.$message.success("正在下载压缩");
-      this.historyGetPage(1, num, "变化检测").then((res) => {
-        this.atchDownload(
-            res.data.data.map((item) => {
-              return { after_img: item.after_img, id: item.id };
-            })
-        );
-      }).catch((rej)=>{})
+      this.$message.info("暂无批量下载");
     },
     getMore() {
-      this.historyGetPage(1, 20, "变化检测")
-          .then((res) => {
-            this.resultArr = res.data.data
-            if (this.resultArr.length) {
-              this.currentQroup = 0;
-              this.currentIndex = 0;
-              this.onRender = 0;
-              this.syncDisplayMode();
-              this.onRenderResult = resolveRecordSource(this.resultArr[0], "after_img", this.assetMode)
-            }
-            this.resetSliderPosition();
-          })
-          .catch((rej) => {});
+      this.resetSliderPosition();
     },
     selectHistogram() {
       if (isRefChecked(this, "histogram")) {
@@ -1650,10 +1542,6 @@ export default {
       this.canUpload = j === 0;
     },
     changePreMode() {
-      if (this.displayMode === "json" && this.preMode === 2) {
-        this.$message.info("JSON 前端可视化仅在单图结果模式下展示");
-        return;
-      }
       if (this.preMode === 1) {
         this.preMode = 2;
       } else {

@@ -6,7 +6,7 @@ host:
   frontend: 0.0.0.0
 baidu_map:
   access_key: <ACCESS_KEY>
-debug: true
+debug: false
 miner:
   enabled: false
   frontend_port: 4000
@@ -19,5 +19,4 @@ services:
   frontend: true
   miner: false
 assets:
-  serve_mode: buffered
-  chunk_size: 1048576
+  serve_mode: sendfile

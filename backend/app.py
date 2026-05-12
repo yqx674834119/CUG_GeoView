@@ -17,9 +17,7 @@ def _load_runtime_config():
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     config = _load_runtime_config()
     host = (config.get("host") or {}).get("backend", "0.0.0.0")
     port = int((config.get("port") or {}).get("backend", 5008))
-    uvicorn.run("app:app", host=host, port=port, reload=False)
+    app.run(host=host, port=port, debug=False)

@@ -1,1 +1,2 @@
-172.20.20.107:8443/your-project/geoview-frontend:20260508-frontendfix3-4837450
+crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260511-acceptance
+crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend:20260511-acceptance

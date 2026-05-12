@@ -181,10 +181,11 @@ def main():
     args = parser.parse_args()
     
     try:
-        if args.device == 'auto':
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        else:
-            device = args.device
+        device = 'cuda' if args.device == 'auto' else args.device
+        if not str(device).startswith('cuda'):
+            raise RuntimeError(f"GPU-only inference requires CUDA device, got {device}")
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available; refusing CPU inference")
             
         pairs = json.loads(args.file_pairs)
         os.makedirs(args.output_dir, exist_ok=True)

@@ -14,6 +14,21 @@ function withTrailingSlash(url) {
   return url.endsWith("/") ? url : `${url}/`;
 }
 
+function normalizeBaseUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) {
+    return "";
+  }
+  if (/^\/\//.test(value)) {
+    const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+    return withTrailingSlash(`${protocol}${value}`);
+  }
+  if (/^https?:\/\//i.test(value) || value.startsWith("/")) {
+    return withTrailingSlash(value);
+  }
+  return withTrailingSlash(`http://${value}`);
+}
+
 function resolveBackendBaseUrl(runtimeConfig) {
   if (hasText(runtimeConfig.backendUrl)) {
     return withTrailingSlash(runtimeConfig.backendUrl.trim());
@@ -83,19 +98,34 @@ function resolveBaiduMapAccessKey(runtimeConfig) {
 }
 
 const runtimeConfig = getRuntimeConfig();
-const BASEURL = resolveBackendBaseUrl(runtimeConfig);
+const storedBaseUrl = typeof window !== "undefined" ? window.localStorage.getItem("GEOVIEW_BACKEND_BASEURL") : "";
+const BASEURL = normalizeBaseUrl(storedBaseUrl) || resolveBackendBaseUrl(runtimeConfig);
 const BACKEND_ASSET_MODE = resolveBackendAssetMode(runtimeConfig);
 const FRONTEND_ASSET_DEBUG = resolveFrontendAssetDebug(runtimeConfig);
 const MINER_ENABLED = resolveMinerEnabled(runtimeConfig);
 const MINER_URL = resolveMinerUrl(runtimeConfig);
 const BAIDU_MAP_ACCESS_KEY = resolveBaiduMapAccessKey(runtimeConfig);
 
-export default {
+const globalConfig = {
   BASEURL,
   BACKEND_ASSET_MODE,
   FRONTEND_ASSET_DEBUG,
   MINER_ENABLED,
   MINER_URL,
   BAIDU_MAP_ACCESS_KEY,
+  setBackendBaseUrl(url) {
+    const nextUrl = normalizeBaseUrl(url);
+    if (!nextUrl) {
+      return this.BASEURL;
+    }
+    this.BASEURL = nextUrl;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("GEOVIEW_BACKEND_BASEURL", nextUrl);
+      window.dispatchEvent(new CustomEvent("geoview-backend-baseurl-change", { detail: { baseUrl: nextUrl } }));
+    }
+    return nextUrl;
+  },
 };
+
+export default globalConfig;
 </script>

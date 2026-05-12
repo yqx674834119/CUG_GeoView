@@ -1,4 +1,4 @@
-from fastapi import HTTPException
+from werkzeug.exceptions import BadRequest
 
 
 def xss_escape(s: str):
@@ -22,4 +22,4 @@ def check_data(schema, data):
         if values:
             msg = f"{key}{values[0]}"
             break
-    raise HTTPException(status_code=400, detail=msg)
+    raise BadRequest(msg)

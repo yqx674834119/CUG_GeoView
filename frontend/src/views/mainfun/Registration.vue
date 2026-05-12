@@ -144,21 +144,6 @@
     <el-divider />
 
     <div v-if="resultCard" class="result-box">
-      <div class="render-mode-bar">
-        <span class="render-mode-bar__label">传输 / 渲染模式</span>
-        <el-radio-group v-model="displayMode" size="small">
-          <el-radio-button label="original">原始图像</el-radio-button>
-          <el-radio-button label="base64" :disabled="!hasBase64Mode">备用 Base64</el-radio-button>
-          <el-radio-button label="json" :disabled="!hasJsonMode">JSON 前端可视化</el-radio-button>
-        </el-radio-group>
-      </div>
-      <div class="render-mode-state">
-        <el-tag size="small" :type="currentModeTagType" effect="dark">
-          当前显示：{{ currentModeLabel }}
-        </el-tag>
-        <span class="render-mode-state__text">{{ modeAvailabilityText }}</span>
-      </div>
-
       <div v-if="registrationAnalysis" class="analysis-shell">
         <div class="analysis-shell__head">
           <div>
@@ -258,13 +243,7 @@
               {{ resultCard.model_name }}
             </div>
             <div class="result-image-box">
-              <JsonImageVisualizer
-                v-if="displayMode === 'json' && hasJsonMode"
-                :image-src="jsonBaseSrc"
-                :payload="resultCard.record.visual_payload"
-              />
               <el-image
-                v-else
                 :src="outputDisplaySrc"
                 :preview-src-list="[outputDisplaySrc]"
                 :preview-teleported="true"
@@ -300,20 +279,11 @@ import {
 import VChart from "vue-echarts";
 
 import Tabinfor from "@/components/Tabinfor";
-import JsonImageVisualizer from "@/components/JsonImageVisualizer";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
-import { historyGetPage } from "@/api/history";
 import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
 import { analyzeRegistrationRecord } from "@/utils/frontAnalysis";
-import {
-  availableDisplayModes,
-  getRecordTransport,
-  modeLabel,
-  normalizeDisplayMode,
-  resolveJsonBaseSource,
-  resolveRecordSource,
-} from "@/utils/mediaTransport";
+import { resolveRecordSource } from "@/utils/mediaTransport";
 
 use([
   CanvasRenderer,
@@ -353,7 +323,7 @@ function revokeObjectUrl(url) {
 
 export default {
   name: "Registration",
-  components: { Tabinfor, JsonImageVisualizer, VChart },
+  components: { Tabinfor, VChart },
   data() {
     return {
       fixedFileList: [],
@@ -366,7 +336,6 @@ export default {
       },
       running: false,
       resultCard: null,
-      displayMode: "original",
       analysisLoading: false,
       analysisError: "",
       registrationAnalysis: null,
@@ -376,51 +345,17 @@ export default {
     this.fetchModels();
   },
   computed: {
-    hasBase64Mode() {
-      return !!getRecordTransport(this.resultCard?.record, "before_img")?.preview_data_url
-        || !!getRecordTransport(this.resultCard?.record, "after_img")?.preview_data_url;
-    },
-    hasJsonMode() {
-      return this.availableModes.includes("json");
-    },
-    availableModes() {
-      return availableDisplayModes(this.resultCard?.record, ["before_img", "after_img"]);
-    },
-    currentModeLabel() {
-      return modeLabel(this.displayMode);
-    },
-    currentModeTagType() {
-      if (this.displayMode === "json") {
-        return "success";
-      }
-      if (this.displayMode === "base64") {
-        return "warning";
-      }
-      return "info";
-    },
-    modeAvailabilityText() {
-      return `当前结果可用链路：${this.availableModes.map((mode) => modeLabel(mode)).join(" / ")}`;
-    },
     movingDisplaySrc() {
       if (!this.resultCard?.record) {
         return this.resultCard?.moving_preview_url || "";
       }
-      if (this.displayMode === "base64") {
-        return resolveRecordSource(this.resultCard.record, "before_img", "base64") || this.resultCard.moving_preview_url;
-      }
-      return resolveRecordSource(this.resultCard.record, "before_img", "original") || this.resultCard.moving_preview_url;
+      return resolveRecordSource(this.resultCard.record, "before_img") || this.resultCard.moving_preview_url;
     },
     outputDisplaySrc() {
       if (!this.resultCard?.record) {
         return this.resultCard?.output_full_url || "";
       }
-      if (this.displayMode === "base64") {
-        return resolveRecordSource(this.resultCard.record, "after_img", "base64") || this.resultCard.output_full_url;
-      }
-      return resolveRecordSource(this.resultCard.record, "after_img", "original") || this.resultCard.output_full_url;
-    },
-    jsonBaseSrc() {
-      return resolveJsonBaseSource(this.resultCard?.record, this.displayMode === "original" ? "original" : "base64") || this.movingDisplaySrc;
+      return resolveRecordSource(this.resultCard.record, "after_img") || this.resultCard.output_full_url;
     },
     registrationMetricCards() {
       if (!this.registrationAnalysis) {
@@ -502,9 +437,6 @@ export default {
     revokeObjectUrl(this.movingPreviewUrl);
   },
   methods: {
-    syncDisplayMode() {
-      this.displayMode = normalizeDisplayMode(this.displayMode, this.availableModes);
-    },
     async fetchModels() {
       try {
         const res = await getCustomModel("object_detection");
@@ -723,10 +655,7 @@ export default {
       return items[0];
     },
     async findLatestDetectionRecord(uploadedSrc) {
-      const response = await historyGetPage(1, 20, "目标检测");
-      const items = response.data.data || [];
-      const matched = items.find((item) => item.before_img === uploadedSrc && item.after_img);
-      return matched || items.find((item) => item.after_img) || null;
+      return null;
     },
     async startDemo() {
       if (!this.movingFileList.length) {

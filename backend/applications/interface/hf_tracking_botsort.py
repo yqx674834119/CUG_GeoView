@@ -67,8 +67,8 @@ def parse_args():
                         default=1280,
                         help="Inference image size")
     parser.add_argument("--device",
-                        default="auto",
-                        help="auto, cpu, cuda:0 or GPU index")
+                        default="cuda:0",
+                        help="cuda:0 or GPU index")
     parser.add_argument("--allowed_labels",
                         default="",
                         help="Optional comma separated label whitelist")
@@ -79,7 +79,11 @@ def resolve_device(device: str):
     import torch
 
     if device == "auto":
-        return 0 if torch.cuda.is_available() else "cpu"
+        device = "cuda:0"
+    if str(device).lower() == "cpu":
+        raise RuntimeError("GPU-only inference requires CUDA device, got cpu")
+    if str(device).startswith("cuda") and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing CPU inference")
     return device
 
 

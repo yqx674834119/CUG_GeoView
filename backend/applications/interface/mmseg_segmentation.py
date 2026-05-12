@@ -180,6 +180,13 @@ def run_inference(
     from mmseg.apis import init_model, inference_model
     
     # 初始化模型
+    if str(device).startswith("cuda"):
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA requested but not available; refusing CPU inference")
+        except Exception:
+            raise RuntimeError("CUDA requested but unavailable; refusing CPU inference")
     print(f"[MMSeg] Loading model from {checkpoint_file}", file=sys.stderr)
     model = init_model(config_file, checkpoint_file, device=device)
     print(f"[MMSeg] Model loaded successfully", file=sys.stderr)

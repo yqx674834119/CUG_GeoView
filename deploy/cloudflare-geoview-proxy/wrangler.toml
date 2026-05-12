@@ -1,0 +1,8 @@
+name = "cuggeoview"
+main = "src/worker.js"
+compatibility_date = "2026-05-11"
+workers_dev = true
+
+[vars]
+PUBLIC_PREFIX = "/CUGGeoView"
+ORIGIN_BASE = "https://livablecitylab.hkust-gz.edu.cn/Geoview"

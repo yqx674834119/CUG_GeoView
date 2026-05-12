@@ -1,16 +1,17 @@
 from pathlib import Path
 
-from fastapi import APIRouter
+from flask import Blueprint
 
 from applications.common.model_assets import (
     MODEL_ROOT,
+    load_paddle_model_info,
     load_model_manifest,
     resolve_repo_path,
     to_public_model_path,
 )
 from applications.common.utils.http import fail_api, success_api
 
-model_api = APIRouter(prefix="/api/model", tags=["model"])
+model_api = Blueprint("model_api", __name__, url_prefix="/api/model")
 
 MODEL_TYPES = {
     "change_detection": "change_detector",
@@ -78,9 +79,7 @@ def build_manifest_entry(model_dir: Path, expected_type: str):
 
 def build_paddle_entry(model_dir: Path, expected_type: str):
     try:
-        from applications.interface.utils import get_model_info
-
-        model_info = get_model_info(str(model_dir))
+        model_info = load_paddle_model_info(model_dir)
     except Exception:
         return None
     if model_info["_Attributes"]["model_type"] != expected_type:
@@ -109,14 +108,14 @@ def get_directory_models(model_type: str, expected_type: str):
     return model_list
 
 
-@model_api.get("/list/{model_type}")
+@model_api.route("/list/<model_type>", methods=["GET"])
 def get_model_list(model_type: str):
     if model_type not in MODEL_TYPES:
         return fail_api("模型类型不正确")
     return success_api(data=get_directory_models(model_type, MODEL_TYPES[model_type]))
 
 
-@model_api.get("/huggingface/list")
+@model_api.route("/huggingface/list", methods=["GET"])
 def get_huggingface_model_list():
     grouped = {}
     for model_type, expected_type in MODEL_TYPES.items():

@@ -13,13 +13,15 @@ def paddle_use_gpu():
         import paddle
 
         if not paddle.device.is_compiled_with_cuda():
-            return False
+            raise RuntimeError("Paddle 当前环境未编译 CUDA，拒绝使用 CPU 推理")
         if paddle.device.cuda.device_count() <= 0:
-            return False
+            raise RuntimeError("Paddle 当前环境未检测到 GPU，拒绝使用 CPU 推理")
         visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
-        return visible_devices is None or str(visible_devices).strip() != ""
+        if visible_devices is not None and str(visible_devices).strip() == "":
+            raise RuntimeError("CUDA_VISIBLE_DEVICES 为空，拒绝使用 CPU 推理")
+        return True
     except Exception:
-        return False
+        raise
 
 def get_model_info(model_dir):
     model_dir = str(resolve_model_dir(model_dir))

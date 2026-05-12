@@ -38,14 +38,6 @@ function goOnlineMap() {
         this.$message.success('您已经在该界面了哦')
     } else this.$router.push("onlinemap");
 }
-function goHistory() {
-    if (this.$route.path === "/history") { this.$message.success('您已经在该界面了哦') }
-    else
-        this.$router.push({
-            name: "history",
-
-        });
-}
 function goRegistration() {
     this.isNavigator = false;
     if (this.$route.path === "/registration") {
@@ -60,4 +52,4 @@ function goTracking() {
     } else this.$router.push("tracking");
 }
 
-export { goDetectChanges, goDetectObjects, goSegmentation, goClassification, goRestoreImgs, goOnlineMap, goHistory, goRegistration, goTracking }
+export { goDetectChanges, goDetectObjects, goSegmentation, goClassification, goRestoreImgs, goOnlineMap, goRegistration, goTracking }

@@ -1,0 +1,1114 @@
+{
+  "generated_at": "2026-05-10T23:36:26",
+  "gpu_environment": {
+    "nvidia_smi": {
+      "ok": true,
+      "returncode": 0,
+      "stdout": "Sun May 10 23:35:52 2026       \n+-----------------------------------------------------------------------------------------+\n| NVIDIA-SMI 550.54.10              Driver Version: 551.61         CUDA Version: 12.4     |\n|-----------------------------------------+------------------------+----------------------+\n| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |\n| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |\n|                                         |                        |               MIG M. |\n|=========================================+========================+======================|\n|   0  NVIDIA RTX A4500               On  |   00000000:AC:00.0 Off |                  Off |\n| 30%   35C    P8             17W /  200W |    2458MiB /  20470MiB |      9%      Default |\n|                                         |                        |                  N/A |\n+-----------------------------------------+------------------------+----------------------+\n                                                                                         \n+-----------------------------------------------------------------------------------------+\n| Processes:                                                                              |\n|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |\n|        ID   ID                                                               Usage      |\n|=========================================================================================|\n|    0   N/A  N/A        27      G   /Xwayland                                   N/A      |\n|    0   N/A  N/A        29      G   /Xwayland                                   N/A      |\n|    0   N/A  N/A        35      G   /Xwayland                                   N/A      |\n|    0   N/A  N/A     10909      G   /cc-switch                                  N/A      |\n|    0   N/A  N/A     10988      G   /WebKitWebProces                            N/A      |\n+-----------------------------------------------------------------------------------------+",
+      "stderr": ""
+    },
+    "torch": {
+      "error": "No module named 'torch'"
+    },
+    "paddle": {
+      "version": "2.4.2",
+      "cuda_compiled": true,
+      "device_count": 1
+    }
+  },
+  "testdata_root": "/app/TestData",
+  "cases": [
+    {
+      "name": "/health",
+      "path": "/health",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.0,
+      "summary": {
+        "status": "ok",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "/api/system/ping",
+      "path": "/api/system/ping",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.0,
+      "summary": {
+        "code": 0,
+        "data": {
+          "status": "ok"
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:change_detection",
+      "path": "/api/model/list/change_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.04,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 1,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:object_detection",
+      "path": "/api/model/list/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.05,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 5,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:semantic_segmentation",
+      "path": "/api/model/list/semantic_segmentation",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.05,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 2,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:classification",
+      "path": "/api/model/list/classification",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.03,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 1,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:image_restoration",
+      "path": "/api/model/list/image_restoration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.03,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 2,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:registration",
+      "path": "/api/model/list/registration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.02,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 3,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "model_list:tracking",
+      "path": "/api/model/list/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.08,
+      "summary": {
+        "code": 0,
+        "data": {
+          "count": 5,
+          "sample": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": []
+    },
+    {
+      "name": "change_detection:backend/model/change_detection/bit_256x256",
+      "path": "/api/analysis/change_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 133.08,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/4d373d1a54e276acfa18207c033b4e1b_e059a18e-166e-4615-b367-2668928a80e7.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2493434,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/7b4f1a38-a028-4a2d-9b6d-c7809f5215ee.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2054856,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/4d373d1a54e276acfa18207c033b4e1b_e059a18e-166e-4615-b367-2668928a80e7.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 4077,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/4d373d1a54e276acfa18207c033b4e1b_e059a18e-166e-4615-b367-2668928a80e7_mask.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 9963,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/hole/707f3127725cb026303b58dcccfe39e9.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 6342,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/hole/707f3127725cb026303b58dcccfe39e9_mask.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 9933,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "object_detection:backend/model/object_detection/paddle_yolo",
+      "path": "/api/analysis/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 5.52,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/1bf0ec36ba378f1cc082f2021bf6cf0d_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 125383,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/2595a6874b16047fcb32600f7e160934.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 59830,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "object_detection:backend/model/object_detection/hf_conditional_detr_resnet50",
+      "path": "/api/analysis/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 89.63,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/44e6a85a0ac821b46b8bb4e77de11cbd_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 125383,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/44e6a85a0ac821b46b8bb4e77de11cbd_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 51955,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "object_detection:backend/model/object_detection/hf_detr_resnet50",
+      "path": "/api/analysis/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 21.17,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/cfe60754fc42dbb668a4a44566fed0d2_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 125383,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/cfe60754fc42dbb668a4a44566fed0d2_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 54098,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "object_detection:backend/model/object_detection/hf_waldo30",
+      "path": "/api/analysis/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 16.21,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/30b559f9a7ed67d769de4cc5290b4419_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 125383,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/30b559f9a7ed67d769de4cc5290b4419_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 48980,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "object_detection:backend/model/object_detection/mmrotate_oriented_rcnn_r50_fpn_1x_dota_le90",
+      "path": "/api/analysis/object_detection",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 86.08,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/6f2f365a01b1942d99e335935bd142f7_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 125383,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/det_6f2f365a01b1942d99e335935bd142f7_1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 140831,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "semantic_segmentation:backend/model/semantic_segmentation/paddle_deeplabv3p",
+      "path": "/api/analysis/semantic_segmentation",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 2.47,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/9d4ab1d4ff63c1ba41c7f8b00a97c9d3_5b5f50a2-936a-470d-af84-65073d960c58.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 97042,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/be5978e1f952baaa6f0f0b8b57c7b729.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 5185,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/mask_be5978e1f952baaa6f0f0b8b57c7b729.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 1589,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "semantic_segmentation:backend/model/semantic_segmentation/mmseg_cugrs",
+      "path": "/api/analysis/semantic_segmentation",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 244.37,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/afb252dd096038f377d2d573fb348acd_5b5f50a2-936a-470d-af84-65073d960c58.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 97042,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/mask_afb252dd096038f377d2d573fb348acd_5b5f50a2-936a-470d-af84-65073d960c58.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 5098,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/pred_afb252dd096038f377d2d573fb348acd_5b5f50a2-936a-470d-af84-65073d960c58.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 300562,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "classification:backend/model/classification/resnet50",
+      "path": "/api/analysis/classification",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 2.52,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/1c621971-d43d-43fa-b143-56c5b7f10212.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 208387,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "image_restoration:backend/model/image_restoration/hf_swin2sr_x2",
+      "path": "/api/analysis/image_restoration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 61.28,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2309269,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 7704352,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "image_restoration:backend/model/image_restoration/hf_swin2sr_x4",
+      "path": "/api/analysis/image_restoration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 45.68,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {}
+            }
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2309269,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 21951844,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "registration:backend/model/registration/auto",
+      "path": "/api/analysis/registration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 31.18,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {
+                "method_used": "kornia_loftr_external"
+              }
+            }
+          },
+          "summary": {}
+        },
+        "msg": "配准完成，共 1/1 对成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/0faee095-427b-4869-a67a-96c8d2e859ef.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 7704246,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2309269,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/085c5556d6fc0e2edf7a18723c0e290e.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2509425,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/28b1155a38f2ecc6884706109bc61f89.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2502661,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/65061c22f71ce31ecfac53b6072d1f67.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2447667,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "registration:backend/model/registration/loftr_outdoor",
+      "path": "/api/analysis/registration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 11.41,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {
+                "method_used": "kornia_loftr_external"
+              }
+            }
+          },
+          "summary": {}
+        },
+        "msg": "配准完成，共 1/1 对成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/0faee095-427b-4869-a67a-96c8d2e859ef.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 7704246,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2309269,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/43867a991994403f1cea2d45a4d477b5.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2447667,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/af51caaea00d6272b9b61bc15192cce8.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2509425,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/b791e6717195ed7e449d03ef802652a8.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2502661,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "registration:backend/model/registration/opencv",
+      "path": "/api/analysis/registration",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 1.88,
+      "summary": {
+        "code": 0,
+        "data": {
+          "records": {
+            "count": 1,
+            "sample": {
+              "data": {
+                "method_used": "opencv_akaze"
+              }
+            }
+          },
+          "summary": {}
+        },
+        "msg": "配准完成，共 1/1 对成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/0faee095-427b-4869-a67a-96c8d2e859ef.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 7704246,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2309269,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/6f2d1fa7ad17451c7d2323469840bda8.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2491712,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/b6dd3b236e212cffd9d96a6ca3ccbe22.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2506946,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/c700a9e79b629f2eac6a52cb8cd0bd8c.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 2519234,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "tracking:backend/model/tracking/auto",
+      "path": "/api/analysis/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 9.67,
+      "summary": {
+        "code": 0,
+        "data": {
+          "method_used": "opencv_csrt",
+          "record": {
+            "data": {
+              "method_used": "opencv_csrt",
+              "runtime_variant": null,
+              "summary": {
+                "method_used": "opencv_csrt"
+              }
+            }
+          },
+          "status": "success",
+          "summary": {
+            "method_used": "opencv_csrt"
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 184041,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/2a0d1fa5912af51f08641e03e877ccf3_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_preview.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 382220,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/61113e09ede82560d361762cfda65aad_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_trajectory.json",
+          "status": 200,
+          "content_type": "application/json",
+          "bytes": 1830,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/f7c01a8e5f9f0118513ba4e447249896_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_sequence.mp4",
+          "status": 200,
+          "content_type": "video/mp4",
+          "bytes": 163524,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "tracking:backend/model/tracking/botsort",
+      "path": "/api/analysis/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 21.1,
+      "summary": {
+        "code": 0,
+        "data": {
+          "method_used": "ultralytics_botsort",
+          "record": {
+            "data": {
+              "method_used": "ultralytics_botsort",
+              "runtime_variant": "engineering",
+              "summary": {}
+            }
+          },
+          "runtime_variant": "engineering",
+          "status": "success",
+          "summary": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 184041,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/2e5507bb4d991adab3b3b99dddeaa9f0.jpg_botsort_trajectory",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 3300,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/2f03d4eb1bb7a69a0e2e73cb91ce37d8.jpg_botsort_preview",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 561879,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/4b1d704f7263abdae4f9f41957f2d98e.jpg_botsort_sequence",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 38008,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "tracking:backend/model/tracking/botsort_official",
+      "path": "/api/analysis/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 128.8,
+      "summary": {
+        "code": 0,
+        "data": {
+          "method_used": "botsort_official_reid",
+          "record": {
+            "data": {
+              "method_used": "botsort_official_reid",
+              "runtime_variant": "official",
+              "summary": {}
+            }
+          },
+          "runtime_variant": "official",
+          "status": "success",
+          "summary": {}
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 184041,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/1fb81efca45ceedfba6ab44b40536bc4.jpg_botsort_official_preview",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 596564,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/62757fce79dea699962b399d94a3cabe.jpg_botsort_official_trajectory",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 27882,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/67b4baedc2f6b8d2ca116c45c106d1cc.jpg_botsort_official_sequence",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 40550,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/d84ac3e2b0168d0f58eaad97aa282994.jpg_botsort_official_tracks",
+          "status": 200,
+          "content_type": "application/octet-stream",
+          "bytes": 5997,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "tracking:backend/model/tracking/csrt",
+      "path": "/api/analysis/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.65,
+      "summary": {
+        "code": 0,
+        "data": {
+          "method_used": "opencv_csrt",
+          "record": {
+            "data": {
+              "method_used": "opencv_csrt",
+              "runtime_variant": null,
+              "summary": {
+                "method_used": "opencv_csrt"
+              }
+            }
+          },
+          "status": "success",
+          "summary": {
+            "method_used": "opencv_csrt"
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 184041,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/448c35d90e967e4c1314c4bfa75c73a4_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_preview.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 382220,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/6bcb833f6d0b9569d6c38725b5ce581f_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_sequence.mp4",
+          "status": 200,
+          "content_type": "video/mp4",
+          "bytes": 163524,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/7460c80eee276be6c48aa525b4cafbde_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_trajectory.json",
+          "status": 200,
+          "content_type": "application/json",
+          "bytes": 1830,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "tracking:backend/model/tracking/kcf",
+      "path": "/api/analysis/tracking",
+      "status": "passed",
+      "http_status": 200,
+      "duration_sec": 0.66,
+      "summary": {
+        "code": 0,
+        "data": {
+          "method_used": "opencv_kcf",
+          "record": {
+            "data": {
+              "method_used": "opencv_kcf",
+              "runtime_variant": null,
+              "summary": {
+                "method_used": "opencv_kcf"
+              }
+            }
+          },
+          "status": "success",
+          "summary": {
+            "method_used": "opencv_kcf"
+          }
+        },
+        "msg": "成功",
+        "success": true
+      },
+      "asset_checks": [
+        {
+          "path": "/api/file/assets/photos/5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg",
+          "status": 200,
+          "content_type": "image/jpeg",
+          "bytes": 184041,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/5045e747180e353842a6ea5be1e4390f_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_preview.png",
+          "status": 200,
+          "content_type": "image/png",
+          "bytes": 382220,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/6db6abaf09cbcec4be19a6212bc60436_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_trajectory.json",
+          "status": 200,
+          "content_type": "application/json",
+          "bytes": 1826,
+          "ok": true
+        },
+        {
+          "path": "/api/file/assets/photos/res/f4fbcc3435da9d7b748b11794e982328_tracking_5bc142a9-96e3-4304-a9f1-e8943132b19a.jpg_sequence.mp4",
+          "status": 200,
+          "content_type": "video/mp4",
+          "bytes": 163524,
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "upload_assets": {
+    "aircraft": {
+      "filename": "aircraft_4.jpg",
+      "photo_id": 2,
+      "src": "/api/file/assets/photos/1c621971-d43d-43fa-b143-56c5b7f10212.jpg"
+    },
+    "seg": {
+      "filename": "aircraft_4.jpg",
+      "photo_id": 3,
+      "src": "/api/file/assets/photos/5b5f50a2-936a-470d-af84-65073d960c58.jpg"
+    },
+    "cd_a": {
+      "filename": "val_1.png",
+      "photo_id": 4,
+      "src": "/api/file/assets/photos/e059a18e-166e-4615-b367-2668928a80e7.png"
+    },
+    "cd_b": {
+      "filename": "val_1.png",
+      "photo_id": 5,
+      "src": "/api/file/assets/photos/7b4f1a38-a028-4a2d-9b6d-c7809f5215ee.png"
+    },
+    "val": {
+      "filename": "val_1.png",
+      "photo_id": 6,
+      "src": "/api/file/assets/photos/9f99c799-d249-4981-97df-5d18aed2e151.png"
+    },
+    "val_2x": {
+      "filename": "val_1_2X.png",
+      "photo_id": 7,
+      "src": "/api/file/assets/photos/0faee095-427b-4869-a67a-96c8d2e859ef.png"
+    },
+    "video": {
+      "filename": "official_mot17_02_frcnn_180frames_raw.mp4",
+      "photo_id": 8,
+      "src": "/api/file/assets/photos/dd0b4dba-c6bc-425a-bd1c-3b71c033cdd5.mp4"
+    }
+  },
+  "tracking_frame_count": 6,
+  "summary": {
+    "total": 28,
+    "passed": 28,
+    "failed": 0
+  }
+}

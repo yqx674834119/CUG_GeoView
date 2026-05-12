@@ -505,7 +505,7 @@ def _cleanup_tracking_input(bundle: TrackingInputBundle):
 
 def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
     if model_path in ("builtin:tracking:auto", None, ""):
-        return "auto"
+        return "botsort"
     if model_path == "builtin:tracking:botsort":
         return "botsort"
     if model_path == "builtin:tracking:botsort_engineering":
@@ -514,12 +514,16 @@ def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
         _ensure_official_botsort_enabled(None)
         return "botsort_official"
     if model_path == "builtin:tracking:csrt":
-        return "csrt"
+        raise TrackingError("CSRT CPU 跟踪已禁用；当前交付只允许 GPU BoT-SORT 跟踪")
     if model_path == "builtin:tracking:kcf":
-        return "kcf"
+        raise TrackingError("KCF CPU 跟踪已禁用；当前交付只允许 GPU BoT-SORT 跟踪")
     manifest = load_model_manifest(model_path)
     if manifest and manifest.get("backend") == "tracking":
         runtime = manifest.get("runtime", "auto")
+        if runtime == "auto":
+            return "botsort"
+        if runtime in {"csrt", "kcf"}:
+            raise TrackingError("CPU 跟踪模型已禁用；当前交付只允许 GPU BoT-SORT 跟踪")
         if runtime == "botsort_official":
             _ensure_official_botsort_enabled(manifest)
         return runtime

@@ -4,12 +4,12 @@ import time
 import uuid
 
 
-def _env_flag(name, default="true"):
+def _env_flag(name, default="false"):
     return str(os.getenv(name, default)).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def debug_enabled():
-    return _env_flag("GEOVIEW_DEBUG_LOG", "true")
+    return _env_flag("GEOVIEW_DEBUG_LOG", "false")
 
 
 def new_request_id():

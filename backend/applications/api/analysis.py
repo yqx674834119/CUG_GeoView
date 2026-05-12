@@ -1,11 +1,9 @@
 import json
 import time
 
-from fastapi import APIRouter, Body, Query
-from sqlalchemy import desc
+from flask import Blueprint, request
 
 from applications.common.debug_logging import compact_json_bytes, log_debug, summarize_value
-from applications.common.curd import model_to_dicts
 from applications.common.model_assets import infer_model_backend
 from applications.common.path_global import (
     fun_type_1,
@@ -16,16 +14,11 @@ from applications.common.path_global import (
     generate_dir,
     up_dir,
 )
-from applications.common.utils import type_utils
-from applications.common.utils.http import fail_api, success_api, table_api
+from applications.common.utils.http import fail_api, success_api
 from applications.common.utils.upload import img_url_handle
-from applications.common.visualization import normalize_analysis_record
-from applications.extensions import db
 from applications.image_processing import histogram_match
-from applications.models.analysis import Analysis
-from applications.schemas import AnalysisSchema
 
-analysis_api = APIRouter(prefix="/api/analysis", tags=["analysis"])
+analysis_api = Blueprint("analysis_api", __name__, url_prefix="/api/analysis")
 
 
 def _get_model_info(model_path):
@@ -58,14 +51,6 @@ def _analysis_functions():
     }
 
 
-def _paginate(query, page: int, limit: int):
-    page = max(page, 1)
-    limit = max(min(limit, 100), 1)
-    total = query.count()
-    items = query.offset((page - 1) * limit).limit(limit).all()
-    return total, items
-
-
 def _analysis_debug(route_name, req_json, **extra):
     payload_summary = {
         key: summarize_value(req_json.get(key))
@@ -92,21 +77,18 @@ def _analysis_done(route_name, started_at, **extra):
     )
 
 
-@analysis_api.get("/show/{type}")
-def show_result(type: str, page: int = Query(default=1), limit: int = Query(default=10)):
-    to_type = type_utils.str_to_type(type)
-    query = Analysis.query.filter_by(type=to_type).order_by(desc(Analysis.create_time))
-    count, items = _paginate(query, page, limit)
-    dicts = model_to_dicts(schema=AnalysisSchema, data=items)
-    dicts = [normalize_analysis_record(item) for item in dicts]
-    return table_api(data=dicts, count=count, limit=limit)
+def _request_json():
+    return request.get_json(silent=True) or {}
 
 
-@analysis_api.post("/change_detection")
-def change_detection_api(req_json: dict = Body(...)):
+@analysis_api.route("/change_detection", methods=["POST"])
+def change_detection_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("change_detection", req_json)
-    model_path = req_json["model_path"]
+    model_path = req_json.get("model_path")
+    if not model_path:
+        return fail_api("请指定模型路径")
     window_size = int(req_json.get("window_size", 256))
     stride = int(req_json.get("stride", 128))
     if window_size <= 0 or stride <= 0:
@@ -119,9 +101,9 @@ def change_detection_api(req_json: dict = Body(...)):
             return fail_api("模型类型不正确，请检查")
     except Exception:
         return fail_api("模型不存在，请检查")
-    list_ = req_json["list"]
-    step1_ = req_json["prehandle"]
-    step2_ = req_json["denoise"]
+    list_ = req_json.get("list")
+    step1_ = req_json.get("prehandle", 0)
+    step2_ = req_json.get("denoise", 0)
     if step1_ not in (0, fun_type_1, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
     if list_ is None:
@@ -135,11 +117,14 @@ def change_detection_api(req_json: dict = Body(...)):
     return success_api(data={"records": records})
 
 
-@analysis_api.post("/object_detection")
-def object_detection_api(req_json: dict = Body(...)):
+@analysis_api.route("/object_detection", methods=["POST"])
+def object_detection_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("object_detection", req_json)
-    model_path = req_json["model_path"]
+    model_path = req_json.get("model_path")
+    if not model_path:
+        return fail_api("请指定模型路径")
     model_backend = infer_model_backend(model_path)
     if model_backend is None:
         return fail_api("模型不存在，请检查")
@@ -150,9 +135,9 @@ def object_detection_api(req_json: dict = Body(...)):
                 return fail_api("模型类型不正确，请检查")
         except Exception:
             return fail_api("模型不存在，请检查")
-    list_ = req_json["list"]
-    step1_ = req_json["prehandle"]
-    step2_ = req_json["denoise"]
+    list_ = req_json.get("list")
+    step1_ = req_json.get("prehandle", 0)
+    step2_ = req_json.get("denoise", 0)
     if step1_ not in (0, fun_type_2, fun_type_4) or step2_ not in (0, fun_type_3, fun_type_5):
         return fail_api("参数异常")
     if list_ is None:
@@ -162,8 +147,9 @@ def object_detection_api(req_json: dict = Body(...)):
     return success_api(data={"records": records})
 
 
-@analysis_api.post("/semantic_segmentation")
-def semantic_segmentation_api(req_json: dict = Body(...)):
+@analysis_api.route("/semantic_segmentation", methods=["POST"])
+def semantic_segmentation_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("semantic_segmentation", req_json)
     model_path = req_json.get("model_path")
@@ -194,18 +180,21 @@ def semantic_segmentation_api(req_json: dict = Body(...)):
         return fail_api(f"推理失败: {str(exc)}")
 
 
-@analysis_api.post("/classification")
-def classification_api(req_json: dict = Body(...)):
+@analysis_api.route("/classification", methods=["POST"])
+def classification_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("classification", req_json)
-    model_path = req_json["model_path"]
+    model_path = req_json.get("model_path")
+    if not model_path:
+        return fail_api("请指定模型路径")
     try:
         model_info = _get_model_info(model_path)
         if model_info["_Attributes"]["model_type"] != "classifier":
             return fail_api("模型类型不正确，请检查")
     except Exception:
         return fail_api("模型不存在，请检查")
-    img_list = req_json["list"]
+    img_list = req_json.get("list")
     if img_list is None:
         return fail_api("请上传图片")
     records = _analysis_functions()["classification"](model_path, up_dir, img_list, 4)
@@ -213,8 +202,9 @@ def classification_api(req_json: dict = Body(...)):
     return success_api(data={"records": records})
 
 
-@analysis_api.post("/image_restoration")
-def image_restoration_api(req_json: dict = Body(...)):
+@analysis_api.route("/image_restoration", methods=["POST"])
+def image_restoration_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("image_restoration", req_json)
     model_path = req_json.get("model_path")
@@ -241,8 +231,9 @@ def image_restoration_api(req_json: dict = Body(...)):
         return fail_api(f"推理失败: {str(exc)}")
 
 
-@analysis_api.post("/registration")
-def registration_api(req_json: dict = Body(...)):
+@analysis_api.route("/registration", methods=["POST"])
+def registration_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("registration", req_json)
     list_ = req_json.get("list")
@@ -275,8 +266,9 @@ def registration_api(req_json: dict = Body(...)):
             pass
 
 
-@analysis_api.post("/tracking")
-def tracking_api(req_json: dict = Body(...)):
+@analysis_api.route("/tracking", methods=["POST"])
+def tracking_api():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("tracking", req_json)
     model_path = req_json.get("model_path", "backend/model/tracking/auto")
@@ -312,12 +304,13 @@ def tracking_api(req_json: dict = Body(...)):
         return fail_api(f"跟踪失败: {str(exc)}")
 
 
-@analysis_api.post("/histogram_match")
-def pre_handle(req_json: dict = Body(...)):
+@analysis_api.route("/histogram_match", methods=["POST"])
+def pre_handle():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("histogram_match", req_json)
-    list_ = req_json["list"]
-    step1_ = req_json["prehandle"]
+    list_ = req_json.get("list")
+    step1_ = req_json.get("prehandle")
     if list_ is None:
         return fail_api("请上传图片")
     if step1_ not in (1, 4):
@@ -339,13 +332,14 @@ def pre_handle(req_json: dict = Body(...)):
     return success_api(data=match)
 
 
-@analysis_api.post("/image_pre")
-def image_pre(req_json: dict = Body(...)):
+@analysis_api.route("/image_pre", methods=["POST"])
+def image_pre():
+    req_json = _request_json()
     started_at = time.time()
     _analysis_debug("image_pre", req_json)
-    list_ = req_json["list"]
-    step1_ = req_json["prehandle"]
-    type_ = req_json["type"]
+    list_ = req_json.get("list")
+    step1_ = req_json.get("prehandle")
+    type_ = req_json.get("type")
     if list_ is None:
         return fail_api("请上传图片")
     if step1_ not in (2, 4):
@@ -357,7 +351,7 @@ def image_pre(req_json: dict = Body(...)):
                 return fail_api("请求参数异常")
         for pair in list_:
             temps = [img_url_handle(pair["first"]), img_url_handle(pair["second"])]
-            imgs1 = handle(fun_type_4, temps, up_dir, generate_dir)
+            imgs1 = _analysis_functions()["handle"](fun_type_4, temps, up_dir, generate_dir)
             imgs.append({"first": pair["first"], "first1": imgs1[0], "second": pair["second"], "second1": imgs1[1]})
     else:
         temps = [img_url_handle(pair) for pair in list_]

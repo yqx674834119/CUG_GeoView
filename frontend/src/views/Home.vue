@@ -20,6 +20,7 @@
               <i class="icon-menu" />
             </button>
             <Tablogin />
+            <BaseUrlControl />
           </div>
         </el-header>
         <router-view v-slot="{ Component }">
@@ -45,12 +46,14 @@
 import "@/assets/css/app.css";
 import AsideVue from "@/components/AsideVue";
 import Tablogin from "@/components/Tablogin";
+import BaseUrlControl from "@/components/BaseUrlControl.vue";
 
 export default {
   name: "Home",
   components: {
     AsideVue,
     Tablogin,
+    BaseUrlControl,
   },
   data() {
     return {
@@ -113,6 +116,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 16px;
+  width: 100%;
   min-height: 72px;
 }
 
@@ -143,6 +147,8 @@ export default {
 
   .platform-header__inner {
     gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 0;
   }
 }
 </style>

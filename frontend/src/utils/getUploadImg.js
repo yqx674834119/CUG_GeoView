@@ -1,30 +1,28 @@
-import { historyGetPage } from "@/api/history"
 import { showFullScreenLoading } from "@/utils/loading";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
-import { hydrateAssetPreviews } from "@/utils/assetPreview";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
 import { buildUploadFormData } from "@/utils/uploadFormData";
 
-function getUploadImg(type) {
-  historyGetPage(1, 20, type).then((res) => {
-    this.imgArr = res.data.data
-    this.imgArr.forEach((item) => {
-      item.before_img_url = toBackendAssetUrl(item.before_img);
-      item.after_img_url = toBackendAssetUrl(item.after_img);
-    });
-    hydrateAssetPreviews(this.imgArr, ["before_img", "after_img"], 420);
-    this.isUpload = this.imgArr.length !== 0;
-  }).catch((rej) => { })
+function getUploadImg() {
+  this.imgArr = [];
+  this.isUpload = false;
 }
 
-function goCompress(type, num) {
-  this.historyGetPage(1, num, type).then((res) => {
-    this.atchDownload(
-      res.data.data.map((item) => {
-        return { after_img: item.after_img, id: item.id };
-      })
-    );
-  }).catch((rej) => { });
+function goCompress() {
+  this.$message.info("暂无批量下载");
+}
+
+function extractAnalysisRecords(response) {
+  const records = response?.data?.data?.records;
+  return Array.isArray(records) ? records : [];
+}
+
+function setAnalysisRecords(vm, response) {
+  const records = extractAnalysisRecords(response);
+  if (records.length) {
+    vm.imgArr = records;
+    vm.isUpload = true;
+  }
+  return records;
 }
 
 function upload(type, funUrl) {
@@ -43,9 +41,9 @@ function upload(type, funUrl) {
         return item.src;
       });
       this.imgUpload(this.uploadSrc, funUrl).then((res) => {
+        setAnalysisRecords(this, res);
         this.fileList = []
         this.$message.success("上传成功！");
-        this.getMore()
       }).catch(() => { })
       if (this.uploadSrc.list.length >= 10 && type !== '场景分类') {
         this.$confirm("上传图片过多，是否压缩?", "提示", {
@@ -66,4 +64,4 @@ function upload(type, funUrl) {
 }
 
 
-export { getUploadImg, goCompress, upload }
+export { extractAnalysisRecords, getUploadImg, goCompress, setAnalysisRecords, upload }

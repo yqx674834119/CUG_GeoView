@@ -86,9 +86,8 @@ import {
   createSrc,
   imgUpload
 } from "@/api/upload";
-import { upload, goCompress } from "@/utils/getUploadImg";
+import { upload, goCompress, extractAnalysisRecords } from "@/utils/getUploadImg";
 import { getImgArrayBuffer, atchDownload } from "@/utils/download";
-import { historyGetPage } from "@/api/history";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
 
 export default {
@@ -179,7 +178,6 @@ export default {
     goCompress,
     getImgArrayBuffer,
     atchDownload,
-    historyGetPage,
     submitUpload(funtype) {
       this.finish(funtype);
     },
@@ -197,9 +195,10 @@ export default {
     },
     //上传图片（点击上传按钮）
     finish(funtype, cutVisible) {
-      // 输出
-      this.$refs.cropper.getCropData((data) => {
-        const File = this.base64toFile(data, this.file.name);
+      this.$refs.cropper.getCropBlob((blob) => {
+        const File = new File([blob], this.file.name || "crop.png", {
+          type: blob.type || "image/png",
+        });
         let formData = new FormData();
         formData.append("files", File);
         formData.append("type", funtype);
@@ -213,13 +212,13 @@ export default {
             this.imgUpload(this.uploadSrc,'semantic_segmentation').then((res) => {
               this.fileList = [];
               this.$message.success("上传成功！");
-              this.$emit('child-refresh')
+              this.$emit('child-refresh', extractAnalysisRecords(res))
             }).catch((rej)=>{})
           } else if (funtype === "目标检测") {
             this.imgUpload(this.uploadSrc,'object_detection').then((res) => {
               this.fileList = [];
               this.$message.success("上传成功！");
-              this.$emit('child-refresh')
+              this.$emit('child-refresh', extractAnalysisRecords(res))
             }).catch((rej)=>{})
           }
           else if (funtype === "场景分类") {
@@ -228,34 +227,20 @@ export default {
             this.imgUpload(this.uploadSrc,'classification').then((res) => {
               this.fileList = [];
               this.$message.success("上传成功！");
-              this.$emit('child-refresh')
+              this.$emit('child-refresh', extractAnalysisRecords(res))
             }).catch((rej)=>{})
           }
-          else if(funtype === "图像复原"){
+          else if(funtype === "图像复原" || funtype === "影像超分重建"){
             delete this.uploadSrc.prehandle
             delete this.uploadSrc.denoise
-            this.imgUpload(this.uploadSrc).then((res) => {
+            this.imgUpload(this.uploadSrc, 'image_restoration').then((res) => {
               this.fileList = [];
               this.$message.success("上传成功！");
-              this.$emit('child-refresh')
+              this.$emit('child-refresh', extractAnalysisRecords(res))
             }).catch((rej)=>{})
           }
           this.$emit("cut-changed", false);
         }).catch((rej)=>{})
-      });
-    },
-    base64toFile(dataurl, filename) {
-      let arr = dataurl.split(",");
-      let mime = arr[0].match(/:(.*?);/)[1];
-      let suffix = mime.split("/")[1];
-      let bstr = atob(arr[1]);
-      let n = bstr.length;
-      let u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      return new File([u8arr], `${filename}.${suffix}`, {
-        type: mime,
       });
     },
   },

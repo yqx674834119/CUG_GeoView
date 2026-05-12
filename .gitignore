@@ -7,6 +7,8 @@ backend/model/**/*.pdiparams
 offline_package
 dist/*
 frontend/node_modules/*
+deploy/cloudflare-geoview-proxy/node_modules/
+.wrangler-config/
 frontend/dist/*
 frontend/build/*
 deploy/frontend/dist/*.tar.gz

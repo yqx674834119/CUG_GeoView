@@ -54,7 +54,7 @@ def check_environment():
             for i in range(torch.cuda.device_count()):
                 log(f"GPU {i}: {torch.cuda.get_device_name(i)}")
         else:
-            log("WARNING: CUDA not available, will use CPU", level="WARN")
+            log("CUDA not available; GPU-only inference will fail", level="ERROR")
     except Exception as e:
         log(f"Error checking PyTorch: {e}", level="ERROR")
     
@@ -171,7 +171,7 @@ def main():
     parser.add_argument("--file_names", type=str, required=True,
                         help="Comma-separated list of file names to process")
     parser.add_argument("--device", type=str, default="cuda",
-                        help="Device to use: 'cuda' or 'cpu' (default: cuda)")
+                        help="Device to use: 'cuda' (GPU-only)")
     args = parser.parse_args()
     
     log("=== HuggingFace Super-Resolution Script Started ===")
@@ -185,21 +185,13 @@ def main():
     # 确定设备
     import torch
     if args.device == "auto":
-        # 自动选择：如果CUDA可用则使用CUDA，否则使用CPU
-        if torch.cuda.is_available():
-            device = "cuda"
-            log("Auto-selecting device: CUDA is available, using CUDA")
-        else:
-            device = "cpu"
-            log("Auto-selecting device: CUDA not available, using CPU")
-    elif args.device == "cuda":
-        if not torch.cuda.is_available():
-            log("CUDA requested but not available, falling back to CPU", level="WARN")
-            device = "cpu"
-        else:
-            device = "cuda"
+        device = "cuda"
     else:
         device = args.device
+    if not str(device).startswith("cuda"):
+        raise RuntimeError(f"GPU-only inference requires CUDA device, got {device}")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available; refusing CPU inference")
     
     log(f"Using device: {device}")
     

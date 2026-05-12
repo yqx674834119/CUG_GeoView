@@ -146,12 +146,8 @@ def register_pair(fixed_path: str, moving_path: str, out_dir: str,
             if request_mode == "loftr" and not candidates:
                 raise
 
-    if request_mode in ("auto", "opencv"):
-        opencv_candidate = _match_with_opencv(fixed_match_gray, moving_match_gray)
-        if opencv_candidate is not None:
-            candidates.append(opencv_candidate)
-        elif request_mode == "opencv":
-            failures.append("OpenCV 特征匹配未能估计有效变换")
+    if request_mode == "opencv":
+        raise RegistrationError("OpenCV CPU 配准已禁用；当前交付只允许 GPU LoFTR 配准")
 
     if not candidates:
         detail = "；".join(failures) if failures else "未找到足够稳定的匹配点"
@@ -324,7 +320,9 @@ def _match_with_loftr(fixed_gray: np.ndarray,
     if not HAS_KORNIA:
         raise RegistrationError("当前环境未安装 Kornia/Torch")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if not torch.cuda.is_available():
+        raise RegistrationError("LoFTR 需要 CUDA，当前环境未检测到 GPU，拒绝 CPU 推理")
+    device = "cuda"
     matcher = _get_loftr_matcher(device)
 
     fixed_tensor = torch.from_numpy(fixed_gray).float().unsqueeze(0).unsqueeze(0)

@@ -188,7 +188,6 @@
 </template>
 <script>
 import {createSrc,imgUpload,getCustomModel} from "@/api/upload";
-import {historyGetPage} from "@/api/history";
 import {getUploadImg, goCompress, upload} from "@/utils/getUploadImg";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
@@ -246,7 +245,6 @@ export default {
   methods: {
     imgUpload,
     getCustomModel,
-    historyGetPage,
     createSrc,
     getUploadImg,
     upload,
@@ -259,7 +257,12 @@ export default {
       this.cutVisible = false;
       this.fileList = [];
     },
-    getMore() {
+    getMore(records) {
+      if (Array.isArray(records) && records.length) {
+        this.imgArr = records;
+        this.isUpload = true;
+        return;
+      }
       this.getUploadImg("影像超分重建");
     },
     uploadMore() {

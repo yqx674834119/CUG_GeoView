@@ -125,6 +125,14 @@ def run_inference(
         ) from exc
 
     import mmrotate  # noqa: F401
+    if str(device).startswith("cuda"):
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA requested but not available; refusing CPU inference")
+        except Exception:
+            raise RuntimeError("CUDA requested but unavailable; refusing CPU inference")
+
     from mmdet.apis import init_detector, inference_detector
     from mmrotate.visualization import RotLocalVisualizer
 
