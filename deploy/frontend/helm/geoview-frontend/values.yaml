@@ -7,7 +7,7 @@ frontend:
   replicaCount: 1
   image:
     repository: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend
-    tag: 20260511-acceptance
+    tag: 20260513-assetchunks
     pullPolicy: IfNotPresent
   runtimeConfig:
     backendUrl: "http://172.20.20.240:31839/186/5008"

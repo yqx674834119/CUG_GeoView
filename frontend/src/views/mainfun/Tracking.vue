@@ -470,7 +470,7 @@ import VChart from "vue-echarts";
 import Tabinfor from "@/components/Tabinfor";
 import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
 import global from "@/global.vue";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
 import { fetchJsonAsset, summarizeTrajectoryPayload } from "@/utils/frontAnalysis";
 import { getLocalSourceUrl, registerLocalSource, registerUploadedSources } from "@/utils/localSourceRegistry";
 
@@ -856,15 +856,16 @@ export default {
       this.videoPreviewErrors.input = false;
       this.videoPreviewPromise = (async () => {
         const formData = new FormData();
-        formData.append("file", fileItem.raw);
+        formData.append("files", fileItem.raw);
         formData.append("type", "目标跟踪");
         const response = await createVideoPreview(formData);
         if (ticket !== this.videoPreviewTicket) {
           return null;
         }
-        const data = response?.data?.data || null;
-        if (!data?.src || !data?.preview_video_path) {
-          throw new Error(response?.data?.msg || "视频预览生成失败");
+        const responseData = response?.data?.data || null;
+        const data = Array.isArray(responseData) ? responseData[0] : responseData;
+        if (!data?.src) {
+          throw new Error(response?.data?.msg || "视频上传失败");
         }
         registerLocalSource(data.src, fileItem.raw, {
           filename: data.filename,
@@ -874,7 +875,11 @@ export default {
           filename: data.filename,
           photo_id: data.photo_id,
         }];
-        this.remoteInputVideoUrl = this.prefixUrl(data.preview_video_path);
+        try {
+          this.remoteInputVideoUrl = await this.prefixUrl(data.preview_video_path || data.src);
+        } catch (error) {
+          this.remoteInputVideoUrl = this.firstFrame || "";
+        }
         this.videoPreviewErrors.input = false;
         return data;
       })().catch((error) => {
@@ -995,13 +1000,12 @@ export default {
         this.result = {
           ...data,
           record: data.record || null,
-          first_frame_full_url: this.prefixUrl(data.first_frame_input),
-          source_input_full_url: this.prefixUrl(data.source_input_path),
-          preview_full_url: this.prefixUrl(data.preview_path),
-          output_video_full_url: this.prefixUrl(data.output_video_path),
-          trajectory_full_url: this.prefixUrl(data.trajectory_path),
+          first_frame_full_url: await this.prefixUrl(data.first_frame_input),
+          source_input_full_url: await this.prefixUrl(data.source_input_path),
+          preview_full_url: await this.prefixUrl(data.preview_path),
+          output_video_full_url: await this.prefixUrl(data.output_video_path),
+          trajectory_full_url: await this.prefixUrl(data.trajectory_path),
         };
-        this.syncDisplayMode();
         await this.loadTrajectoryAnalysis(this.result.trajectory_full_url);
         this.$message.success(response.data.msg || "目标跟踪完成");
       } catch (error) {
@@ -1012,11 +1016,11 @@ export default {
         this.running = false;
       }
     },
-    prefixUrl(path) {
+    async prefixUrl(path) {
       if (!path) {
         return "";
       }
-      return toBackendAssetUrl(path);
+      return fetchBackendAssetBlobUrl(path);
     },
     downloadFile(url, filename) {
       const link = document.createElement("a");

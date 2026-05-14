@@ -4,6 +4,7 @@ from applications.api.model import model_api
 from applications.api.service import service_api
 from applications.api.system import system_api_blueprint
 from applications.api.task import task_api
+from applications.api.transport import transport_api
 
 
 def register_api(app):
@@ -14,6 +15,7 @@ def register_api(app):
     app.register_blueprint(service_api)
     app.register_blueprint(task_api)
     app.register_blueprint(system_api_blueprint)
+    app.register_blueprint(transport_api)
 
 
 def system_api(app):

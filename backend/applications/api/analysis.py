@@ -1,4 +1,3 @@
-import json
 import time
 
 from flask import Blueprint, request
@@ -14,6 +13,7 @@ from applications.common.path_global import (
     generate_dir,
     up_dir,
 )
+from applications.common.result_transport import create_result_manifest, normalize_chunk_size
 from applications.common.utils.http import fail_api, success_api
 from applications.common.utils.upload import img_url_handle
 from applications.image_processing import histogram_match
@@ -81,6 +81,23 @@ def _request_json():
     return request.get_json(silent=True) or {}
 
 
+def _transport_success(route_name, payload, msg="成功"):
+    chunk_size = normalize_chunk_size(request.headers.get("X-Geoview-Chunk-Size") or request.args.get("chunk_size"))
+    manifest = create_result_manifest(payload, route=route_name, chunk_size=chunk_size)
+    log_debug(
+        "模型推理",
+        "推理结果已写入分片传输缓存",
+        route=route_name,
+        result_id=manifest["result_id"],
+        raw_size=manifest["raw_size"],
+        compressed_size=manifest["compressed_size"],
+        encoded_size=manifest["encoded_size"],
+        chunk_size=manifest["chunk_size"],
+        chunk_count=manifest["chunk_count"],
+    )
+    return success_api(msg=msg, data={"transport_manifest": manifest})
+
+
 @analysis_api.route("/change_detection", methods=["POST"])
 def change_detection_api():
     req_json = _request_json()
@@ -114,7 +131,7 @@ def change_detection_api():
     log_debug("模型推理", "change_detection 参数校验通过，开始执行模型推理", model_path=model_path, list_count=len(list_))
     records = _analysis_functions()["change_detection"](model_path, up_dir, generate_dir, list_, step1_, step2_, 1, window_size, stride)
     _analysis_done("change_detection", started_at, record_count=len(records), model_path=model_path)
-    return success_api(data={"records": records})
+    return _transport_success("change_detection", {"records": records})
 
 
 @analysis_api.route("/object_detection", methods=["POST"])
@@ -144,7 +161,7 @@ def object_detection_api():
         return fail_api("请上传图片")
     records = _analysis_functions()["object_detection"](model_path, up_dir, generate_dir, list_, step1_, step2_, 2)
     _analysis_done("object_detection", started_at, record_count=len(records), model_path=model_path)
-    return success_api(data={"records": records})
+    return _transport_success("object_detection", {"records": records})
 
 
 @analysis_api.route("/semantic_segmentation", methods=["POST"])
@@ -175,7 +192,7 @@ def semantic_segmentation_api():
     try:
         records = _analysis_functions()["terrain_classification"](model_path, up_dir, generate_dir, list_, step1_, step2_, 3)
         _analysis_done("semantic_segmentation", started_at, record_count=len(records), model_path=model_path)
-        return success_api(data={"records": records})
+        return _transport_success("semantic_segmentation", {"records": records})
     except Exception as exc:
         return fail_api(f"推理失败: {str(exc)}")
 
@@ -199,7 +216,7 @@ def classification_api():
         return fail_api("请上传图片")
     records = _analysis_functions()["classification"](model_path, up_dir, img_list, 4)
     _analysis_done("classification", started_at, record_count=len(records), model_path=model_path)
-    return success_api(data={"records": records})
+    return _transport_success("classification", {"records": records})
 
 
 @analysis_api.route("/image_restoration", methods=["POST"])
@@ -226,7 +243,7 @@ def image_restoration_api():
     try:
         records = _analysis_functions()["image_restoration"](model_path, up_dir, generate_dir, img_list, 5)
         _analysis_done("image_restoration", started_at, record_count=len(records), model_path=model_path)
-        return success_api(data={"records": records})
+        return _transport_success("image_restoration", {"records": records})
     except Exception as exc:
         return fail_api(f"推理失败: {str(exc)}")
 
@@ -245,9 +262,9 @@ def registration_api():
             return fail_api("请求参数异常")
     try:
         records = _analysis_functions()["registration"](model_path, up_dir, generate_dir, list_, type_=6)
-        return success_api(
-            msg=f"配准完成，共 {len(records)}/{len(list_)} 对成功",
-            data={
+        return _transport_success(
+            "registration",
+            {
                 "records": records,
                 "summary": {
                     "total_pairs": len(list_),
@@ -256,6 +273,7 @@ def registration_api():
                     "model_path": model_path,
                 },
             },
+            msg=f"配准完成，共 {len(records)}/{len(list_)} 对成功",
         )
     except Exception as exc:
         return fail_api(f"配准失败: {str(exc)}")
@@ -299,7 +317,7 @@ def tracking_api():
     try:
         result = _analysis_functions()["tracking"](model_path, up_dir, generate_dir, list_, rect, type_=7)
         _analysis_done("tracking", started_at, record_count=len(result) if hasattr(result, "__len__") else -1, model_path=model_path)
-        return success_api(data=result)
+        return _transport_success("tracking", result)
     except Exception as exc:
         return fail_api(f"跟踪失败: {str(exc)}")
 

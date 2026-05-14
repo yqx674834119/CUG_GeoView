@@ -99,7 +99,10 @@ function resolveBaiduMapAccessKey(runtimeConfig) {
 
 const runtimeConfig = getRuntimeConfig();
 const storedBaseUrl = typeof window !== "undefined" ? window.localStorage.getItem("GEOVIEW_BACKEND_BASEURL") : "";
+const storedChunkSize = typeof window !== "undefined" ? window.localStorage.getItem("GEOVIEW_RESULT_CHUNK_SIZE") : "";
 const BASEURL = normalizeBaseUrl(storedBaseUrl) || resolveBackendBaseUrl(runtimeConfig);
+const initialChunkSize = Number(storedChunkSize || runtimeConfig.resultChunkSize || 65536);
+const RESULT_CHUNK_SIZE = Math.max(1024, Math.min(Number.isFinite(initialChunkSize) ? initialChunkSize : 65536, 262144));
 const BACKEND_ASSET_MODE = resolveBackendAssetMode(runtimeConfig);
 const FRONTEND_ASSET_DEBUG = resolveFrontendAssetDebug(runtimeConfig);
 const MINER_ENABLED = resolveMinerEnabled(runtimeConfig);
@@ -108,6 +111,7 @@ const BAIDU_MAP_ACCESS_KEY = resolveBaiduMapAccessKey(runtimeConfig);
 
 const globalConfig = {
   BASEURL,
+  RESULT_CHUNK_SIZE,
   BACKEND_ASSET_MODE,
   FRONTEND_ASSET_DEBUG,
   MINER_ENABLED,
@@ -124,6 +128,15 @@ const globalConfig = {
       window.dispatchEvent(new CustomEvent("geoview-backend-baseurl-change", { detail: { baseUrl: nextUrl } }));
     }
     return nextUrl;
+  },
+  setResultChunkSize(size) {
+    const nextSize = Math.max(1024, Math.min(Number(size) || this.RESULT_CHUNK_SIZE || 65536, 262144));
+    this.RESULT_CHUNK_SIZE = nextSize;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("GEOVIEW_RESULT_CHUNK_SIZE", String(nextSize));
+      window.dispatchEvent(new CustomEvent("geoview-result-chunk-size-change", { detail: { chunkSize: nextSize } }));
+    }
+    return nextSize;
   },
 };
 

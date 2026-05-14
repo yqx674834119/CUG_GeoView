@@ -1,5 +1,5 @@
 import {createSrc,prePhotoHandle} from '@/api/upload'
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
 import { buildUploadFormData } from "@/utils/uploadFormData";
 
 function isChecked(vm, refName) {
@@ -39,18 +39,18 @@ function selectSharpen(type) {
 
       let formData = buildUploadFormData(this.fileList, type, { scope: "预处理上传" });
       createSrc(formData).then((res) => {
-        this.uploadSrc.list = res.data.data.map((item) => {
-          return toBackendAssetUrl(item.src);
+        this.uploadSrc.list = res.data.data.map((item) => item.src);
+        Promise.all(this.uploadSrc.list.slice(0, 3).map((item) => fetchBackendAssetBlobUrl(item))).then((urls) => {
+          this.before = urls;
         });
-        this.before = this.uploadSrc.list.splice(0,3)
 
-        this.prePhoto.list = this.before;
+        this.prePhoto.list = this.uploadSrc.list.slice(0, 3);
         this.prePhoto.prehandle = 4;
 
         prePhotoHandle(this.prePhoto).then((res)=>{
 
-          this.sharpenImg = res.data.data.map((item)=>{
-            return toBackendAssetUrl(item)
+          Promise.all(res.data.data.map((item) => fetchBackendAssetBlobUrl(item))).then((urls) => {
+            this.sharpenImg = urls;
           })
         }).catch(()=>{})
       }).catch((rej)=>{})
@@ -80,18 +80,18 @@ function selectSharpen(type) {
 
         let formData = buildUploadFormData(this.fileList, type, { scope: "预处理上传" });
         createSrc(formData).then((res) => {
-          this.uploadSrc.list = res.data.data.map((item) => {
-            return toBackendAssetUrl(item.src);
+          this.uploadSrc.list = res.data.data.map((item) => item.src);
+          Promise.all(this.uploadSrc.list.slice(0, 3).map((item) => fetchBackendAssetBlobUrl(item))).then((urls) => {
+            this.before = urls;
           });
-          this.before = this.uploadSrc.list.splice(0,3)
 
-          this.prePhoto.list = this.before
+          this.prePhoto.list = this.uploadSrc.list.slice(0, 3)
           this.prePhoto.prehandle = 2
 
           prePhotoHandle(this.prePhoto).then((res)=>{
 
-            this.claheImg = res.data.data.map((item)=>{
-              return toBackendAssetUrl(item)
+            Promise.all(res.data.data.map((item) => fetchBackendAssetBlobUrl(item))).then((urls) => {
+              this.claheImg = urls;
             })
           }).catch((rej)=>{})
         }).catch((rej)=>{})

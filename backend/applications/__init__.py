@@ -2,7 +2,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
@@ -31,7 +31,8 @@ def create_app(config_name=None):
     @app.route("/health", methods=["GET"])
     def health():
         upload_dir = primary_upload_root()
-        return jsonify({
+        payload_size = request.args.get("payload_size")
+        response = {
             "success": True,
             "status": "ok",
             "service": "geoview-backend",
@@ -41,7 +42,17 @@ def create_app(config_name=None):
                 "upload_dir": upload_dir,
                 "upload_dir_exists": os.path.isdir(upload_dir),
             },
-        })
+        }
+        if payload_size is not None:
+            try:
+                size = max(0, min(int(payload_size), 256 * 1024))
+            except Exception:
+                size = 0
+            response["probe"] = {
+                "requested_bytes": size,
+                "payload": "x" * size,
+            }
+        return jsonify(response)
 
     @app.teardown_appcontext
     def _db_session_cleanup(_exception=None):

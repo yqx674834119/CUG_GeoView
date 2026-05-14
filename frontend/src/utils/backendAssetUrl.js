@@ -26,7 +26,7 @@ export function normalizeBackendAssetPath(value) {
   return value;
 }
 
-function photoAssetRelativePath(path) {
+export function backendAssetRelativePath(path) {
   if (!path) {
     return "";
   }
@@ -51,7 +51,7 @@ function photoAssetRelativePath(path) {
 }
 
 export function isBackendPhotoAssetPath(path) {
-  return Boolean(photoAssetRelativePath(path));
+  return Boolean(backendAssetRelativePath(path));
 }
 
 export function toBackendAssetUrl(path) {
@@ -75,7 +75,7 @@ export function toBackendAssetUrl(path) {
 }
 
 export function toBackendAssetPreviewUrl(path) {
-  const relativePath = photoAssetRelativePath(path);
+  const relativePath = backendAssetRelativePath(path);
   if (!relativePath) {
     return "";
   }

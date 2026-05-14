@@ -1,7 +1,6 @@
 import axios from "axios";
 
 import { getBackendAssetPreviewDataUrl } from "@/utils/assetPreview";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 const CLASSIFICATION_TOP_N = 5;
 const SEGMENTATION_PREVIEW_SIZE = 320;
@@ -61,7 +60,7 @@ async function resolveImageSource(source, maxSize) {
   try {
     return await getBackendAssetPreviewDataUrl(value, maxSize);
   } catch (error) {
-    return toBackendAssetUrl(value);
+    throw error;
   }
 }
 

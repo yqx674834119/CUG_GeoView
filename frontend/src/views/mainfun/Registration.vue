@@ -280,7 +280,7 @@ import VChart from "vue-echarts";
 
 import Tabinfor from "@/components/Tabinfor";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
 import { registerUploadedSources } from "@/utils/localSourceRegistry";
 import { analyzeRegistrationRecord } from "@/utils/frontAnalysis";
 import { resolveRecordSource } from "@/utils/mediaTransport";
@@ -684,10 +684,11 @@ export default {
         }
 
         const selectedModel = this.modelPathArr[0] || {};
+        const outputUrl = await fetchBackendAssetBlobUrl(record.after_img);
         this.resultCard = {
           fixed_preview_url: this.fixedPreviewUrl,
           moving_preview_url: this.movingPreviewUrl,
-          output_full_url: toBackendAssetUrl(record.after_img),
+          output_full_url: outputUrl,
           output_asset_path: record.after_img,
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
           record,

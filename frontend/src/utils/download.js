@@ -4,6 +4,7 @@ import FileSaver from 'file-saver'
 
 import {hideFullScreenLoading} from "@/utils/loading";
 import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlob } from "@/utils/assetChunkTransport";
 
 function saveBlob(blob, filename) {
   const url = window.URL.createObjectURL(blob);
@@ -24,13 +25,7 @@ function buildDownloadName(index, funtype) {
 function downloadimgWithWords(index, src, funtype) {
   const filename = buildDownloadName(index, funtype);
   if (isBackendPhotoAssetPath(src)) {
-    fetch(toBackendAssetUrl(src))
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`download failed: ${response.status}`);
-        }
-        return response.blob();
-      })
+    fetchBackendAssetBlob(src)
       .then((blob) => saveBlob(blob, filename))
       .catch(() => {});
     return;
@@ -47,12 +42,7 @@ function downloadimgWithWords(index, src, funtype) {
 }
 function getImgArrayBuffer(url) {
   if (isBackendPhotoAssetPath(url)) {
-    return fetch(toBackendAssetUrl(url)).then((response) => {
-      if (!response.ok) {
-        throw new Error(`download failed: ${response.status}`);
-      }
-      return response.blob();
-    });
+    return fetchBackendAssetBlob(url);
   }
 
   return new Promise((resolve, reject) => {

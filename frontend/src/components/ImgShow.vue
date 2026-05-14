@@ -237,7 +237,8 @@ import {
   summarizeSegmentation,
 } from "@/utils/frontAnalysis";
 import { resolveRecordSource } from "@/utils/mediaTransport";
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlobUrl, getCachedBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
+import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 use([
   CanvasRenderer,
@@ -528,6 +529,10 @@ export default {
       return `${item.id ?? index}`;
     },
     displaySrc(item, field) {
+      const preview = item && item[`_${field}_preview`];
+      if (preview) {
+        return preview;
+      }
       const source = resolveRecordSource(item, field);
       if (source) {
         return source;
@@ -543,15 +548,36 @@ export default {
       const source = item?.visual_payload?.source || {};
       const result = item?.visual_payload?.result || {};
       if (field === "before_img") {
-        return toBackendAssetUrl(legacyAssets.source_primary || source.primary?.asset_path || "");
+        return this.cachedOrQueueAsset(item, field, legacyAssets.source_primary || source.primary?.asset_path || "");
       }
       if (field === "after_img") {
-        return toBackendAssetUrl(legacyAssets.primary_result || result.mask_path || "");
+        return this.cachedOrQueueAsset(item, field, legacyAssets.primary_result || result.mask_path || "");
       }
       return "";
     },
+    cachedOrQueueAsset(item, field, path) {
+      if (!path) {
+        return "";
+      }
+      if (!isBackendPhotoAssetPath(path)) {
+        return toBackendAssetUrl(path);
+      }
+      const cached = getCachedBackendAssetBlobUrl(path);
+      if (cached) {
+        return cached;
+      }
+      fetchBackendAssetBlobUrl(path)
+        .then((url) => {
+          this.$set(item, `_${field}_preview`, url);
+        })
+        .catch(() => {});
+      return ASSET_PREVIEW_PLACEHOLDER;
+    },
     onImageLoadError(item, field) {
       const url = this.displaySrc(item, field);
+      if (!url) {
+        return;
+      }
       console.error("[GeoView] image load failed", {
         field,
         url,

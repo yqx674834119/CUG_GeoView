@@ -1,18 +1,29 @@
-import { toBackendAssetUrl } from "@/utils/backendAssetUrl";
+import { fetchBackendAssetBlobUrl, getCachedBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
+import { isBackendPhotoAssetPath, toBackendAssetUrl } from "@/utils/backendAssetUrl";
 
 export const ASSET_PREVIEW_PLACEHOLDER = "";
 
 export function getBackendAssetPreviewDataUrl(path) {
-  return Promise.resolve(toBackendAssetUrl(path));
+  return fetchBackendAssetBlobUrl(path);
 }
 
-export function setPreviewField(target, sourceField, previewField) {
+export async function setPreviewField(target, sourceField, previewField) {
   if (!target || !target[sourceField]) {
     return Promise.resolve("");
   }
-  const url = toBackendAssetUrl(target[sourceField]);
+  const source = target[sourceField];
+  const url = isBackendPhotoAssetPath(source)
+    ? (getCachedBackendAssetBlobUrl(source) || await awaitPreview(source, target, previewField || `${sourceField}_preview`))
+    : toBackendAssetUrl(source);
   target[previewField || `${sourceField}_preview`] = url;
-  return Promise.resolve(url);
+  return url;
+}
+
+function awaitPreview(source, target, field) {
+  return fetchBackendAssetBlobUrl(source).then((url) => {
+    target[field] = url;
+    return url;
+  });
 }
 
 export function hydrateAssetPreviews(target, fields) {
@@ -22,14 +33,26 @@ export function hydrateAssetPreviews(target, fields) {
   if (Array.isArray(target)) {
     return Promise.all(target.map((item) => hydrateAssetPreviews(item, fields))).then(() => target);
   }
-  fields.forEach((field) => {
+  const jobs = fields.map((field) => {
     if (typeof field === "string") {
-      const url = toBackendAssetUrl(target[field]);
+      const source = target[field];
+      const url = isBackendPhotoAssetPath(source)
+        ? getCachedBackendAssetBlobUrl(source)
+        : toBackendAssetUrl(source);
       target[`_${field}_preview`] = url;
-      return;
+      return isBackendPhotoAssetPath(source)
+        ? awaitPreview(source, target, `_${field}_preview`)
+        : Promise.resolve(url);
     }
     const object = field.object || target;
-    object[field.preview] = toBackendAssetUrl(object[field.source]);
+    const source = object[field.source];
+    const url = isBackendPhotoAssetPath(source)
+      ? getCachedBackendAssetBlobUrl(source)
+      : toBackendAssetUrl(source);
+    object[field.preview] = url;
+    return isBackendPhotoAssetPath(source)
+      ? awaitPreview(source, object, field.preview)
+      : Promise.resolve(url);
   });
-  return Promise.resolve(target);
+  return Promise.all(jobs).then(() => target);
 }

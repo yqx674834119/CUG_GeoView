@@ -865,9 +865,12 @@ import {
 import Tabinfor from "@/components/Tabinfor";
 import DraggableItem from "@/components/DraggableItem";
 import {
+  hydrateDataSource,
+  hydrateRecordSource,
   resolveDataSource,
   resolveRecordSource,
 } from "@/utils/mediaTransport";
+import { fetchBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
 import { buildUploadFormData } from "@/utils/uploadFormData";
 import { use } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -1110,7 +1113,7 @@ export default {
       this.currentIndex = 5 * index;
       this.goRenderThis(0);
     },
-    setOneWay(style,isShowExample,holeStyle) {
+    async setOneWay(style,isShowExample,holeStyle) {
       this.renderstyle = style;
       const current = this.resultArr[this.currentIndex];
       if(isShowExample){
@@ -1129,19 +1132,19 @@ export default {
       }
       if(!holeStyle){
         switch (style){
-          case '原图': this.onRenderResult = resolveRecordSource(current, "after_img");break
-          case '森林': this.onRenderResult = resolveDataSource(current, "2");break
-          case '霓虹': this.onRenderResult = resolveDataSource(current, "3");break
-          case '闪电': this.onRenderResult = resolveDataSource(current, "0");break
-          case '极光': this.onRenderResult = resolveDataSource(current, "1");break
+          case '原图': this.onRenderResult = await hydrateRecordSource(current, "after_img");break
+          case '森林': this.onRenderResult = await hydrateDataSource(current, "2");break
+          case '霓虹': this.onRenderResult = await hydrateDataSource(current, "3");break
+          case '闪电': this.onRenderResult = await hydrateDataSource(current, "0");break
+          case '极光': this.onRenderResult = await hydrateDataSource(current, "1");break
         }
       }else{
         switch (style){
-          case '原图': this.onRenderResult = resolveDataSource(current, "hole");break
-          case '森林': this.onRenderResult = resolveDataSource(current, "hole_style.2");break
-          case '霓虹': this.onRenderResult = resolveDataSource(current, "hole_style.3");break
-          case '闪电': this.onRenderResult = resolveDataSource(current, "hole_style.0");break
-          case '极光': this.onRenderResult = resolveDataSource(current, "hole_style.1");break
+          case '原图': this.onRenderResult = await hydrateDataSource(current, "hole");break
+          case '森林': this.onRenderResult = await hydrateDataSource(current, "hole_style.2");break
+          case '霓虹': this.onRenderResult = await hydrateDataSource(current, "hole_style.3");break
+          case '闪电': this.onRenderResult = await hydrateDataSource(current, "hole_style.0");break
+          case '极光': this.onRenderResult = await hydrateDataSource(current, "hole_style.1");break
         }
       }
 
@@ -1297,19 +1300,19 @@ export default {
           let upload3 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
               this.uploadSrc3 = res.data.data.splice(0, 3);
-              this.Img1 = this.uploadSrc3.map((item) => {
-                return toBackendAssetUrl(item.src);
+              Promise.all(this.uploadSrc3.map((item) => fetchBackendAssetBlobUrl(item.src))).then((urls) => {
+                this.Img1 = urls;
+                resolve();
               });
-              resolve();
             }).catch((rej)=>{})
           });
           let upload4 = new Promise((resolve, reject) => {
             this.createSrc(formData2).then((res) => {
               this.uploadSrc4 = res.data.data.splice(0, 3);
-              this.Img3 = this.uploadSrc4.map((item) => {
-                return toBackendAssetUrl(item.src);
+              Promise.all(this.uploadSrc4.map((item) => fetchBackendAssetBlobUrl(item.src))).then((urls) => {
+                this.Img3 = urls;
+                resolve();
               });
-              resolve();
             }).catch((rej)=>{})
           });
           Promise.all([upload3, upload4]).then((val) => {
@@ -1343,10 +1346,9 @@ export default {
             } else {
               this.myhistogram.list = this.getList(this.histogramSrc);
               this.histogramUpload(this.myhistogram).then((res) => {
-                this.Img2 = res.data.data.map((item) => {
-                  return toBackendAssetUrl(item);
+                Promise.all(res.data.data.map((item) => fetchBackendAssetBlobUrl(item))).then((urls) => {
+                  this.Img2 = urls.splice(0, 3);
                 });
-                this.Img2 = this.Img2.splice(0, 3);
               }).catch((rej)=>{})
             }
           }).catch((rej)=>{})
@@ -1391,19 +1393,19 @@ export default {
           let upload1 = new Promise((resolve, reject) => {
             this.createSrc(formData1).then((res) => {
               this.sharpenSrc1 = res.data.data.splice(0, 3);
-              this.Img1 = this.sharpenSrc1.map((item) => {
-                return toBackendAssetUrl(item.src);
+              Promise.all(this.sharpenSrc1.map((item) => fetchBackendAssetBlobUrl(item.src))).then((urls) => {
+                this.Img1 = urls;
+                resolve();
               });
-              resolve();
             }).catch((rej)=>{})
           });
           let upload2 = new Promise((resolve, reject) => {
             this.createSrc(formData2).then((res) => {
               this.sharpenSrc2 = res.data.data.splice(0, 3);
-              this.Img3 = this.sharpenSrc2.map((item) => {
-                return toBackendAssetUrl(item.src);
+              Promise.all(this.sharpenSrc2.map((item) => fetchBackendAssetBlobUrl(item.src))).then((urls) => {
+                this.Img3 = urls;
+                resolve();
               });
-              resolve();
             }).catch((rej)=>{})
           });
           Promise.all([upload1, upload2]).then((val) => {
@@ -1435,12 +1437,12 @@ export default {
             } else {
               this.mysharpen.list =  this.getList(this.sharpenSrc);
               this.histogramUpload(this.mysharpen).then((res) => {
-                this.sharpenImg1 = res.data.data.map((item) => {
-                  return toBackendAssetUrl(item.first);
+                Promise.all(res.data.data.map((item) => fetchBackendAssetBlobUrl(item.first))).then((urls) => {
+                  this.sharpenImg1 = urls;
                 });
 
-                this.sharpenImg2 = res.data.data.map((item) => {
-                  return toBackendAssetUrl(item.second);
+                Promise.all(res.data.data.map((item) => fetchBackendAssetBlobUrl(item.second))).then((urls) => {
+                  this.sharpenImg2 = urls;
                 });
               }).catch(()=>{})
             }
