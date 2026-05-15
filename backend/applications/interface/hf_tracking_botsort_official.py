@@ -9,11 +9,14 @@ sequence uploaded through GeoView.
 """
 
 import argparse
+import collections
 import json
 import math
 import os
 import sys
+import types
 from collections import Counter, defaultdict
+from collections import abc
 from contextlib import contextmanager
 from datetime import datetime
 from statistics import mean
@@ -21,6 +24,28 @@ from typing import Dict, List, Sequence, Tuple
 
 import cv2
 import numpy as np
+
+
+def patch_python_compat():
+    for name in ("Sequence", "Mapping", "MutableMapping"):
+        if not hasattr(collections, name) and hasattr(abc, name):
+            setattr(collections, name, getattr(abc, name))
+    numpy_aliases = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "complex": complex,
+        "object": object,
+    }
+    for name, value in numpy_aliases.items():
+        if name not in np.__dict__:
+            setattr(np, name, value)
+    if "torch._six" not in sys.modules:
+        torch_six = types.ModuleType("torch._six")
+        torch_six.string_classes = (str,)
+        torch_six.int_classes = (int,)
+        torch_six.container_abcs = abc
+        sys.modules["torch._six"] = torch_six
 
 
 def log(msg: str, level: str = "INFO"):
@@ -189,6 +214,7 @@ def pushd(path: str):
 
 
 def main():
+    patch_python_compat()
     args = parse_args()
 
     repo_dir = os.path.abspath(args.repo_dir)

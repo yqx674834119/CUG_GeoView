@@ -326,7 +326,7 @@ def main():
         "notes": [
             "MOT17 only covers MOTA/IDF1/HOTA. Anomaly Precision is not evaluated on this dataset.",
             "Engineering variant uses WALDO30 person detections filtered to label=person.",
-            "Official environment was adjusted from torch 1.11/cu113 to torch 1.13.1/cu117 because torch 1.11 could not see the GPU on this machine.",
+            "Official environment was adjusted from torch 1.11/cu113 to torch 2.1.2/cu118 so the official runtime remains compatible with Hopper/H100-class GPUs.",
         ],
     }
 

@@ -3,7 +3,7 @@
     <Tabinfor>
       <template #left>
         <div id="sub-title">
-          遥感目标跟踪<i class="icon-click" />
+          全域静态目标跟踪与预警模块<i class="icon-click" />
         </div>
       </template>
     </Tabinfor>
@@ -344,6 +344,63 @@
       </el-row>
 
       <el-row
+        v-if="trackingWarningInsight"
+        :gutter="20"
+      >
+        <el-col :xs="24" :sm="24" :md="24" :lg="24">
+          <el-card class="warning-panel">
+            <div class="warning-panel__head">
+              <div>
+                <div class="warning-panel__title">趋势预警</div>
+                <div class="warning-panel__meta">
+                  基于跟踪汇总与轨迹信息生成当前序列的风险等级与目标活跃趋势
+                </div>
+              </div>
+              <el-tag :type="trackingWarningInsight.tagType" effect="dark">
+                {{ trackingWarningInsight.levelLabel }}
+              </el-tag>
+            </div>
+
+            <div class="warning-panel__headline">
+              {{ trackingWarningInsight.headline }}
+            </div>
+            <div class="warning-panel__summary">
+              {{ trackingWarningInsight.summary }}
+            </div>
+
+            <div class="warning-chip-row">
+              <div class="warning-chip">
+                <span>跟踪成功率</span>
+                <strong>{{ trackingWarningInsight.trackingRatio }}%</strong>
+              </div>
+              <div class="warning-chip">
+                <span>活跃度趋势</span>
+                <strong>{{ trackingWarningInsight.activityTrendText }}</strong>
+              </div>
+              <div class="warning-chip">
+                <span>主导类别</span>
+                <strong>{{ trackingWarningInsight.dominantLabel }}</strong>
+              </div>
+              <div class="warning-chip">
+                <span>最长轨迹覆盖</span>
+                <strong>{{ trackingWarningInsight.topTrackCoverage }}%</strong>
+              </div>
+            </div>
+
+            <div class="warning-reason-row">
+              <span
+                v-for="reason in trackingWarningInsight.reasons"
+                :key="reason"
+                class="warning-reason"
+              >
+                {{ reason }}
+              </span>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <el-row
         v-if="resultSummary"
         :gutter="20"
       >
@@ -418,7 +475,7 @@
             <template #header>
               <div class="result-card__head">
                 <span>逐帧目标数量</span>
-                <span class="result-card__meta">轨迹 JSON 推导</span>
+                <span class="result-card__meta">轨迹 JSON 统计</span>
               </div>
             </template>
             <v-chart
@@ -519,6 +576,117 @@ const ACCEPT_SUFFIXES = [
   ...VIDEO_SUFFIXES.map((suffix) => `.${suffix.toLowerCase()}`),
 ];
 const LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES = ["mp4", "webm", "m4v"];
+
+function roundMetric(value, digits = 2) {
+  if (!Number.isFinite(Number(value))) {
+    return 0;
+  }
+  const factor = 10 ** digits;
+  return Math.round(Number(value) * factor) / factor;
+}
+
+function safeAverage(values) {
+  const list = Array.isArray(values) ? values.filter((value) => Number.isFinite(Number(value))) : [];
+  if (!list.length) {
+    return 0;
+  }
+  return list.reduce((sum, value) => sum + Number(value), 0) / list.length;
+}
+
+function buildTrackingWarningInsight(summary, trajectoryAnalysis) {
+  if (!summary) {
+    return null;
+  }
+
+  const totalFrames = Number(summary.total_frames) || 0;
+  const trackedFrames = Number(summary.tracked_frames) || 0;
+  const lostFrames = Number(summary.lost_frames) || 0;
+  const meanConfidence = roundMetric(Number(summary.mean_confidence) || 0, 3);
+  const trackingRatio = roundMetric(
+    Number.isFinite(Number(summary.tracking_ratio))
+      ? (Number(summary.tracking_ratio) * 100)
+      : ((trackedFrames / Math.max(1, totalFrames)) * 100),
+    2,
+  );
+  const lostRatio = roundMetric((lostFrames / Math.max(1, totalFrames)) * 100, 2);
+
+  const frameCounts = trajectoryAnalysis?.frameCounts || [];
+  const startWindow = frameCounts.slice(0, Math.min(5, frameCounts.length)).map((item) => item.value);
+  const endWindow = frameCounts.slice(Math.max(0, frameCounts.length - 5)).map((item) => item.value);
+  const startAvg = safeAverage(startWindow);
+  const endAvg = safeAverage(endWindow);
+  const activityChange = startAvg
+    ? roundMetric(((endAvg - startAvg) / startAvg) * 100, 2)
+    : 0;
+
+  const labelEntries = Object.entries(summary.label_histogram || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
+  const dominantLabel = labelEntries[0]?.[0] || "暂无";
+  const dominantCount = Number(labelEntries[0]?.[1]) || 0;
+  const topTrackCoverage = roundMetric(
+    ((trajectoryAnalysis?.topTracks?.[0]?.count || 0) / Math.max(1, totalFrames)) * 100,
+    2,
+  );
+
+  let riskScore = 0;
+  if (trackingRatio < 75) {
+    riskScore += 2;
+  } else if (trackingRatio < 88) {
+    riskScore += 1;
+  }
+  if (lostRatio > 20) {
+    riskScore += 2;
+  } else if (lostRatio > 10) {
+    riskScore += 1;
+  }
+  if (activityChange <= -25) {
+    riskScore += 2;
+  } else if (activityChange <= -10) {
+    riskScore += 1;
+  }
+  if (meanConfidence < 0.55) {
+    riskScore += 1;
+  }
+  if (topTrackCoverage < 35 && totalFrames >= 10) {
+    riskScore += 1;
+  }
+
+  let levelLabel = "低风险";
+  let tagType = "success";
+  let headline = "当前序列整体跟踪稳定，未见明显异常趋势。";
+  if (riskScore >= 5) {
+    levelLabel = "高风险预警";
+    tagType = "danger";
+    headline = "当前序列存在明显失跟或目标活跃度衰减，建议优先复核。";
+  } else if (riskScore >= 3) {
+    levelLabel = "中风险预警";
+    tagType = "warning";
+    headline = "当前序列出现一定程度波动，建议结合结果视频重点查看后段帧。";
+  }
+
+  let activityTrendText = "平稳";
+  if (activityChange >= 10) {
+    activityTrendText = `上升 ${activityChange}%`;
+  } else if (activityChange <= -10) {
+    activityTrendText = `下降 ${Math.abs(activityChange)}%`;
+  }
+
+  return {
+    levelLabel,
+    tagType,
+    headline,
+    summary: `共 ${totalFrames} 帧，成功跟踪 ${trackedFrames} 帧，丢失 ${lostFrames} 帧；当前主导类别为 ${dominantLabel}，出现 ${dominantCount} 次。`,
+    trackingRatio,
+    dominantLabel,
+    topTrackCoverage,
+    activityTrendText,
+    reasons: [
+      `丢失帧占比 ${lostRatio}%`,
+      `平均置信度 ${roundMetric(meanConfidence * 100, 2)}%`,
+      `前后段平均目标数 ${roundMetric(startAvg, 2)} -> ${roundMetric(endAvg, 2)}`,
+      `最长轨迹覆盖 ${topTrackCoverage}% 帧序列`,
+    ],
+  };
+}
 
 export default {
   name: "Tracking",
@@ -670,6 +838,9 @@ export default {
         ],
       };
     },
+    trackingWarningInsight() {
+      return buildTrackingWarningInsight(this.resultSummary, this.trajectoryAnalysis);
+    },
     requiresInitialRect() {
       const modelPath = (this.selectedModel && this.selectedModel.model_path) || "";
       return !(
@@ -806,7 +977,7 @@ export default {
       }
       if (VIDEO_SUFFIXES.includes(suffix)) {
         if (!LOCAL_PREVIEW_SAFE_VIDEO_SUFFIXES.includes(suffix.toLowerCase())) {
-          this.$message.warning("当前浏览器对该视频格式的本地预览兼容性有限，处理完成后将优先提供标准化 MP4 预览");
+          this.$message.warning("当前浏览器对该视频格式的预览兼容性有限，处理完成后将优先提供标准化 MP4 预览");
         }
         return "video";
       }
@@ -1047,7 +1218,7 @@ export default {
         this.trajectoryAnalysis = summarizeTrajectoryPayload(payload);
       } catch (error) {
         console.error(error);
-        this.trajectoryError = "轨迹 JSON 已生成，但前端未能读取详细统计。";
+        this.trajectoryError = "轨迹 JSON 已生成，但详细统计暂时无法读取。";
       }
     },
     handleVideoPreviewError(type) {
@@ -1348,6 +1519,92 @@ export default {
 .trajectory-error {
   margin-top: 4px;
   color: #b91c1c;
+  font-size: 13px;
+}
+
+.warning-panel {
+  margin-top: 0;
+  margin-bottom: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.12), transparent 32%),
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.warning-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.warning-panel__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--theme-heading-color);
+}
+
+.warning-panel__meta {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.warning-panel__headline {
+  margin-top: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.warning-panel__summary {
+  margin-top: 10px;
+  color: var(--text-primary);
+  line-height: 1.8;
+}
+
+.warning-chip-row {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.warning-chip {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.warning-chip span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.warning-chip strong {
+  font-size: 22px;
+  color: var(--theme-heading-color);
+  font-family: var(--theme-display-fontfamily);
+}
+
+.warning-reason-row {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.warning-reason {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(245, 158, 11, 0.18);
+  color: #92400e;
   font-size: 13px;
 }
 

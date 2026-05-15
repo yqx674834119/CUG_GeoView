@@ -89,24 +89,46 @@ def ensure_official_env(repo_dir: Path, env_name: str):
         print(f"[skip] conda env exists: {env_name}", flush=True)
         return
 
-    run(["conda", "create", "-y", "-n", env_name, "python=3.7"])
+    run(["conda", "create", "--solver", "classic", "-y", "-n", env_name, "python=3.10"])
     pip_install(
         env_name,
-        "torch==1.11.0+cu113",
-        "torchvision==0.12.0+cu113",
-        "--extra-index-url",
-        "https://download.pytorch.org/whl/cu113",
+        "torch==2.1.2",
+        "torchvision==0.16.2",
+        "--index-url",
+        "https://download.pytorch.org/whl/cu118",
     )
-    pip_install(env_name, "-r", "requirements.txt", cwd=repo_dir)
-    run(["conda", "run", "-n", env_name, "python", "setup.py", "develop"], cwd=repo_dir)
     pip_install(
         env_name,
+        "numpy",
+        "opencv-python<4.11",
+        "opencv-contrib-python<4.11",
+        "loguru",
+        "scikit-image",
+        "scikit-learn",
+        "tqdm",
+        "Pillow",
+        "thop",
+        "ninja",
+        "tabulate",
+        "tensorboard",
+        "lap",
+        "motmetrics",
+        "filterpy",
+        "h5py",
+        "matplotlib",
+        "scipy",
+        "prettytable",
+        "easydict",
+        "pyyaml",
+        "yacs",
+        "termcolor",
+        "gdown",
         "cython",
         "cython_bbox",
         "faiss-cpu",
-        "opencv-contrib-python<4.11",
         "pycocotools",
     )
+    run(["conda", "run", "-n", env_name, "python", "setup.py", "develop"], cwd=repo_dir)
 
 
 def ensure_engineering_env(env_name: str):
@@ -114,7 +136,7 @@ def ensure_engineering_env(env_name: str):
         print(f"[skip] conda env exists: {env_name}", flush=True)
         return
 
-    run(["conda", "create", "-y", "-n", env_name, "python=3.10"])
+    run(["conda", "create", "--solver", "classic", "-y", "-n", env_name, "python=3.10"])
     pip_install(
         env_name,
         "torch==2.1.2",

@@ -3,7 +3,7 @@
     <Tabinfor>
       <template #left>
         <div id="sub-title">
-          地物分类<i class="iconfont icon-dianji" />
+          细粒度遥感目标检测模块<i class="iconfont icon-dianji" />
         </div>
       </template>
     </Tabinfor>

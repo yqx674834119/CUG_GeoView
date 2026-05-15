@@ -5,7 +5,7 @@
         <div
           id="sub-title"
         >
-          影像超分重建<i
+          遥感图像超分重建模块<i
             class="iconfont icon-dianji"
           />
         </div>

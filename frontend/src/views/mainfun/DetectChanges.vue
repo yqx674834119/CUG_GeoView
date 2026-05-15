@@ -5,7 +5,7 @@
         <div
           id="sub-title"
         >
-          时序变化分析<i
+          遥感图像时序变化检测<i
             class="icon-click"
           />
         </div>

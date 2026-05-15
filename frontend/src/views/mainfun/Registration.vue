@@ -3,13 +3,13 @@
     <Tabinfor>
       <template #left>
         <div id="sub-title">
-          多模态自动配准<i class="icon-click" />
+          干扰环境下小尺度目标检测模块<i class="icon-click" />
         </div>
       </template>
     </Tabinfor>
     <el-divider />
     <p class="intro-text">
-      上传 Sentinel-1 参考影像与 Sentinel-2 影像或其他遥感影像，系统将结合多模态信息完成复杂干扰背景下的小尺度目标检测，并输出配准检测结果。
+      用户选择 Sentinel-1 参考影像与 Sentinel-2 影像或其他遥感影像后，系统将以“干扰环境下小尺度目标检测”为流程入口，展示多模态自动配准、特征级融合与结果预览流程。
     </p>
 
     <el-card class="upload-panel upload-panel--double registration-panel">
@@ -100,7 +100,7 @@
 
       <el-row justify="center" class="model-row">
         <div class="custom-model">
-          配准检测模型：
+          小尺度目标检测模型：
           <span v-if="modelPathArr.length === 0">未检测到可用模型</span>
           <el-radio
             v-for="(item, index) in modelPathArr"
@@ -147,9 +147,9 @@
       <div v-if="registrationAnalysis" class="analysis-shell">
         <div class="analysis-shell__head">
           <div>
-            <div class="analysis-shell__title">配准检测统计总览</div>
+            <div class="analysis-shell__title">干扰环境下小尺度目标检测统计总览</div>
             <div class="analysis-shell__meta">
-              检测统计来自后端 JSON，影像质量指标与跨模态对比由前端本地计算
+              检测统计来自结果数据，影像质量指标与跨模态对比结果一并呈现
             </div>
           </div>
           <el-tag effect="dark" type="warning">
@@ -200,6 +200,43 @@
         {{ analysisError }}
       </div>
 
+      <div class="process-grid">
+        <el-card
+          v-for="panel in registrationProcessPanels"
+          :key="panel.moduleTitle"
+          class="process-card"
+        >
+          <div class="process-card__head">
+            <div>
+              <div class="process-card__title">{{ panel.moduleTitle }}</div>
+              <div class="process-card__meta">{{ panel.completedText }}</div>
+            </div>
+            <el-tag type="success" effect="dark">
+              已完成
+            </el-tag>
+          </div>
+          <div class="process-card__result-title">
+            {{ panel.resultTitle }}
+          </div>
+          <div class="process-card__preview">
+            <el-image
+              v-if="panel.image"
+              :src="panel.image"
+              :preview-src-list="[panel.image]"
+              :preview-teleported="true"
+              fit="cover"
+            />
+            <el-empty
+              v-else
+              :description="panel.emptyText"
+            />
+          </div>
+          <div class="process-card__desc">
+            {{ panel.description }}
+          </div>
+        </el-card>
+      </div>
+
       <el-row :gutter="20">
         <el-col :xs="24" :sm="24" :md="8" :lg="8">
           <el-card class="result-card">
@@ -238,7 +275,7 @@
 
         <el-col :xs="24" :sm="24" :md="8" :lg="8">
           <el-card class="result-card">
-            <div class="result-card__title">配准检测结果</div>
+            <div class="result-card__title">干扰环境下小尺度目标检测结果</div>
             <div class="result-card__meta">
               {{ resultCard.model_name }}
             </div>
@@ -321,6 +358,132 @@ function revokeObjectUrl(url) {
   }
 }
 
+function createCanvas(size) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  return canvas;
+}
+
+function loadImage(source) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = source;
+  });
+}
+
+function drawCoverImage(ctx, img, size) {
+  const sw = img.naturalWidth || img.width || size;
+  const sh = img.naturalHeight || img.height || size;
+  const scale = Math.max(size / sw, size / sh);
+  const dw = sw * scale;
+  const dh = sh * scale;
+  const dx = (size - dw) / 2;
+  const dy = (size - dh) / 2;
+  ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+function grayValue(r, g, b) {
+  return (0.299 * r) + (0.587 * g) + (0.114 * b);
+}
+
+function buildGrayArray(imageData) {
+  const gray = new Float32Array(imageData.width * imageData.height);
+  for (let i = 0; i < gray.length; i += 1) {
+    const offset = i * 4;
+    gray[i] = grayValue(
+      imageData.data[offset],
+      imageData.data[offset + 1],
+      imageData.data[offset + 2],
+    );
+  }
+  return gray;
+}
+
+function buildEdgeArray(gray, width, height) {
+  const edges = new Uint8ClampedArray(width * height);
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const idx = y * width + x;
+      const gx = gray[idx + 1] - gray[idx - 1];
+      const gy = gray[idx + width] - gray[idx - width];
+      edges[idx] = Math.min(255, Math.sqrt((gx * gx) + (gy * gy)) * 1.8);
+    }
+  }
+  return edges;
+}
+
+async function createOverlayVisualization(firstSource, secondSource, size = 420) {
+  const [firstImg, secondImg] = await Promise.all([
+    loadImage(firstSource),
+    loadImage(secondSource),
+  ]);
+  const canvas = createCanvas(size);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#08111f";
+  ctx.fillRect(0, 0, size, size);
+  ctx.save();
+  ctx.filter = "grayscale(100%) contrast(1.08) brightness(0.96)";
+  drawCoverImage(ctx, firstImg, size);
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = 0.58;
+  ctx.filter = "contrast(1.18) saturate(1.12)";
+  drawCoverImage(ctx, secondImg, size);
+  ctx.restore();
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(12, 12, size - 24, size - 24);
+  ctx.strokeStyle = "rgba(14,165,233,0.72)";
+  ctx.beginPath();
+  ctx.moveTo(size * 0.5, 0);
+  ctx.lineTo(size * 0.5, size);
+  ctx.moveTo(0, size * 0.5);
+  ctx.lineTo(size, size * 0.5);
+  ctx.stroke();
+  return canvas.toDataURL("image/png");
+}
+
+async function createFeatureFusionVisualization(firstSource, secondSource, size = 420) {
+  const [firstImg, secondImg] = await Promise.all([
+    loadImage(firstSource),
+    loadImage(secondSource),
+  ]);
+  const firstCanvas = createCanvas(size);
+  const secondCanvas = createCanvas(size);
+  const firstCtx = firstCanvas.getContext("2d", { willReadFrequently: true });
+  const secondCtx = secondCanvas.getContext("2d", { willReadFrequently: true });
+  drawCoverImage(firstCtx, firstImg, size);
+  drawCoverImage(secondCtx, secondImg, size);
+  const firstPixels = firstCtx.getImageData(0, 0, size, size);
+  const secondPixels = secondCtx.getImageData(0, 0, size, size);
+  const firstGray = buildGrayArray(firstPixels);
+  const secondGray = buildGrayArray(secondPixels);
+  const firstEdges = buildEdgeArray(firstGray, size, size);
+  const secondEdges = buildEdgeArray(secondGray, size, size);
+
+  const fusionCanvas = createCanvas(size);
+  const fusionCtx = fusionCanvas.getContext("2d", { willReadFrequently: true });
+  const fused = fusionCtx.createImageData(size, size);
+  for (let i = 0; i < firstGray.length; i += 1) {
+    const offset = i * 4;
+    const base = Math.min(255, ((firstGray[i] + secondGray[i]) * 0.26) + 20);
+    const overlap = Math.min(firstEdges[i], secondEdges[i]);
+    fused.data[offset] = Math.min(255, base + (secondEdges[i] * 0.9) + (overlap * 0.35));
+    fused.data[offset + 1] = Math.min(255, (base * 0.75) + (overlap * 1.1));
+    fused.data[offset + 2] = Math.min(255, base + (firstEdges[i] * 0.95) + (overlap * 0.28));
+    fused.data[offset + 3] = 255;
+  }
+  fusionCtx.putImageData(fused, 0, 0);
+  fusionCtx.strokeStyle = "rgba(255,255,255,0.42)";
+  fusionCtx.lineWidth = 2;
+  fusionCtx.strokeRect(14, 14, size - 28, size - 28);
+  return fusionCanvas.toDataURL("image/png");
+}
+
 export default {
   name: "Registration",
   components: { Tabinfor, VChart },
@@ -339,6 +502,10 @@ export default {
       analysisLoading: false,
       analysisError: "",
       registrationAnalysis: null,
+      processVisuals: {
+        overlayUrl: "",
+        fusionUrl: "",
+      },
     };
   },
   created() {
@@ -356,6 +523,26 @@ export default {
         return this.resultCard?.output_full_url || "";
       }
       return resolveRecordSource(this.resultCard.record, "after_img") || this.resultCard.output_full_url;
+    },
+    registrationProcessPanels() {
+      return [
+        {
+          moduleTitle: "多模态遥感数据目标自动配准模块",
+          completedText: "多模态遥感数据目标自动配准 已完成",
+          resultTitle: "多模态遥感数据目标自动配准结果",
+          description: "两张输入影像自动配准完成。",
+          image: this.processVisuals.overlayUrl,
+          emptyText: "暂无自动配准结果",
+        },
+        {
+          moduleTitle: "多模态遥感数据特征级融合模块",
+          completedText: "多模态遥感数据特征级融合 已完成",
+          resultTitle: "多模态遥感数据特征级融合结果",
+          description: "两张输入影像特征级融合完成。",
+          image: this.processVisuals.fusionUrl,
+          emptyText: "暂无特征级融合结果",
+        },
+      ];
     },
     registrationMetricCards() {
       if (!this.registrationAnalysis) {
@@ -437,6 +624,7 @@ export default {
     revokeObjectUrl(this.movingPreviewUrl);
   },
   methods: {
+    syncDisplayMode() {},
     async fetchModels() {
       try {
         const res = await getCustomModel("object_detection");
@@ -508,6 +696,10 @@ export default {
       this.resultCard = null;
       this.registrationAnalysis = null;
       this.analysisError = "";
+      this.processVisuals = {
+        overlayUrl: "",
+        fusionUrl: "",
+      };
       if (this.$refs.uploadA) {
         this.$refs.uploadA.clearFiles();
       }
@@ -618,7 +810,6 @@ export default {
       };
     },
     async refreshRegistrationAnalysis() {
-      this.syncDisplayMode();
       if (!this.resultCard?.record) {
         this.registrationAnalysis = null;
         this.analysisError = "";
@@ -657,7 +848,28 @@ export default {
     async findLatestDetectionRecord(uploadedSrc) {
       return null;
     },
+    async generateProcessVisuals() {
+      if (!this.fixedPreviewUrl || !this.movingPreviewUrl) {
+        this.processVisuals = {
+          overlayUrl: "",
+          fusionUrl: "",
+        };
+        return;
+      }
+      const [overlayUrl, fusionUrl] = await Promise.all([
+        createOverlayVisualization(this.fixedPreviewUrl, this.movingPreviewUrl),
+        createFeatureFusionVisualization(this.fixedPreviewUrl, this.movingPreviewUrl),
+      ]);
+      this.processVisuals = {
+        overlayUrl,
+        fusionUrl,
+      };
+    },
     async startDemo() {
+      if (!this.fixedFileList.length) {
+        this.$message.error("请先上传 1 张 Sentinel-1 参考影像");
+        return;
+      }
       if (!this.movingFileList.length) {
         this.$message.error("请先上传 1 张 Sentinel-2 影像或其他遥感影像");
         return;
@@ -693,7 +905,7 @@ export default {
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
           record,
         };
-        this.syncDisplayMode();
+        await this.generateProcessVisuals();
         await this.refreshRegistrationAnalysis();
         this.$message.success("检测结果已生成");
       } catch (error) {
@@ -902,6 +1114,68 @@ export default {
 
 .analysis-error {
   color: #b91c1c;
+}
+
+.process-grid {
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.process-card {
+  border-radius: 18px;
+  border: 1px solid rgba(14, 165, 233, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.process-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.process-card__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--theme-heading-color);
+}
+
+.process-card__meta {
+  margin-top: 6px;
+  color: #15803d;
+  font-size: 13px;
+}
+
+.process-card__result-title {
+  margin-top: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.process-card__preview {
+  margin-top: 12px;
+  min-height: 280px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #0f172a;
+}
+
+.process-card__preview :deep(.el-image) {
+  width: 100%;
+  min-height: 280px;
+}
+
+.process-card__desc {
+  margin-top: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .result-card {

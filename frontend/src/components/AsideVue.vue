@@ -36,7 +36,7 @@
         class="icon-change-detect"
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-change-detect" />时序变化分析
+        <i class="icon-change-detect" />遥感图像时序变化检测
       </h3>
     </el-menu-item>
 
@@ -49,7 +49,7 @@
         class="icon-object-detect"
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-object-detect" />智能目标识别
+        <i class="icon-object-detect" />多目标变化检测模块
       </h3>
     </el-menu-item>
 
@@ -62,20 +62,7 @@
         class="icon-classification"
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-classification" />地表覆盖分类
-      </h3>
-    </el-menu-item>
-
-    <el-menu-item
-      index="/classification"
-      @click="goClassification"
-    >
-      <i
-        v-show="isCollapse"
-        class="icon-scene-class"
-      />
-      <h3 v-show="!isCollapse">
-        <i class="icon-scene-class" />场景智能识别
+        <i class="icon-classification" />细粒度遥感目标检测模块
       </h3>
     </el-menu-item>
 
@@ -88,7 +75,7 @@
         class="icon-enhance"
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-enhance" />影像超分重建
+        <i class="icon-enhance" />遥感图像超分重建模块
       </h3>
     </el-menu-item>
 
@@ -101,7 +88,7 @@
         class="icon-registration" 
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-registration" />多模态自动配准
+        <i class="icon-registration" />干扰环境下小尺度目标检测模块
       </h3>
     </el-menu-item>
 
@@ -114,7 +101,7 @@
         class="icon-tracking"
       />
       <h3 v-show="!isCollapse">
-        <i class="icon-tracking" />全域目标跟踪
+        <i class="icon-tracking" />全域静态目标跟踪与预警模块
       </h3>
     </el-menu-item>
 
@@ -134,7 +121,6 @@ import {
   goDetectChanges,
   goDetectObjects,
   goSegmentation,
-  goClassification,
   goRestoreImgs,
   goRegistration,
   goTracking
@@ -155,7 +141,6 @@ export default {
     goDetectChanges,
     goDetectObjects,
     goSegmentation,
-    goClassification,
     goRestoreImgs,
     goRegistration,
     goTracking,
@@ -180,7 +165,11 @@ export default {
 
   .el-menu-item {
     margin: 6px 12px;
-    min-height: 50px;
+    min-height: 64px;
+    height: auto !important;
+    white-space: normal !important;
+    padding-top: 10px;
+    padding-bottom: 10px;
     border-radius: 16px;
     position: relative;
     color: var(--text-secondary);
@@ -188,16 +177,20 @@ export default {
     transition: transform var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
     h3 {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: flex-start;
-      gap: 10px;
-      padding-right: 18px;
+      gap: 8px;
+      padding-right: 10px;
       width: 100%;
       margin: 0 auto;
-      font-size: var(--font-size-h3);
+      font-size: 13px;
+      line-height: 1.4;
       font-weight: 600;
+      white-space: normal;
+      word-break: break-all;
       .iconfont {
         font-weight: normal;
+        margin-top: 1px;
       }
     }
   }
@@ -227,7 +220,7 @@ export default {
 }
 
 .el-menu-vertical-demo:not(.el-menu--collapse) {
-  width: 250px;
+  width: 258px;
   min-height: 400px;
 }
 

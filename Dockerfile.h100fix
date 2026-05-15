@@ -1,0 +1,226 @@
+ARG RUNTIME_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260513-assetchunks
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04 AS envbuilder
+
+ARG MMENGINE_VERSION=0.10.4
+ARG MMCV_VERSION=2.1.0
+ARG MMSEG_VERSION=1.2.2
+ARG MMDET_VERSION=3.0.0
+ARG MMROTATE_VERSION=1.0.0rc1
+ARG MMCV_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;9.0+PTX"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai
+
+RUN sed -i 's|mirrors.aliyun.com|archive.ubuntu.com|g' /etc/apt/sources.list && \
+    sed -i 's|archive.ubuntu.com/ubuntu focal-security|security.ubuntu.com/ubuntu focal-security|g' /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list || true
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    git \
+    build-essential \
+    wget \
+    bzip2 \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget -O /tmp/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
+    bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm /tmp/miniconda.sh
+
+ENV PATH=/opt/conda/bin:${PATH}
+
+RUN python - <<'PY'
+from pathlib import Path
+condarc = Path("/opt/conda/.condarc")
+channels = [
+    "https://conda.anaconda.org/Paddle",
+    "https://conda.anaconda.org/conda-forge",
+    "https://repo.anaconda.com/pkgs/main",
+    "https://repo.anaconda.com/pkgs/r",
+]
+lines = ["channels:"] + [f"  - {channel}" for channel in channels] + [
+    "show_channel_urls: true",
+    "notify_outdated_conda: false",
+    "remote_connect_timeout_secs: 20",
+    "remote_read_timeout_secs: 60",
+    "remote_max_retries: 5",
+    "channel_priority: strict",
+]
+condarc.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+
+RUN conda clean -afy && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
+    CONDA_NO_PLUGINS=true conda install --solver classic -n base -c conda-forge -y mamba
+
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-botsortofficial37 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n BoTSORTOfficial37 python=3.10 && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
+
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-botsortofficial37-torch && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    CONDA_NO_PLUGINS=true mamba install -y -n BoTSORTOfficial37 --override-channels \
+    -c pytorch -c nvidia -c conda-forge \
+    pytorch==2.1.2 torchvision==0.16.2 pytorch-cuda=11.8 && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
+
+RUN /bin/bash -lc 'source /opt/conda/etc/profile.d/conda.sh && \
+    conda activate BoTSORTOfficial37 && \
+    python -m pip install --no-cache-dir -v \
+    "numpy<2" "setuptools<81" "opencv-python<4.11" "opencv-contrib-python<4.11" \
+    loguru tqdm Pillow thop ninja tabulate prettytable easydict pyyaml yacs termcolor gdown cython'
+
+RUN /bin/bash -lc 'source /opt/conda/etc/profile.d/conda.sh && \
+    conda activate BoTSORTOfficial37 && \
+    export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple && \
+    python -m pip install --no-cache-dir --prefer-binary --default-timeout=120 --retries 10 -v \
+    "scipy<1.14" pandas h5py matplotlib faiss-cpu'
+
+RUN /bin/bash -lc 'source /opt/conda/etc/profile.d/conda.sh && \
+    conda activate BoTSORTOfficial37 && \
+    export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple && \
+    python -m pip install --no-cache-dir --prefer-binary --default-timeout=120 --retries 10 -v \
+    scikit-image scikit-learn tensorboard'
+
+RUN /bin/bash -lc 'source /opt/conda/etc/profile.d/conda.sh && \
+    conda activate BoTSORTOfficial37 && \
+    export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple && \
+    python -m pip install --no-cache-dir --prefer-binary --default-timeout=120 --retries 10 -v \
+    lap motmetrics filterpy'
+
+RUN /bin/bash -lc 'source /opt/conda/etc/profile.d/conda.sh && \
+    conda activate BoTSORTOfficial37 && \
+    python -m pip install --no-cache-dir -v cython_bbox pycocotools && \
+    python -m pip cache purge'
+
+RUN conda run -n BoTSORTOfficial37 python - <<'PY'
+import torch
+arch_list = getattr(torch.cuda, "get_arch_list", lambda: [])()
+if "sm_90" not in arch_list:
+    raise RuntimeError(f"BoTSORTOfficial37 torch build is not H100-compatible: {arch_list}")
+print("BoTSORTOfficial37 torch", torch.__version__, "cuda", torch.version.cuda, "arch_list", arch_list)
+PY
+
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-mmseg310 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n MMSeg310 python=3.10 gdal && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
+
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-mmseg310-torch && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    CONDA_NO_PLUGINS=true mamba install -y -n MMSeg310 --override-channels \
+    -c pytorch -c nvidia -c conda-forge \
+    pytorch==2.1.2 torchvision==0.16.2 pytorch-cuda=11.8 && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
+
+RUN conda run -n MMSeg310 pip install \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --prefer-binary \
+    --default-timeout 120 \
+    --retries 10 \
+    "numpy==1.26.4" \
+    "opencv-python<4.11" \
+    "opencv-python-headless<4.11" \
+    "setuptools<81" \
+    packaging \
+    wheel
+
+RUN conda run -n MMSeg310 pip install \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --prefer-binary \
+    --default-timeout 120 \
+    --retries 10 \
+    "mmengine==${MMENGINE_VERSION}" && \
+    export FORCE_CUDA=1 MMCV_WITH_OPS=1 TORCH_CUDA_ARCH_LIST="${MMCV_CUDA_ARCH_LIST}" && \
+    conda run -n MMSeg310 pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout 120 --retries 10 --no-binary mmcv --no-build-isolation --verbose \
+    "mmcv==${MMCV_VERSION}"
+
+RUN conda run -n MMSeg310 pip install \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --prefer-binary \
+    --default-timeout 120 \
+    --retries 10 \
+    "mmsegmentation==${MMSEG_VERSION}" \
+    "mmdet==${MMDET_VERSION}" \
+    "mmrotate==${MMROTATE_VERSION}" \
+    transformers==4.36.2 \
+    huggingface_hub \
+    numpy==1.26.4 \
+    "opencv-python-headless<4.11" \
+    pillow>=9.0.0 \
+    ftfy \
+    regex \
+    "scipy<1.14" && \
+    conda run -n MMSeg310 pip install --force-reinstall \
+    --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
+    --prefer-binary \
+    --default-timeout 120 \
+    --retries 10 \
+    "numpy<2" \
+    "opencv-python<4.11"
+
+RUN conda run -n MMSeg310 python - <<'PY'
+import subprocess
+import torch
+import mmcv
+import mmcv._ext
+import mmcv.ops
+import mmengine
+import mmdet
+import mmrotate
+import mmseg
+
+arch_list = getattr(torch.cuda, "get_arch_list", lambda: [])()
+if "sm_90" not in arch_list:
+    raise RuntimeError(f"MMSeg310 torch build is not H100-compatible: {arch_list}")
+
+cuobjdump_output = subprocess.check_output(
+    ["cuobjdump", "--list-elf", mmcv._ext.__file__],
+    text=True,
+)
+if "sm_90" not in cuobjdump_output:
+    raise RuntimeError("MMCV CUDA ops were built without sm_90 support")
+
+print(
+    "OpenMMLab imports OK",
+    {
+        "torch": torch.__version__,
+        "torch_cuda": torch.version.cuda,
+        "arch_list": arch_list,
+        "mmcv": mmcv.__version__,
+        "mmengine": mmengine.__version__,
+        "mmdet": mmdet.__version__,
+        "mmrotate": mmrotate.__version__,
+        "mmseg": mmseg.__version__,
+        "mmcv_ops": "ok",
+        "mmcv_cuda_arch": "sm_90",
+    },
+)
+PY
+
+RUN conda run -n MMSeg310 pip cache purge
+
+FROM ${RUNTIME_IMAGE}
+
+RUN rm -rf /opt/conda/envs/BoTSORTOfficial37 /opt/conda/envs/MMSeg310
+
+COPY --from=envbuilder /opt/conda/envs/BoTSORTOfficial37 /opt/conda/envs/BoTSORTOfficial37
+COPY --from=envbuilder /opt/conda/envs/MMSeg310 /opt/conda/envs/MMSeg310

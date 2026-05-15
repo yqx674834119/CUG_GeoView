@@ -1,12 +1,13 @@
-FROM nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 ARG MMENGINE_VERSION=0.10.4
-ARG MMCV_VERSION=2.2.0
+ARG MMCV_VERSION=2.1.0
 ARG MMSEG_VERSION=1.2.2
 ARG MMDET_VERSION=3.0.0
 ARG MMROTATE_VERSION=1.0.0rc1
 ARG CONDA_CHANNEL_MODE=official
 ARG USER_HOME=/root
+ARG MMCV_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;9.0+PTX"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
@@ -78,19 +79,33 @@ RUN if [ "${CONDA_CHANNEL_MODE}" = "official" ]; then \
       conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r; \
     fi
 
-RUN conda create -y -n PaddleRS37 \
+RUN CONDA_NO_PLUGINS=true conda install --solver classic -n base -c conda-forge -y mamba
+
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-paddlers37 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n PaddleRS37 \
     python=3.7 \
     paddlepaddle-gpu=2.4.2 \
     cudatoolkit=11.7 \
     cudnn=8.4 \
     gdal && \
-    conda clean -afy
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
 
-RUN conda create -y -n HFPyTorch310 python=3.10 && \
-    conda clean -afy
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-hfpy310 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n HFPyTorch310 python=3.10 && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
 
-RUN conda create -y -n BoTSORTOfficial37 python=3.7 && \
-    conda clean -afy
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-botsortofficial37 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n BoTSORTOfficial37 python=3.10 && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
 
 RUN conda run -n HFPyTorch310 pip install \
     torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118 && \
@@ -106,10 +121,20 @@ RUN conda run -n HFPyTorch310 pip install \
     conda run -n HFPyTorch310 pip cache purge
 
 RUN conda run -n BoTSORTOfficial37 pip install \
-    torch==1.11.0+cu113 torchvision==0.12.0+cu113 --extra-index-url https://download.pytorch.org/whl/cu113 && \
+    torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118 && \
     conda run -n BoTSORTOfficial37 pip install \
     numpy "opencv-python<4.11" "opencv-contrib-python<4.11" loguru scikit-image scikit-learn tqdm Pillow thop ninja tabulate tensorboard lap motmetrics filterpy h5py matplotlib scipy prettytable easydict pyyaml yacs termcolor gdown cython cython_bbox faiss-cpu pycocotools && \
     conda run -n BoTSORTOfficial37 pip cache purge
+
+RUN conda run -n BoTSORTOfficial37 python - <<'PY'
+import torch
+
+arch_list = getattr(torch.cuda, "get_arch_list", lambda: [])()
+if "sm_90" not in arch_list:
+    raise RuntimeError(f"BoTSORTOfficial37 torch build is not H100-compatible: {arch_list}")
+
+print("BoTSORTOfficial37 torch", torch.__version__, "cuda", torch.version.cuda, "arch_list", arch_list)
+PY
 
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV HF_HOME=/root/.cache/huggingface \
@@ -120,8 +145,12 @@ ENV HF_HOME=/root/.cache/huggingface \
     TORCH_HOME=/root/.cache/torch \
     PADDLE_HOME=/root/.paddle
 
-RUN conda create -y -n MMSeg310 python=3.10 gdal && \
-    conda clean -afy
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-mmseg310 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    mamba create -y -n MMSeg310 python=3.10 gdal && \
+    conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS"
 
 RUN conda run -n MMSeg310 pip install \
     torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cu118
@@ -131,16 +160,19 @@ RUN conda run -n MMSeg310 pip install \
     "opencv-python<4.11" \
     "opencv-python-headless<4.11" \
     "setuptools<81" \
+    packaging \
     wheel
 
 RUN conda run -n MMSeg310 pip install \
-    openmim==0.3.9 && \
-    conda run -n MMSeg310 pip uninstall -y mmdet || true && \
-    conda run -n MMSeg310 mim install "mmengine==${MMENGINE_VERSION}" && \
-    conda run -n MMSeg310 mim install "mmcv==${MMCV_VERSION}"
+    "mmengine==${MMENGINE_VERSION}" && \
+    export FORCE_CUDA=1 MMCV_WITH_OPS=1 TORCH_CUDA_ARCH_LIST="${MMCV_CUDA_ARCH_LIST}" && \
+    conda run -n MMSeg310 pip install --no-build-isolation --verbose \
+    "git+https://github.com/open-mmlab/mmcv.git@v${MMCV_VERSION}"
 
 RUN conda run -n MMSeg310 pip install \
     "mmsegmentation==${MMSEG_VERSION}" \
+    "mmdet==${MMDET_VERSION}" \
+    "mmrotate==${MMROTATE_VERSION}" \
     transformers==4.36.2 \
     huggingface_hub \
     numpy==1.26.4 \
@@ -149,18 +181,48 @@ RUN conda run -n MMSeg310 pip install \
     ftfy \
     regex \
     "scipy<1.14" && \
-    conda run -n MMSeg310 mim install "mmdet==${MMDET_VERSION}" && \
-    conda run -n MMSeg310 mim install "mmrotate==${MMROTATE_VERSION}" && \
     conda run -n MMSeg310 pip install --force-reinstall \
     "numpy<2" \
     "opencv-python<4.11"
 
-RUN sed -i "s/mmcv_maximum_version = .*/mmcv_maximum_version = '2.3.0'/" \
-      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmdet/__init__.py \
-      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmrotate/__init__.py && \
-    sed -i "s/MMCV_MAX = .*/MMCV_MAX = '2.3.0'/" \
-      /opt/conda/envs/MMSeg310/lib/python3.10/site-packages/mmseg/__init__.py && \
-    conda run -n MMSeg310 python -c "import mmcv, mmengine, mmdet, mmrotate, mmseg; print('OpenMMLab imports OK', mmcv.__version__, mmengine.__version__, mmdet.__version__, mmrotate.__version__, mmseg.__version__)"
+RUN conda run -n MMSeg310 python - <<'PY'
+import torch
+import mmcv
+import mmcv._ext
+import mmcv.ops
+import mmengine
+import mmdet
+import mmrotate
+import mmseg
+import subprocess
+
+arch_list = getattr(torch.cuda, "get_arch_list", lambda: [])()
+if "sm_90" not in arch_list:
+    raise RuntimeError(f"MMSeg310 torch build is not H100-compatible: {arch_list}")
+
+cuobjdump_output = subprocess.check_output(
+    ["cuobjdump", "--list-elf", mmcv._ext.__file__],
+    text=True,
+)
+if "sm_90" not in cuobjdump_output:
+    raise RuntimeError("MMCV CUDA ops were built without sm_90 support")
+
+print(
+    "OpenMMLab imports OK",
+    {
+        "torch": torch.__version__,
+        "torch_cuda": torch.version.cuda,
+        "arch_list": arch_list,
+        "mmcv": mmcv.__version__,
+        "mmengine": mmengine.__version__,
+        "mmdet": mmdet.__version__,
+        "mmrotate": mmrotate.__version__,
+        "mmseg": mmseg.__version__,
+        "mmcv_ops": "ok",
+        "mmcv_cuda_arch": "sm_90",
+    },
+)
+PY
 
 RUN conda run -n MMSeg310 pip cache purge
 

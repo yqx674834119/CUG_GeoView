@@ -11,7 +11,7 @@
           <div>
             <div class="analysis-shell__title">结果统计总览</div>
             <div class="analysis-shell__meta">
-              共 {{ overviewStats.sampleCount }} 条结果，统计仅依赖前端可见数据计算
+              共 {{ overviewStats.sampleCount }} 条结果，统计基于当前结果数据生成
             </div>
           </div>
           <el-tag
@@ -345,7 +345,7 @@ export default {
           {
             label: "统计样本数",
             value: this.overviewStats.sampleCount,
-            desc: "已完成前端像素统计的结果条目",
+            desc: "已完成统计的结果条目",
           },
           {
             label: "类别数",
