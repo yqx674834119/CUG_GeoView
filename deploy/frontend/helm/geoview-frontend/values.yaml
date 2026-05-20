@@ -7,7 +7,7 @@ frontend:
   replicaCount: 1
   image:
     repository: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend
-    tag: 20260514-frontmodules-v5
+    tag: 20260519-asyncpoll1
     pullPolicy: IfNotPresent
   runtimeConfig:
     backendUrl: "http://172.20.20.240:31839/186/5008"
@@ -17,6 +17,7 @@ frontend:
     backendAssetMode: sendfile
     frontendAssetDebug: false
     frontendDebug: false
+    frontendVersionTag: "20260519-asyncpoll1"
     minerEnabled: false
     minerUrl: ""
     baiduMapAccessKey: ""

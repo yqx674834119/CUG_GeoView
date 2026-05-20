@@ -1,6 +1,8 @@
 FROM node:18-alpine AS builder
 
 WORKDIR /app/frontend
+ARG FRONTEND_VERSION_TAG=dev
+ENV VUE_APP_VERSION_TAG=${FRONTEND_VERSION_TAG}
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit

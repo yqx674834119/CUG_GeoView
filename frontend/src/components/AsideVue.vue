@@ -187,7 +187,8 @@ export default {
       line-height: 1.4;
       font-weight: 600;
       white-space: normal;
-      word-break: break-all;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
       .iconfont {
         font-weight: normal;
         margin-top: 1px;

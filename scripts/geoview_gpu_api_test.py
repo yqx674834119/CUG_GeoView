@@ -54,13 +54,31 @@ MODEL_CASES = {
     ],
 }
 
+SMALL_TARGET_DETECTION_MODEL_PATH = "backend/model/object_detection/mmrotate_oriented_rcnn_r50_fpn_1x_dota_le90"
+PADDLE_CASES = {
+    "change_detection": ["backend/model/change_detection/bit_256x256"],
+    "object_detection": ["backend/model/object_detection/paddle_yolo"],
+    "classification": ["backend/model/classification/resnet50"],
+    "semantic_segmentation": ["backend/model/semantic_segmentation/paddle_deeplabv3p"],
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default="docs/test-results/gpu-api-report.json")
     parser.add_argument("--tracking-frames", type=int, default=6)
     parser.add_argument("--tracking-width", type=int, default=960)
+    parser.add_argument("--paddle-devices", default="gpu,cpu")
     return parser.parse_args()
+
+
+def parse_paddle_devices(value: str) -> List[str]:
+    devices = []
+    for item in (value or "").split(","):
+        device = item.strip().lower()
+        if device in {"gpu", "cpu"} and device not in devices:
+            devices.append(device)
+    return devices or ["gpu"]
 
 
 def run_text(cmd: List[str]) -> Dict[str, Any]:
@@ -263,6 +281,7 @@ def prepare_tracking_frames(width: int, count: int) -> List[Path]:
 
 def main():
     args = parse_args()
+    paddle_devices = parse_paddle_devices(args.paddle_devices)
     env = gpu_environment()
     assert_gpu(env)
     _, client, ctx = open_app()
@@ -297,16 +316,28 @@ def main():
             report["cases"].append(call_case(client, f"model_list:{model_type}", "GET", f"/api/model/list/{model_type}"))
 
         for model_path in MODEL_CASES["change_detection"]:
-            report["cases"].append(call_case(client, f"change_detection:{model_path}", "POST", "/api/analysis/change_detection", {
-                "model_path": model_path,
-                "list": [{"first": uploads["cd_a"]["src"], "second": uploads["cd_b"]["src"]}],
-                "prehandle": 0,
-                "denoise": 0,
-                "window_size": 256,
-                "stride": 128,
-            }))
+            for device in paddle_devices:
+                report["cases"].append(call_case(client, f"change_detection:{model_path}:{device}", "POST", "/api/analysis/change_detection", {
+                    "model_path": model_path,
+                    "list": [{"first": uploads["cd_a"]["src"], "second": uploads["cd_b"]["src"]}],
+                    "prehandle": 0,
+                    "denoise": 0,
+                    "window_size": 256,
+                    "stride": 128,
+                    "paddle_device": device,
+                }))
 
         for model_path in MODEL_CASES["object_detection"]:
+            if model_path in PADDLE_CASES["object_detection"]:
+                for device in paddle_devices:
+                    report["cases"].append(call_case(client, f"object_detection:{model_path}:{device}", "POST", "/api/analysis/object_detection", {
+                        "model_path": model_path,
+                        "list": [uploads["aircraft"]["src"]],
+                        "prehandle": 0,
+                        "denoise": 0,
+                        "paddle_device": device,
+                    }))
+                continue
             report["cases"].append(call_case(client, f"object_detection:{model_path}", "POST", "/api/analysis/object_detection", {
                 "model_path": model_path,
                 "list": [uploads["aircraft"]["src"]],
@@ -314,7 +345,24 @@ def main():
                 "denoise": 0,
             }))
 
+        report["cases"].append(call_case(client, f"small_target_detection:{SMALL_TARGET_DETECTION_MODEL_PATH}", "POST", "/api/analysis/small_target_detection", {
+            "model_path": SMALL_TARGET_DETECTION_MODEL_PATH,
+            "list": [uploads["cd_a"]["src"], uploads["aircraft"]["src"]],
+            "prehandle": 0,
+            "denoise": 0,
+        }))
+
         for model_path in MODEL_CASES["semantic_segmentation"]:
+            if model_path in PADDLE_CASES["semantic_segmentation"]:
+                for device in paddle_devices:
+                    report["cases"].append(call_case(client, f"semantic_segmentation:{model_path}:{device}", "POST", "/api/analysis/semantic_segmentation", {
+                        "model_path": model_path,
+                        "list": [uploads["seg"]["src"]],
+                        "prehandle": 0,
+                        "denoise": 0,
+                        "paddle_device": device,
+                    }))
+                continue
             report["cases"].append(call_case(client, f"semantic_segmentation:{model_path}", "POST", "/api/analysis/semantic_segmentation", {
                 "model_path": model_path,
                 "list": [uploads["seg"]["src"]],
@@ -323,10 +371,12 @@ def main():
             }))
 
         for model_path in MODEL_CASES["classification"]:
-            report["cases"].append(call_case(client, f"classification:{model_path}", "POST", "/api/analysis/classification", {
-                "model_path": model_path,
-                "list": [uploads["aircraft"]["src"]],
-            }))
+            for device in paddle_devices:
+                report["cases"].append(call_case(client, f"classification:{model_path}:{device}", "POST", "/api/analysis/classification", {
+                    "model_path": model_path,
+                    "list": [uploads["aircraft"]["src"]],
+                    "paddle_device": device,
+                }))
 
         for model_path in MODEL_CASES["image_restoration"]:
             report["cases"].append(call_case(client, f"image_restoration:{model_path}", "POST", "/api/analysis/image_restoration", {

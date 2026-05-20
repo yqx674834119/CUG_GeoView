@@ -171,19 +171,20 @@
                 </el-tag>
               </div>
 
-              <el-descriptions
-                :column="2"
-                border
-                size="small"
-              >
-                <el-descriptions-item
+              <div class="record-analysis__metrics">
+                <div
                   v-for="metric in itemMetricCards(analysisFor(item, index))"
                   :key="metric.label"
-                  :label="metric.label"
+                  class="record-analysis__metric"
                 >
-                  {{ metric.value }}
-                </el-descriptions-item>
-              </el-descriptions>
+                  <div class="record-analysis__metric-label">
+                    {{ metric.label }}
+                  </div>
+                  <div class="record-analysis__metric-value">
+                    {{ metric.value }}
+                  </div>
+                </div>
+              </div>
 
               <div
                 v-if="itemCharts(analysisFor(item, index)).length"
@@ -1080,7 +1081,9 @@ export default {
 .img-display-item__result {
   display: flex;
   flex-direction: column;
+  flex: 1 1 680px;
   max-width: 100%;
+  min-width: 0;
 }
 
 .record-analysis {
@@ -1089,6 +1092,39 @@ export default {
   border-radius: 16px;
   background: rgba(248, 250, 252, 0.95);
   border: 1px solid rgba(148, 163, 184, 0.16);
+  width: min(100%, 760px);
+  align-self: stretch;
+}
+
+.record-analysis__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.record-analysis__metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.record-analysis__metric-label {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.record-analysis__metric-value {
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--theme-heading-color);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .el-divider /deep/ {
@@ -1098,6 +1134,18 @@ export default {
 @media (max-width: 900px) {
   .chart-view {
     height: 240px;
+  }
+
+  .img-display-item__result {
+    flex-basis: 100%;
+  }
+
+  .record-analysis {
+    width: 100%;
+  }
+
+  .record-analysis__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .img-display-box .img-display-item .img-display {

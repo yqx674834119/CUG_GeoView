@@ -44,14 +44,14 @@ def get_huggingface_model_id(model_path):
     return ""
 
 
-def execute_paddle(model_path, data_path, out_dir, names):
+def execute_paddle(model_path, data_path, out_dir, names, use_gpu=True):
     """使用 PaddleRS 执行推理"""
     import paddlers as pdrs
     
     temps = list()
     image_list = [osp.join(data_path, name) for name in names]
     predictor = pdrs.deploy.Predictor(model_dir=str(resolve_model_dir(model_path)),
-                                      use_gpu=paddle_use_gpu())
+                                      use_gpu=paddle_use_gpu(use_gpu))
     pred = predictor.predict(image_list)
     imgs = [im['res_map'] for im in pred]
     for name, im in zip(names, imgs):
@@ -79,7 +79,7 @@ def execute_huggingface(model_id, data_path, out_dir, names):
     )
 
 
-def execute(model_path, data_path, out_dir, names):
+def execute(model_path, data_path, out_dir, names, use_gpu=True):
     """
     统一的执行接口 - 自动路由到 Paddle 或 HuggingFace
     
@@ -99,4 +99,4 @@ def execute(model_path, data_path, out_dir, names):
         return execute_huggingface(model_id, data_path, out_dir, names)
     else:
         print(f"[ImageRestoration] 使用 Paddle 模型: {model_path}", flush=True)
-        return execute_paddle(model_path, data_path, out_dir, names)
+        return execute_paddle(model_path, data_path, out_dir, names, use_gpu=use_gpu)

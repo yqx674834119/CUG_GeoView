@@ -222,6 +222,13 @@
           </el-radio>
         </div>
       </el-row>
+      <el-row justify="center">
+        <PaddleRuntimeSelector
+          v-model="upload.paddle_device"
+          :model-path="upload.model_path"
+          :models="modelPathArr"
+        />
+      </el-row>
 
       <div class="handle-button">
         <el-button
@@ -789,20 +796,20 @@
         center
       >
         <div v-if="resultArr[currentIndex]">
-          <el-descriptions title="基础统计" :column="2" border>
-            <el-descriptions-item label="变化区域个数">
-              {{ holeShow ? resultArr[currentIndex].data.count_hole : resultArr[currentIndex].data.count }}
-            </el-descriptions-item>
-            <el-descriptions-item label="总变化面积 (像素)">
-              {{ holeShow ? resultArr[currentIndex].data.total_area_hole : resultArr[currentIndex].data.total_area }}
-            </el-descriptions-item>
-            <el-descriptions-item label="平均变化面积 (像素)">
-               {{ (holeShow ? resultArr[currentIndex].data.avg_area_hole : resultArr[currentIndex].data.avg_area).toFixed(2) }}
-            </el-descriptions-item>
-            <el-descriptions-item label="变化百分比">
-              {{ (holeShow ? resultArr[currentIndex].data.fractional_variation_hole : resultArr[currentIndex].data.fractional_variation).toFixed(2) }}%
-            </el-descriptions-item>
-          </el-descriptions>
+          <div class="detail-metric-grid">
+            <div
+              v-for="metric in detailMetrics"
+              :key="metric.label"
+              class="detail-metric-card"
+            >
+              <div class="detail-metric-card__label">
+                {{ metric.label }}
+              </div>
+              <div class="detail-metric-card__value">
+                {{ metric.value }}
+              </div>
+            </div>
+          </div>
 
           <el-divider>区域大小分布</el-divider>
           <div style="height: 300px; width: 100%;">
@@ -864,6 +871,7 @@ import {
 } from "@/utils/download.js";
 import Tabinfor from "@/components/Tabinfor";
 import DraggableItem from "@/components/DraggableItem";
+import PaddleRuntimeSelector from "@/components/PaddleRuntimeSelector";
 import {
   hydrateDataSource,
   hydrateRecordSource,
@@ -911,6 +919,7 @@ export default {
     Tabinfor,
     DraggableItem,
     VChart,
+    PaddleRuntimeSelector,
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -956,7 +965,8 @@ export default {
         ],
         prehandle: 0,
         denoise: 0,
-        model_path:''
+        model_path:'',
+        paddle_device: "cpu",
       },
       modelPathArr:[],
       //直方图处理
@@ -1036,25 +1046,25 @@ export default {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveRecordSource(this.currentRecord, "before_img") || "";
+      return this.currentRecord._before_img_preview || resolveRecordSource(this.currentRecord, "before_img") || "";
     },
     currentBeforeSecondSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveRecordSource(this.currentRecord, "before_img1") || "";
+      return this.currentRecord._before_img1_preview || resolveRecordSource(this.currentRecord, "before_img1") || "";
     },
     currentMaskSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveDataSource(this.currentRecord, "mask") || "";
+      return this.currentRecord._mask_preview || resolveDataSource(this.currentRecord, "mask") || "";
     },
     currentMaskHoleSource() {
       if (!this.currentRecord) {
         return "";
       }
-      return resolveDataSource(this.currentRecord, "mask_hole") || "";
+      return this.currentRecord._mask_hole_preview || resolveDataSource(this.currentRecord, "mask_hole") || "";
     },
     sliderWrapperStyle() {
       return {
@@ -1067,15 +1077,37 @@ export default {
         left: `${this.sliderPosition}%`,
       };
     },
+    detailMetrics() {
+      const data = this.resultArr[this.currentIndex]?.data || {};
+      const count = this.holeShow ? data.count_hole : data.count;
+      const totalArea = this.holeShow ? data.total_area_hole : data.total_area;
+      const avgArea = this.holeShow ? data.avg_area_hole : data.avg_area;
+      const variation = this.holeShow ? data.fractional_variation_hole : data.fractional_variation;
+      return [
+        { label: "变化区域个数", value: count ?? "--" },
+        { label: "总变化面积", value: totalArea ?? "--" },
+        { label: "平均变化面积", value: Number.isFinite(Number(avgArea)) ? Number(avgArea).toFixed(2) : "--" },
+        { label: "变化百分比", value: Number.isFinite(Number(variation)) ? `${Number(variation).toFixed(2)}%` : "--" },
+      ];
+    },
   },
   beforeUnmount() {
     this.removeSliderListeners();
+  },
+  watch: {
+    currentIndex() {
+      this.hydrateCurrentChangeAssets();
+    },
+    holeShow() {
+      this.hydrateCurrentChangeAssets();
+    },
   },
   created() {
     this.getMore();
     this.getCustomModel('change_detection').then((res)=>{
       this.modelPathArr = res.data.data
       this.upload.model_path = this.modelPathArr[0]?.model_path
+      this.upload.paddle_device = "cpu"
     }).catch((rej)=>{})
   },
 
@@ -1087,6 +1119,34 @@ export default {
     getImgArrayBuffer,
     atchDownload,
     histogramUpload,
+    hydrateCurrentChangeAssets() {
+      const current = this.currentRecord;
+      if (!current) {
+        return;
+      }
+      const jobs = [
+        ["before_img", "_before_img_preview", current.before_img],
+        ["before_img1", "_before_img1_preview", current.before_img1],
+        ["mask", "_mask_preview", current.data?.mask],
+        ["mask_hole", "_mask_hole_preview", current.data?.mask_hole],
+      ];
+      jobs.forEach(([name, previewField, path]) => {
+        if (!path || current[previewField]) {
+          return;
+        }
+        fetchBackendAssetBlobUrl(path)
+          .then((url) => {
+            current[previewField] = url;
+          })
+          .catch((error) => {
+            console.error("[GeoView] change asset chunk load failed", {
+              field: name,
+              path,
+              error: error?.message || error,
+            });
+          });
+      });
+    },
     resultThumbSource(item) {
       if (!item) {
         return "";
@@ -1098,8 +1158,14 @@ export default {
     clearQueue() {
       this.fileList1 = [];
       this.fileList2 = [];
+      this.resultArr = [];
+      this.currentIndex = 0;
+      this.currentQroup = 0;
+      this.onRender = 0;
+      this.onRenderResult = "";
       this.$message.success("清除成功");
     },
+    syncDisplayMode() {},
     goRenderThis(index) {
       this.currentIndex = this.currentQroup;
       this.currentIndex += index;
@@ -1220,6 +1286,7 @@ export default {
                       this.currentIndex = 0;
                       this.currentQroup = 0;
                       this.getMore();
+                      this.hydrateCurrentChangeAssets();
                       this.setOneWay(this.renderstyle, this.resultArr.length === 0, this.holeShow);
                       if (this.upload.list.length >= 10) {
                         this.$confirm(
@@ -2007,6 +2074,38 @@ export default {
 .render-mode-state__text {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.detail-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.detail-metric-card {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--theme-surface-elevated);
+  border: 1px solid var(--border-color);
+}
+
+.detail-metric-card__label {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.detail-metric-card__value {
+  margin-top: 6px;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--theme-heading-color);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .upload-box{

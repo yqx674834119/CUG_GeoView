@@ -12,14 +12,15 @@ from applications.common.path_global import generate_url
 from applications.interface.utils import paddle_use_gpu
 
 
-def execute(model_path, data_path, out_dir, names, window_size=256, stride=128):
+def execute(model_path, data_path, out_dir, names, window_size=256, stride=128, use_gpu=True):
     image_list = [(osp.join(data_path, name["first"]), osp.join(data_path,
                                                                 name["second"]))
                   for name in names]
     temps = list()  # 存储查看链接
     temps1 = list()  # 存储生成的图片名
     predictor = pdrs.deploy.Predictor(str(resolve_model_dir(model_path)),
-                                      use_gpu=paddle_use_gpu())
+                                      use_gpu=paddle_use_gpu(use_gpu),
+                                      use_mkl=False)
     for image in image_list:
         predictor.slider_predict(
             image,

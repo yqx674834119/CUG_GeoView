@@ -666,10 +666,14 @@ img,
 .model-label {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   font-size: var(--font-size-tips);
   font-weight: 700;
   color: var(--text-primary);
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .model-label__icon {

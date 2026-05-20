@@ -17,7 +17,12 @@ import JSZIP from "jszip"
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 initializeTheme()
-console.info("[GeoView] frontend ready", { backendBaseUrl: global.BASEURL })
+const runtimeConfig = window.__GEOVIEW_RUNTIME_CONFIG__ || {}
+const frontendVersionTag = process.env.VUE_APP_VERSION_TAG || runtimeConfig.frontendVersionTag || "dev"
+console.info("[GeoView] frontend ready", {
+  versionTag: frontendVersionTag,
+  backendBaseUrl: global.BASEURL,
+})
 
 const RESIZE_OBSERVER_NOISE = "ResizeObserver loop completed with undelivered notifications."
 

@@ -191,6 +191,27 @@
           开始跟踪
         </el-button>
       </div>
+      <div v-if="running || trackingJobId" class="tracking-job-panel">
+        <div class="tracking-job-panel__head">
+          <el-tag :type="trackingJobTagType" effect="dark">
+            {{ trackingJobStatusText }}
+          </el-tag>
+          <span class="tracking-job-panel__meta">
+            {{ trackingJobMessage || "等待后端返回状态" }}
+          </span>
+        </div>
+        <div
+          class="tracking-job-panel__bar"
+          :class="{ 'tracking-job-panel__bar--active': running && !isTrackingJobTerminal }"
+        >
+          <span :style="{ width: `${trackingProgressPercent}%` }" />
+        </div>
+        <div class="tracking-job-panel__foot">
+          <span v-if="trackingElapsedSec">已运行 {{ trackingElapsedSec }} 秒</span>
+          <span>已查询 {{ trackingPollCount }} 次</span>
+          <span v-if="running && !isTrackingJobTerminal">每 3 秒自动刷新</span>
+        </div>
+      </div>
     </el-card>
 
     <Tabinfor>
@@ -525,11 +546,12 @@ import {
 import VChart from "vue-echarts";
 
 import Tabinfor from "@/components/Tabinfor";
-import { createSrc, createVideoPreview, getCustomModel, imgUpload } from "@/api/upload";
+import { createSrc, createVideoPreview, getCustomModel } from "@/api/upload";
 import global from "@/global.vue";
 import { fetchBackendAssetBlobUrl } from "@/utils/assetChunkTransport";
 import { fetchJsonAsset, summarizeTrajectoryPayload } from "@/utils/frontAnalysis";
 import { getLocalSourceUrl, registerLocalSource, registerUploadedSources } from "@/utils/localSourceRegistry";
+import { fetchTransportResult } from "@/utils/resultTransport";
 
 use([
   CanvasRenderer,
@@ -723,6 +745,12 @@ export default {
       trajectoryPayload: null,
       trajectoryAnalysis: null,
       trajectoryError: "",
+      trackingJobId: "",
+      trackingJobStatus: "",
+      trackingJobMessage: "",
+      trackingElapsedSec: 0,
+      trackingPollCount: 0,
+      trackingPollTimer: null,
     };
   },
   computed: {
@@ -841,6 +869,45 @@ export default {
     trackingWarningInsight() {
       return buildTrackingWarningInsight(this.resultSummary, this.trajectoryAnalysis);
     },
+    trackingJobStatusText() {
+      const map = {
+        queued: "排队中",
+        running: "运行中",
+        succeeded: "已完成",
+        failed: "失败",
+      };
+      return map[this.trackingJobStatus] || (this.running ? "提交中" : "待提交");
+    },
+    trackingJobTagType() {
+      if (this.trackingJobStatus === "failed") {
+        return "danger";
+      }
+      if (this.trackingJobStatus === "succeeded") {
+        return "success";
+      }
+      if (this.trackingJobStatus === "queued") {
+        return "warning";
+      }
+      return "info";
+    },
+    isTrackingJobTerminal() {
+      return this.trackingJobStatus === "succeeded" || this.trackingJobStatus === "failed";
+    },
+    trackingProgressPercent() {
+      if (this.trackingJobStatus === "succeeded") {
+        return 100;
+      }
+      if (this.trackingJobStatus === "failed") {
+        return 100;
+      }
+      if (this.trackingJobStatus === "running") {
+        return Math.min(92, 24 + this.trackingPollCount * 7);
+      }
+      if (this.trackingJobStatus === "queued") {
+        return Math.min(24, 8 + this.trackingPollCount * 4);
+      }
+      return this.running ? 8 : 0;
+    },
     requiresInitialRect() {
       const modelPath = (this.selectedModel && this.selectedModel.model_path) || "";
       return !(
@@ -856,6 +923,7 @@ export default {
     this.fetchModels();
   },
   beforeUnmount() {
+    this.stopTrackingPolling();
     this.revokeFirstFrameUrl();
   },
   methods: {
@@ -864,7 +932,7 @@ export default {
         const currentModels = res.data.data || [];
         this.modelPathArr = currentModels.filter((item) => {
           const path = item.model_path || "";
-          return path.includes("/tracking/botsort") || path.includes("/tracking/botsort_official");
+          return path.includes("/tracking/botsort_official");
         }).sort((a, b) => {
           const aOfficial = (a.model_path || "").includes("/tracking/botsort_official");
           const bOfficial = (b.model_path || "").includes("/tracking/botsort_official");
@@ -876,6 +944,7 @@ export default {
       }).catch(() => {});
     },
     clearQueue() {
+      this.running = false;
       this.revokeFirstFrameUrl();
       this.fileList = [];
       this.sortedNames = [];
@@ -896,6 +965,12 @@ export default {
       this.trajectoryPayload = null;
       this.trajectoryAnalysis = null;
       this.trajectoryError = "";
+      this.stopTrackingPolling();
+      this.trackingJobId = "";
+      this.trackingJobStatus = "";
+      this.trackingJobMessage = "";
+      this.trackingElapsedSec = 0;
+      this.trackingPollCount = 0;
       if (this.$refs.upload) {
         this.$refs.upload.clearFiles();
       }
@@ -1006,6 +1081,12 @@ export default {
       this.trajectoryPayload = null;
       this.trajectoryAnalysis = null;
       this.trajectoryError = "";
+      this.stopTrackingPolling();
+      this.trackingJobId = "";
+      this.trackingJobStatus = "";
+      this.trackingJobMessage = "";
+      this.trackingElapsedSec = 0;
+      this.trackingPollCount = 0;
       this.firstFrame = ordered.length ? URL.createObjectURL(ordered[0].raw) : null;
       if (this.inputMode === "video" && ordered.length === 1) {
         this.prepareVideoPreview(ordered[0]);
@@ -1163,22 +1244,16 @@ export default {
             Math.round(this.rect.h * scaleY),
           ];
         }
-        const response = await imgUpload(payload, "tracking");
-        const data = response.data.data || {};
-        if (!data.preview_path || !data.output_video_path) {
-          throw new Error(response.data.msg || "跟踪结果不完整");
+        const submitted = await this.submitTrackingJob(payload);
+        this.trackingJobId = submitted.job_id || "";
+        this.trackingJobStatus = submitted.status || "queued";
+        this.trackingJobMessage = submitted.message || "目标跟踪任务已提交";
+        this.trackingElapsedSec = 0;
+        this.trackingPollCount = 0;
+        if (!this.trackingJobId) {
+          throw new Error("后端未返回目标跟踪任务 ID");
         }
-        this.result = {
-          ...data,
-          record: data.record || null,
-          first_frame_full_url: await this.prefixUrl(data.first_frame_input),
-          source_input_full_url: await this.prefixUrl(data.source_input_path),
-          preview_full_url: await this.prefixUrl(data.preview_path),
-          output_video_full_url: await this.prefixUrl(data.output_video_path),
-          trajectory_full_url: await this.prefixUrl(data.trajectory_path),
-        };
-        await this.loadTrajectoryAnalysis(this.result.trajectory_full_url);
-        this.$message.success(response.data.msg || "目标跟踪完成");
+        await this.pollTrackingJob(this.trackingJobId);
       } catch (error) {
         console.error(error);
         const message = error?.response?.data?.msg || error?.message || "目标跟踪失败";
@@ -1186,6 +1261,85 @@ export default {
       } finally {
         this.running = false;
       }
+    },
+    backendUrl(path) {
+      return `${String(this.global.BASEURL || "").replace(/\/+$/, "")}${path}`;
+    },
+    async requestTrackingJson(path, options = {}) {
+      const headers = {
+        Accept: "application/json",
+        ...(options.headers || {}),
+      };
+      if (options.body && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
+      const response = await fetch(this.backendUrl(path), {
+        ...options,
+        headers,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success !== true) {
+        throw new Error(payload?.msg || `请求失败 HTTP ${response.status}`);
+      }
+      return payload.data || {};
+    },
+    async submitTrackingJob(payload) {
+      this.stopTrackingPolling();
+      this.trackingJobStatus = "queued";
+      this.trackingJobMessage = "正在提交目标跟踪任务";
+      this.trackingPollCount = 0;
+      const chunkSize = encodeURIComponent(String(global.RESULT_CHUNK_SIZE || 65536));
+      return this.requestTrackingJson(`/api/analysis/tracking/async?chunk_size=${chunkSize}`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    waitTrackingPoll(ms) {
+      return new Promise((resolve) => {
+        this.trackingPollTimer = window.setTimeout(resolve, ms);
+      });
+    },
+    stopTrackingPolling() {
+      if (this.trackingPollTimer) {
+        window.clearTimeout(this.trackingPollTimer);
+        this.trackingPollTimer = null;
+      }
+    },
+    async pollTrackingJob(jobId) {
+      while (this.running && jobId === this.trackingJobId) {
+        const job = await this.requestTrackingJson(`/api/analysis/tracking/jobs/${jobId}`, {
+          method: "GET",
+        });
+        this.trackingPollCount += 1;
+        this.trackingJobStatus = job.status || "";
+        this.trackingJobMessage = job.message || "";
+        this.trackingElapsedSec = Number(job.elapsed_sec || 0);
+        if (job.status === "failed") {
+          throw new Error(job.message || job.error || "目标跟踪失败");
+        }
+        if (job.status === "succeeded") {
+          const data = await fetchTransportResult(job.transport_manifest);
+          await this.applyTrackingResult(data || {});
+          this.$message.success(job.message || "目标跟踪完成");
+          return;
+        }
+        await this.waitTrackingPoll(3000);
+      }
+    },
+    async applyTrackingResult(data) {
+      if (!data.preview_path || !data.output_video_path) {
+        throw new Error("跟踪结果不完整");
+      }
+      this.result = {
+        ...data,
+        record: data.record || null,
+        first_frame_full_url: await this.prefixUrl(data.first_frame_input),
+        source_input_full_url: await this.prefixUrl(data.source_input_path),
+        preview_full_url: await this.prefixUrl(data.preview_path),
+        output_video_full_url: await this.prefixUrl(data.output_video_path),
+        trajectory_full_url: await this.prefixUrl(data.trajectory_path),
+      };
+      await this.loadTrajectoryAnalysis(this.result.trajectory_full_url);
     },
     async prefixUrl(path) {
       if (!path) {
@@ -1390,6 +1544,65 @@ export default {
 .handle-button {
   margin-top: 24px;
   text-align: center;
+}
+
+.tracking-job-panel {
+  margin: 18px auto 0;
+  max-width: 760px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--theme-border-color);
+  background: var(--theme-surface-secondary);
+}
+
+.tracking-job-panel__head,
+.tracking-job-panel__foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tracking-job-panel__meta,
+.tracking-job-panel__foot {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.tracking-job-panel__bar {
+  position: relative;
+  height: 8px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.tracking-job-panel__bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 8px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  transition: width 0.35s ease;
+}
+
+.tracking-job-panel__bar--active span {
+  background:
+    linear-gradient(90deg, #2563eb, #16a34a),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.2) 0,
+      rgba(255, 255, 255, 0.2) 8px,
+      rgba(255, 255, 255, 0) 8px,
+      rgba(255, 255, 255, 0) 16px
+    );
+}
+
+.tracking-job-panel__foot {
+  margin-top: 10px;
+  font-size: 13px;
 }
 
 .render-mode-bar {

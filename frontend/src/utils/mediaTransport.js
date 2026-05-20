@@ -17,12 +17,16 @@ export function getDataTransport() {
 
 export function resolveTransportSource(transport) {
   const value = transport?.asset_path || transport?.original_url || "";
-  return isBackendPhotoAssetPath(value) ? getCachedBackendAssetBlobUrl(value) : toBackendAssetUrl(value);
+  return isBackendPhotoAssetPath(value)
+    ? getCachedBackendAssetBlobUrl(value)
+    : toBackendAssetUrl(value);
 }
 
 export function resolveRecordSource(record, field) {
   const value = record?.[field] || "";
-  return isBackendPhotoAssetPath(value) ? getCachedBackendAssetBlobUrl(value) : toBackendAssetUrl(value);
+  return isBackendPhotoAssetPath(value)
+    ? getCachedBackendAssetBlobUrl(value)
+    : toBackendAssetUrl(value);
 }
 
 export function resolveDataSource(record, field) {
@@ -32,7 +36,9 @@ export function resolveDataSource(record, field) {
     current = current?.[segment];
   }
   const value = current || "";
-  return isBackendPhotoAssetPath(value) ? getCachedBackendAssetBlobUrl(value) : toBackendAssetUrl(value);
+  return isBackendPhotoAssetPath(value)
+    ? getCachedBackendAssetBlobUrl(value)
+    : toBackendAssetUrl(value);
 }
 
 export async function hydrateRecordSource(record, field) {

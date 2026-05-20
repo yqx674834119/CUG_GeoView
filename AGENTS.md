@@ -5,10 +5,14 @@
 ## 基本原则
 
 - 不要回滚用户已有改动；先用 `git status --short` 看清楚工作区。
-- 镜像必须使用明确 tag，不使用 `latest`。tag 格式沿用 `YYYYMMDD-purposeN`，例如 `20260515-h100fix1`。
+- 镜像必须同时维护两个 tag：明确版本 tag 和 `latest`。版本 tag 格式沿用 `YYYYMMDD-purposeN`，例如 `20260515-smalltarget2`。
+- `docker-compose*.yml` 默认使用 `latest`，便于本机或现场直接拉取当前版本；交付记录、验收报告、U 盘打包命令必须使用明确版本 tag 和 digest，不能只记录 `latest`。
 - 后端镜像必须包含所有模型、权重和依赖；内网部署时不能依赖公网下载。
 - 后端修改后必须做 H100 GPU/API 全量回归，要求所有模型通过，不能只验证出问题的模型。
 - 前端修改后必须重新构建前端镜像，并确认页面能访问后端接口。
+- 本机验收按前后端分离启动：后端容器和前端容器分别启动，不启动 MySQL，不启动矿山服务。
+- 每次构建并推送新的前端或后端镜像后，必须同步替换本机正在运行的对应容器到新镜像，并做健康检查；不要只完成镜像构建和推送。
+- 集群对单个响应大小有限制，前后端不得新增大响应直传。所有模型分析接口必须返回 `transport_manifest`，前端通过 `/api/transport/result/<result_id>/chunk?...` 拉取分片结果；所有后端图片/视频等资产预览必须通过 `/api/transport/asset/chunk?path=...&offset=...&limit=...` 拉取，不能直接把 `/api/file/assets/photos/...` 作为最终展示地址。
 
 ## 当前镜像信息
 
@@ -16,12 +20,29 @@
 
 ```bash
 BACKEND_REGISTRY=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs
-BACKEND_TAG=20260515-h100fix1
+BACKEND_TAG=20260519-trackingasync1
 BACKEND_IMAGE=${BACKEND_REGISTRY}:${BACKEND_TAG}
-BACKEND_DIGEST=sha256:b427b0a507da6527c42bb98af928397676090f9f6453001f083b45b1219e2e11
+BACKEND_LATEST_IMAGE=${BACKEND_REGISTRY}:latest
+BACKEND_DIGEST=sha256:5cc04a8b3ff05a2865012951a36ba559bbc41424ad3d6fc2a9aa534b8f427df2
 ```
 
-前端镜像仓库以当前 `docker-compose`、Helm values 或 `deploy/frontend/helm/image-manifest.txt` 为准；不要臆造 tag，先查现有配置。
+前端仓库：
+
+```bash
+FRONTEND_REGISTRY=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend
+FRONTEND_TAG=20260519-trackingasync1
+FRONTEND_IMAGE=${FRONTEND_REGISTRY}:${FRONTEND_TAG}
+FRONTEND_LATEST_IMAGE=${FRONTEND_REGISTRY}:latest
+FRONTEND_DIGEST=sha256:1fe8d4690c651cdf816c9114cc913cdac1b8415af86ac092d70be65c884b1a19
+```
+
+## Paddle 变更与当前问题
+
+- Paddle 模型已支持前端选择 `GPU/CPU` 推理。前端通过 `paddle_device` 传参，后端统一用 `resolve_paddle_device()` 解析；`cpu` 会显式走 CPU，`gpu` 会要求容器内 Paddle CUDA 可用，不可用时拒绝静默回退。
+- 前端已接入 `PaddleRuntimeSelector`。变化检测默认 `cpu`；通用遥感目标识别默认 `cpu`；其他 Paddle 页面保留按页面配置显示设备选项。
+- 后端 Paddle 调用统一经过 `paddle_use_gpu()`，GPU 模式会检查 `paddle.device.is_compiled_with_cuda()`、`paddle.device.cuda.device_count()` 和 `CUDA_VISIBLE_DEVICES`，避免现场 GPU 不可用时悄悄跑 CPU。
+- 后端回归脚本 `scripts/geoview_gpu_api_test.py` 支持 `--paddle-devices gpu,cpu`，后端交付回归必须同时覆盖 Paddle GPU 和 CPU。
+- 不要修改或回滚历史 `Dockerfile.h100fix`；Paddle/H100 后续修复应基于当前专用 Dockerfile 或新增 Dockerfile 继续做。
 
 ## 本机修改后的自检
 
@@ -56,10 +77,10 @@ docker run --rm --gpus all \
   -v "$PWD/TestData:/app/TestData:ro" \
   -v "$PWD/scripts/geoview_gpu_api_test.py:/app/scripts/geoview_gpu_api_test.py:ro" \
   ${BACKEND_IMAGE} \
-  bash -lc 'cd /app && python scripts/geoview_gpu_api_test.py --output runtime/gpu-api-report.json --tracking-frames 3 --tracking-width 640'
+  bash -lc 'cd /app && python scripts/geoview_gpu_api_test.py --output runtime/gpu-api-report.json --tracking-frames 3 --tracking-width 640 --paddle-devices gpu,cpu'
 ```
 
-通过标准：所有模型通过，例如当前基线是 `25 passed / 0 failed`。如果测试脚本新增模型，必须以新增后的总数全部通过为准。
+通过标准：所有模型通过，例如当前基线是 `30 passed / 0 failed`，其中 Paddle 模型需要同时覆盖 `gpu,cpu`。如果测试脚本新增模型，必须以新增后的总数全部通过为准。
 
 前端必须检查：
 
@@ -70,8 +91,14 @@ npm --prefix frontend run build
 如果前端镜像或 Helm 配置变更，还要本机启动前后端容器，访问页面，并确认 `/health`、`/api/system/ping` 正常：
 
 ```bash
+docker rm -f cugrs-app cugrs-mysql cugrs-backend geoview-frontend 2>/dev/null || true
+docker compose pull backend
+docker compose -f docker-compose.frontend.yml pull frontend
+docker compose up -d backend
+docker compose -f docker-compose.frontend.yml up -d frontend
 curl -fsS http://127.0.0.1:5008/health
 curl -fsS http://127.0.0.1:5008/api/system/ping
+curl -fsSI http://127.0.0.1:3000/
 ```
 
 ## 构建和推送
@@ -92,11 +119,34 @@ Cmd=["entrypoint.sh"]
 
 ```bash
 docker login crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com
+docker tag ${BACKEND_IMAGE} ${BACKEND_LATEST_IMAGE}
 docker push ${BACKEND_IMAGE}
+docker push ${BACKEND_LATEST_IMAGE}
 docker image inspect ${BACKEND_IMAGE} --format '{{json .RepoDigests}} {{json .Config.Cmd}}'
+docker image inspect ${BACKEND_LATEST_IMAGE} --format '{{json .RepoDigests}} {{json .Config.Cmd}}'
 ```
 
-前端镜像同样使用明确 tag 构建、推送，并同步更新 compose/Helm/manifest 中引用的 tag。
+前端镜像同样使用明确版本 tag 构建，再打 `latest` 并推送两个 tag。`docker-compose*.yml` 使用 `latest`；Helm values、manifest 和 U 盘打包命令使用明确版本 tag。
+
+```bash
+docker tag ${FRONTEND_IMAGE} ${FRONTEND_LATEST_IMAGE}
+docker push ${FRONTEND_IMAGE}
+docker push ${FRONTEND_LATEST_IMAGE}
+docker image inspect ${FRONTEND_IMAGE} --format '{{json .RepoDigests}} {{json .Config.Cmd}}'
+docker image inspect ${FRONTEND_LATEST_IMAGE} --format '{{json .RepoDigests}} {{json .Config.Cmd}}'
+```
+
+镜像推送后必须同步替换本机正在运行的容器。后端变更只重启后端，前端变更只重启前端；如果两者都变更，则分别重启：
+
+```bash
+docker compose pull backend
+docker compose up -d --force-recreate backend
+docker compose -f docker-compose.frontend.yml pull frontend
+docker compose -f docker-compose.frontend.yml up -d --force-recreate frontend
+curl -fsS http://127.0.0.1:5008/health
+curl -fsS http://127.0.0.1:5008/api/system/ping
+curl -fsSI http://127.0.0.1:3000/
+```
 
 ## 中转机器打包到 U 盘
 只负责给出中转机打包命令，用于交付。中转机器只负责从 Aliyun 拉取前后端精确 tag，直接把压缩镜像包写入 U 盘，并生成校验文件。不在本文件描述内网部署。
@@ -117,19 +167,21 @@ lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,MODEL
 sudo umount /dev/sdX1 2>/dev/null || true
 sudo mkfs.exfat -n GEOVIEW /dev/sdX1
 sudo mkdir -p /mnt/geoview_usb
-sudo mount /dev/sdX1 /mnt/geoview_usb
+sudo mount -o uid=$(id -u),gid=$(id -g),umask=022 /dev/sdX1 /mnt/geoview_usb
 USB_DIR=/mnt/geoview_usb
+touch ${USB_DIR}/write_test && rm ${USB_DIR}/write_test
 ```
 
 按实际前端镜像替换 `FRONTEND_IMAGE`、`FRONTEND_TAG`、`USB_DIR`。下面命令会直接导出压缩包到 U 盘，不在中转机本地额外生成未压缩 tar：
 
 ```bash
 BACKEND_REGISTRY=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs
-BACKEND_TAG=20260515-h100fix1
+BACKEND_TAG=20260517-paddlefix1
 BACKEND_IMAGE=${BACKEND_REGISTRY}:${BACKEND_TAG}
 
-FRONTEND_IMAGE=替换为前端镜像完整地址:tag
-FRONTEND_TAG=替换为前端tag
+FRONTEND_REGISTRY=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/geoview-frontend
+FRONTEND_TAG=20260517-paddlefix1
+FRONTEND_IMAGE=${FRONTEND_REGISTRY}:${FRONTEND_TAG}
 USB_DIR=/mnt/geoview_usb
 
 docker login crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com

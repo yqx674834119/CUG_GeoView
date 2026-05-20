@@ -179,6 +179,13 @@
               </el-radio>
             </div>
           </el-row>
+          <el-row justify="center">
+            <PaddleRuntimeSelector
+              v-model="uploadSrc.paddle_device"
+              :model-path="uploadSrc.model_path"
+              :models="modelPathArr"
+            />
+          </el-row>
           <div class="handle-button">
             <el-button
               type="primary"
@@ -533,6 +540,7 @@ import {selectClahe, selectFilter, selectSharpen, selectSmooth,} from "@/utils/p
 import { analyzeDetectionRecord } from "@/utils/frontAnalysis";
 import { resolveRecordSource } from "@/utils/mediaTransport";
 import ImgShow from "@/components/ImgShow";
+import PaddleRuntimeSelector from "@/components/PaddleRuntimeSelector";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
 
@@ -544,12 +552,20 @@ use([
   TooltipComponent,
 ]);
 
+const ORIENTED_DETECTION_MODEL_PATH = "backend/model/object_detection/mmrotate_oriented_rcnn_r50_fpn_1x_dota_le90";
+const PADDLE_DETECTION_MODEL_PATH = "backend/model/object_detection/paddle_yolo";
+const DETECTION_MODEL_DISPLAY = {
+  [ORIENTED_DETECTION_MODEL_PATH]: "定向目标检测",
+  [PADDLE_DETECTION_MODEL_PATH]: "通用遥感识别",
+};
+
 export default {
   name: "Detectobjects",
   components: {
     ImgShow,
     Tabinfor,
     MyVueCropper,
+    PaddleRuntimeSelector,
     VChart,
   },
   beforeRouteEnter(to, from, next) {
@@ -577,7 +593,8 @@ export default {
         list: [],
         prehandle: 0,
         denoise: 0,
-        model_path:''
+        model_path:'',
+        paddle_device: "gpu",
       },
       modelPathArr:[],
       prePhoto:{
@@ -593,6 +610,9 @@ export default {
     };
   },
   watch:{
+    "uploadSrc.model_path"(modelPath) {
+      this.applyModelRuntimeDefaults(modelPath);
+    },
     uploadSrc:{
       handler(newVal,oldVal){
         this.uploadSrc = newVal
@@ -704,8 +724,9 @@ export default {
   created() {
     this.getUploadImg("目标检测");
     this.getCustomModel('object_detection').then((res)=>{
-      this.modelPathArr = res.data.data
+      this.modelPathArr = this.filterDetectionModels(res.data.data)
       this.uploadSrc.model_path = this.modelPathArr[0]?.model_path
+      this.applyModelRuntimeDefaults(this.uploadSrc.model_path)
     }).catch((rej)=>{})
   },
   methods: {
@@ -722,6 +743,21 @@ export default {
     selectFilter,
     selectSmooth,
     selectClahe,
+    filterDetectionModels(models) {
+      const allowedPaths = [ORIENTED_DETECTION_MODEL_PATH, PADDLE_DETECTION_MODEL_PATH];
+      return allowedPaths
+        .map((modelPath) => (Array.isArray(models) ? models : []).find((item) => item.model_path === modelPath))
+        .filter(Boolean)
+        .map((item) => ({
+          ...item,
+          model_name: DETECTION_MODEL_DISPLAY[item.model_path] || item.model_name,
+        }));
+    },
+    applyModelRuntimeDefaults(modelPath) {
+      if (modelPath === PADDLE_DETECTION_MODEL_PATH) {
+        this.uploadSrc.paddle_device = "cpu";
+      }
+    },
     comparisonOptionLabel(record, index) {
       const rawSource = String(record?.before_img || record?.after_img || "");
       const filename = rawSource.split("/").pop()?.split("?")[0] || `结果 ${index + 1}`;
@@ -729,7 +765,7 @@ export default {
       return `${groupId} - ${filename}`;
     },
     comparisonImageSrc(record, field) {
-      return record?.[`_${field}_preview`] || resolveRecordSource(record, field) || record?.[field] || "";
+      return record?.[`_${field}_preview`] || resolveRecordSource(record, field) || "";
     },
     runDetectionComparison() {
       if (this.selectedComparisonLeft === null || this.selectedComparisonRight === null) {

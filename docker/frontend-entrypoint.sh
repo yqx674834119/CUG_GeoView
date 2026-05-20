@@ -17,6 +17,7 @@ BAIDU_MAP_ACCESS_KEY="${GEOVIEW_BAIDU_MAP_ACCESS_KEY:-}"
 BACKEND_ASSET_MODE="${GEOVIEW_BACKEND_ASSET_MODE:-sendfile}"
 FRONTEND_ASSET_DEBUG="${GEOVIEW_FRONTEND_ASSET_DEBUG:-false}"
 FRONTEND_DEBUG="${GEOVIEW_FRONTEND_DEBUG:-false}"
+FRONTEND_VERSION_TAG="${GEOVIEW_FRONTEND_VERSION_TAG:-}"
 
 if [ -z "${BACKEND_URL}" ] && [ -z "${BACKEND_PORT}" ]; then
     BACKEND_PORT="5008"
@@ -41,6 +42,7 @@ window.__GEOVIEW_RUNTIME_CONFIG__ = {
   backendAssetMode: "$(js_escape "${BACKEND_ASSET_MODE}")",
   frontendAssetDebug: "$(js_escape "${FRONTEND_ASSET_DEBUG}")",
   frontendDebug: "$(js_escape "${FRONTEND_DEBUG}")",
+  frontendVersionTag: "$(js_escape "${FRONTEND_VERSION_TAG}")",
   minerEnabled: "$(js_escape "${MINER_ENABLED}")",
   minerUrl: "$(js_escape "${MINER_URL}")",
   baiduMapAccessKey: "$(js_escape "${BAIDU_MAP_ACCESS_KEY}")"

@@ -1,21 +1,18 @@
 version: "3.9"
 
 services:
-  app:
+  backend:
     image: crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:latest
-    container_name: cugrs-app
+    container_name: cugrs-backend
     ports:
       - "5008:5008"
-      - "3000:3000"
-      - "4000:4000"
-      - "8000:8000"
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
-      MYSQL_USERNAME: paddle_rs
-      MYSQL_PASSWORD: "Yqx090315."
-      MYSQL_DATABASE: paddle_rs
-      GEOVIEW_CONFIG: production
+      GEOVIEW_CONFIG: embedded
+      DATABASE_BACKEND: sqlite
+      SQLITE_DATABASE_PATH: /app/backend/static/geoview.sqlite3
+      GEOVIEW_BACKEND_ENABLED: "true"
+      GEOVIEW_FRONTEND_ENABLED: "false"
+      GEOVIEW_MINER_SERVICE_ENABLED: "false"
       REQUIRE_GPU: ${REQUIRE_GPU:-true}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
@@ -27,16 +24,11 @@ services:
       TORCH_HOME: /root/.cache/torch
       PADDLE_HOME: /root/.paddle
       GEOVIEW_MODEL_ROOT: /app/backend/model
-    depends_on:
-      - mysql
+      GEOVIEW_EXTERNAL_STATIC_ROOT: /data/geoview/static
+      GEOVIEW_INTERNAL_STATIC_ROOT: /app/backend/static
+      GEOVIEW_ASSET_READ_ORDER: external,internal
     volumes:
-      - ./config.yaml:/app/config.yaml
-      - ./backend/static:/app/backend/static
-      - ./backend:/app/backend
-      - ./frontend:/app/frontend
-      - /app/frontend/node_modules
-      - ./miner:/app/miner
-      - /app/miner/node_modules
+      - /data/geoview:/data/geoview
       # HuggingFace & other models cache (persists across container restarts and supports offline deployment)
       - ./offline_cache/huggingface:/root/.cache/huggingface
       - ./offline_cache/torch:/root/.cache/torch
@@ -44,7 +36,6 @@ services:
       - ./offline_cache/paddle:/root/.cache/paddle
 
     restart: unless-stopped
-    runtime: nvidia
     deploy:
       resources:
         reservations:
@@ -52,21 +43,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
-
-  mysql:
-    image: registry.openanolis.cn/openanolis/mysql:8.0.30-8.6
-    container_name: cugrs-mysql
-    command: --default-authentication-plugin=mysql_native_password
-    environment:
-      MYSQL_ROOT_PASSWORD: "root"
-      MYSQL_DATABASE: paddle_rs
-      MYSQL_USER: paddle_rs
-      MYSQL_PASSWORD: "Yqx090315."
-    volumes:
-      - mysql-data:/var/lib/mysql
-    ports:
-      - "3307:3306"
-    restart: unless-stopped
-
-volumes:
-  mysql-data:

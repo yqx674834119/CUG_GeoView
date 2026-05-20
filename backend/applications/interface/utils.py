@@ -8,10 +8,12 @@ from paddlers.transforms import build_transforms
 from applications.common.model_assets import resolve_model_dir
 
 
-def paddle_use_gpu():
+def paddle_use_gpu(use_gpu=True):
     try:
         import paddle
 
+        if not bool(use_gpu):
+            return False
         if not paddle.device.is_compiled_with_cuda():
             raise RuntimeError("Paddle 当前环境未编译 CUDA，拒绝使用 CPU 推理")
         if paddle.device.cuda.device_count() <= 0:
@@ -22,6 +24,19 @@ def paddle_use_gpu():
         return True
     except Exception:
         raise
+
+
+def resolve_paddle_device(req_json):
+    raw_device = req_json.get("paddle_device", req_json.get("device", "gpu"))
+    if isinstance(raw_device, bool):
+        return raw_device
+    device = str(raw_device or "gpu").strip().lower()
+    if device in ("cpu", "false", "0", "off"):
+        return False
+    if device in ("gpu", "true", "1", "on"):
+        return True
+    return True
+
 
 def get_model_info(model_dir):
     model_dir = str(resolve_model_dir(model_dir))

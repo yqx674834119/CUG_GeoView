@@ -86,7 +86,7 @@ RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
     mkdir -p "$CONDA_PKGS_DIRS" && \
     mamba create -y -n PaddleRS37 \
     python=3.7 \
-    paddlepaddle-gpu=2.4.2 \
+    paddlepaddle-gpu=2.5.2 \
     cudatoolkit=11.7 \
     cudnn=8.4 \
     gdal && \

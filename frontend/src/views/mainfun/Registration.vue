@@ -832,18 +832,23 @@ export default {
         this.analysisLoading = false;
       }
     },
-    async uploadMovingImage() {
+    async uploadDemoImages() {
       const formData = new FormData();
-      const current = this.movingFileList[0];
-      formData.append("files", current.raw || current);
+      const fixed = this.fixedFileList[0];
+      const moving = this.movingFileList[0];
+      formData.append("files", fixed.raw || fixed);
+      formData.append("files", moving.raw || moving);
       formData.append("type", "目标检测");
       const response = await createSrc(formData);
       const items = response.data.data || [];
-      if (!items.length) {
+      if (items.length < 2) {
         throw new Error("上传结果为空");
       }
-      registerUploadedSources(items, [current]);
-      return items[0];
+      registerUploadedSources(items, [fixed, moving]);
+      return {
+        fixed: items[0],
+        moving: items[1],
+      };
     },
     async findLatestDetectionRecord(uploadedSrc) {
       return null;
@@ -882,15 +887,15 @@ export default {
       this.running = true;
       this.resultCard = null;
       try {
-        const uploaded = await this.uploadMovingImage();
+        const uploaded = await this.uploadDemoImages();
         const response = await imgUpload({
           model_path: this.uploadSrc.model_path,
-          list: [uploaded.src],
+          list: [uploaded.fixed.src, uploaded.moving.src],
           prehandle: 0,
           denoise: 0,
-        }, "object_detection");
+        }, "small_target_detection");
 
-        const record = response?.data?.data?.records?.[0] || await this.findLatestDetectionRecord(uploaded.src);
+        const record = response?.data?.data?.records?.[0] || await this.findLatestDetectionRecord(uploaded.moving.src);
         if (!record || !record.after_img) {
           throw new Error("未获取到检测结果");
         }

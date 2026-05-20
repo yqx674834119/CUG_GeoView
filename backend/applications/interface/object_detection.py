@@ -18,7 +18,7 @@ from applications.common.path_global import md5_name, generate_url
 from applications.interface.utils import paddle_use_gpu
 
 
-def execute(model_path, data_path, out_dir, names, threshold=0.2):
+def execute(model_path, data_path, out_dir, names, threshold=0.2, use_gpu=True):
     """
     :param model_path: 模型路径
     :param data_path: 数据文件夹路径，里面只包含图片
@@ -59,7 +59,7 @@ def execute(model_path, data_path, out_dir, names, threshold=0.2):
 
     model_dir = str(resolve_model_dir(model_path))
     image_list = [osp.join(data_path, name) for name in names]
-    predictor = pdrs.deploy.Predictor(model_dir=model_dir, use_gpu=paddle_use_gpu())
+    predictor = pdrs.deploy.Predictor(model_dir=model_dir, use_gpu=paddle_use_gpu(use_gpu))
     pred = predictor.predict(image_list)
     ims = [decode_image(i) for i in image_list]
     temps = list()

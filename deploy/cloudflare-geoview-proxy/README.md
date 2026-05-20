@@ -1,6 +1,7 @@
-# GeoView CUGxxx External Proxy
+# GeoView CUGxxx Redirect
 
-This deploys a free Cloudflare Workers reverse proxy.
+This deploys a small Cloudflare Worker that redirects the public URL to the
+original GeoView site.
 
 Public path:
 
@@ -11,7 +12,7 @@ https://cuggeoview.<your-cloudflare-subdomain>.workers.dev/CUGGeoView/
 Origin:
 
 ```text
-https://livablecitylab.hkust-gz.edu.cn/Geoview/
+https://livablecitylab.hkust-gz.edu.cn/GeoView
 ```
 
 Deploy:
@@ -27,12 +28,14 @@ Test after deploy:
 
 ```bash
 curl -I https://cuggeoview.<your-cloudflare-subdomain>.workers.dev/CUGGeoView/
-curl https://cuggeoview.<your-cloudflare-subdomain>.workers.dev/CUGGeoView/health
-curl https://cuggeoview.<your-cloudflare-subdomain>.workers.dev/CUGGeoView/runtime-config.js
+curl -I "https://cuggeoview.<your-cloudflare-subdomain>.workers.dev/CUGGeoView/?x=1"
 ```
 
 Notes:
 
-- This is a real reverse proxy and streams request bodies, so normal upload/download requests do not need base64 wrapping.
-- The user-facing URL does not expose `livablecitylab.hkust-gz.edu.cn`.
-- Mainland China performance is not guaranteed on the free `workers.dev` domain. For stable China-friendly access, the practical free option is still to use an existing China-accessible domain or a domestic CDN account with a bound domain.
+- This is only a redirect. The browser will leave the `workers.dev` URL and load
+  `livablecitylab.hkust-gz.edu.cn` directly.
+- Paths and query strings under `/CUGGeoView/` are preserved, for example
+  `/CUGGeoView/api/system/ping?x=1` redirects to `/GeoView/api/system/ping?x=1`.
+- A redirect avoids Cloudflare Worker proxy overhead, but it does not accelerate
+  the origin site after the browser lands on `livablecitylab.hkust-gz.edu.cn`.

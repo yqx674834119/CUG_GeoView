@@ -5,4 +5,4 @@ workers_dev = true
 
 [vars]
 PUBLIC_PREFIX = "/CUGGeoView"
-ORIGIN_BASE = "https://livablecitylab.hkust-gz.edu.cn/Geoview"
+ORIGIN_BASE = "https://livablecitylab.hkust-gz.edu.cn/GeoView"

@@ -20,7 +20,10 @@ except Exception:
     from collections import Sequence
 
 import numpy as np
-from paddle.fluid.dataloader.collate import default_collate_fn
+try:
+    from paddle.fluid.dataloader.collate import default_collate_fn
+except ModuleNotFoundError:
+    from paddlers.models.ppdet.data.utils import default_collate_fn
 
 from .operators import Transform, Resize, ResizeByShort, _Permute, interp_dict
 from .box_utils import jaccard_overlap

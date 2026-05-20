@@ -30,3 +30,6 @@ config.local.yaml
 docker/__pycache__/
 tmp/
 武汉环境服务和应用部署步骤260413.txt
+deploy/*
+deploy/cloudflare-geoview-proxy/*
+.playwright-mcp/*

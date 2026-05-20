@@ -238,7 +238,8 @@ def change_detection(model_path,
                      step2,
                      type_,
                      window_size=256,
-                     stride=128):
+                     stride=128,
+                     use_gpu=True):
     """
     变化检测
     :param model_path: 静态图模型路径
@@ -250,7 +251,7 @@ def change_detection(model_path,
     """
     print("变化检测----------------->start")
     started_at = time.time()
-    _inference_log("变化检测", "request", model_path=model_path, prehandle=step1, denoise=step2, window_size=window_size, stride=stride, pairs=_compact_list(names), data_path=data_path, output_dir=out_dir)
+    _inference_log("变化检测", "request", model_path=model_path, prehandle=step1, denoise=step2, window_size=window_size, stride=stride, use_gpu=use_gpu, pairs=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     imgs1 = list()
     temp_names = copy.deepcopy(names)
@@ -292,7 +293,8 @@ def change_detection(model_path,
         out_dir,
         names,
         window_size=window_size,
-        stride=stride)
+        stride=stride,
+        use_gpu=use_gpu)
     _inference_log("变化检测", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), result_images=_compact_list(retPics), mask_files=_compact_list(filenames))
     # 4.检测渲染
     res = handle(fun_type_6, filenames, out_dir, out_dir)
@@ -439,7 +441,7 @@ def url_handle(imgs):
 
 
 def object_detection(model_path, data_path, out_dir, names, step1, step2,
-                     type_):
+                     type_, use_gpu=True):
     """
     目标检测
     :param model_path:
@@ -449,7 +451,7 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
     """
     print("目标检测----------------->start", flush=True)
     started_at = time.time()
-    _inference_log("目标检测", "request", model_path=model_path, prehandle=step1, denoise=step2, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
+    _inference_log("目标检测", "request", model_path=model_path, prehandle=step1, denoise=step2, use_gpu=use_gpu, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     temp_names = copy.deepcopy(names)
     for j, pair in enumerate(names):
@@ -474,7 +476,7 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
 
     # 4. 目标检测
     _inference_log("目标检测", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
-    retPics = OD.execute(model_path, data_path, out_dir, imgs)
+    retPics = OD.execute(model_path, data_path, out_dir, imgs, use_gpu=use_gpu)
     _inference_log("目标检测", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     # 5.入库
     records = []
@@ -516,7 +518,7 @@ def object_detection(model_path, data_path, out_dir, names, step1, step2,
 
 
 def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
-                           type_):
+                           type_, use_gpu=True):
     """
     地物分类
     :param model_path:
@@ -526,7 +528,7 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
     """
     print("地物分类----------------->start")
     started_at = time.time()
-    _inference_log("地物分类", "request", model_path=model_path, prehandle=step1, denoise=step2, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
+    _inference_log("地物分类", "request", model_path=model_path, prehandle=step1, denoise=step2, use_gpu=use_gpu, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     temp_names = copy.deepcopy(names)
     for j, pair in enumerate(names):
@@ -550,7 +552,7 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
 
     # 4. 地物分类
     _inference_log("地物分类", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
-    retPics = SS.execute(model_path, data_path, out_dir, imgs)
+    retPics = SS.execute(model_path, data_path, out_dir, imgs, use_gpu=use_gpu)
     _inference_log("地物分类", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     
     # 5.入库
@@ -604,7 +606,7 @@ def terrain_classification(model_path, data_path, out_dir, names, step1, step2,
     return records
 
 
-def classification(model_path, data_path, names, type):
+def classification(model_path, data_path, names, type, use_gpu=True):
     """
     场景分类
     :param model_path: 模型存储目录
@@ -615,7 +617,7 @@ def classification(model_path, data_path, names, type):
     """
     print("场景分类----------------->start")
     started_at = time.time()
-    _inference_log("场景分类", "request", model_path=model_path, input=_compact_list(names), data_path=data_path)
+    _inference_log("场景分类", "request", model_path=model_path, use_gpu=use_gpu, input=_compact_list(names), data_path=data_path)
     imgs = list()
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
@@ -623,7 +625,7 @@ def classification(model_path, data_path, names, type):
     _inference_log("场景分类", "input-normalized", files=_compact_list(imgs))
     # 1. 场景分类
     _inference_log("场景分类", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
-    result = C.execute(model_path, data_path, imgs)
+    result = C.execute(model_path, data_path, imgs, use_gpu=use_gpu)
     _inference_log("场景分类", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_list(result))
     # 2.入库
     records = []
@@ -655,7 +657,7 @@ def classification(model_path, data_path, names, type):
     return records
 
 
-def image_restoration(model_path, data_path, out_dir, names, type_):
+def image_restoration(model_path, data_path, out_dir, names, type_, use_gpu=True):
     """
     图像复原
     :param model_path:
@@ -665,7 +667,7 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
     """
     print("图像复原----------------->start")
     started_at = time.time()
-    _inference_log("图像复原", "request", model_path=model_path, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
+    _inference_log("图像复原", "request", model_path=model_path, use_gpu=use_gpu, input=_compact_list(names), data_path=data_path, output_dir=out_dir)
     imgs = list()
     for j, pair in enumerate(names):
         names[j] = img_url_handle(pair)
@@ -674,7 +676,7 @@ def image_restoration(model_path, data_path, out_dir, names, type_):
 
     # 1. 图像复原
     _inference_log("图像复原", "model-execute-start", model_path=model_path, files=_compact_list(imgs))
-    retPics = IR.execute(model_path, data_path, out_dir, imgs)
+    retPics = IR.execute(model_path, data_path, out_dir, imgs, use_gpu=use_gpu)
     _inference_log("图像复原", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs=_compact_results(retPics))
     # 2.入库
     records = []

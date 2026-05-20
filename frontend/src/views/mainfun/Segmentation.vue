@@ -174,6 +174,13 @@
               </el-radio>
             </div>
           </el-row>
+          <el-row justify="center">
+            <PaddleRuntimeSelector
+              v-model="uploadSrc.paddle_device"
+              :model-path="uploadSrc.model_path"
+              :models="modelPathArr"
+            />
+          </el-row>
           <div class="handle-button">
             <el-button
               type="primary"
@@ -363,8 +370,11 @@ import { imgUpload, createSrc ,getCustomModel } from "@/api/upload";
 import { getUploadImg, goCompress, upload } from "@/utils/getUploadImg";
 import { selectClahe, selectFilter, selectSharpen, selectSmooth, } from "@/utils/preHandle";
 import ImgShow from "@/components/ImgShow";
+import PaddleRuntimeSelector from "@/components/PaddleRuntimeSelector";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
+
+const MULTI_FEATURE_SEGMENTATION_MODEL_PATH = "backend/model/semantic_segmentation/mmseg_cugrs";
 
 export default {
   name: "Segmentation",
@@ -372,6 +382,7 @@ export default {
     ImgShow,
     Tabinfor,
     MyVueCropper,
+    PaddleRuntimeSelector,
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -394,7 +405,7 @@ export default {
       scrollTop: "",
       fit: "fill",
 
-      uploadSrc: { list: [], prehandle: 0, denoise: 0 ,model_path:''},
+      uploadSrc: { list: [], prehandle: 0, denoise: 0, model_path: "", paddle_device: "gpu" },
 
       modelPathArr:[],
 
@@ -419,7 +430,7 @@ export default {
   created() {
     this.getUploadImg("地物分类");
     this.getCustomModel('semantic_segmentation').then(res=>{
-      this.modelPathArr = res.data.data
+      this.modelPathArr = (res.data.data || []).filter((item) => item.model_path === MULTI_FEATURE_SEGMENTATION_MODEL_PATH)
       this.uploadSrc.model_path = this.modelPathArr[0]?.model_path
     }).catch((rej)=>{})
   },

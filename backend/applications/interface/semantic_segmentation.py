@@ -34,11 +34,11 @@ def get_mmseg_model_id(model_path: str) -> str:
     return model_path
 
 
-def execute_paddle(model_path, data_path, out_dir, test_names):
+def execute_paddle(model_path, data_path, out_dir, test_names, use_gpu=True):
     """使用 PaddleRS 执行语义分割推理"""
     image_list = [osp.join(data_path, name) for name in test_names]
     predictor = pdrs.deploy.Predictor(str(resolve_model_dir(model_path)),
-                                      use_gpu=paddle_use_gpu())
+                                      use_gpu=paddle_use_gpu(use_gpu))
     pred = predictor.predict(image_list)
     ims = [i['label_map'] for i in pred]
     temps = list()
@@ -76,7 +76,7 @@ def execute_mmseg(model_path, data_path, out_dir, test_names):
     )
 
 
-def execute(model_path, data_path, out_dir, test_names):
+def execute(model_path, data_path, out_dir, test_names, use_gpu=True):
     """
     统一的执行接口 - 自动路由到 Paddle 或 MMSegmentation
     
@@ -94,4 +94,4 @@ def execute(model_path, data_path, out_dir, test_names):
         return execute_mmseg(model_path, data_path, out_dir, test_names)
     else:
         print(f"[SemanticSegmentation] 使用 Paddle 模型: {model_path}", flush=True)
-        return execute_paddle(model_path, data_path, out_dir, test_names)
+        return execute_paddle(model_path, data_path, out_dir, test_names, use_gpu=use_gpu)

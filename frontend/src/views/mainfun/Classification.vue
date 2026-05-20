@@ -66,6 +66,13 @@
               </el-radio>
             </div>
           </el-row>
+          <el-row justify="center">
+            <PaddleRuntimeSelector
+              v-model="uploadSrc.paddle_device"
+              :model-path="uploadSrc.model_path"
+              :models="modelPathArr"
+            />
+          </el-row>
           <div class="handle-button">
             <el-button type="primary" class="btn-animate btn-animate__shiny" @click="upload('场景分类', 'classification')">
               开始处理
@@ -108,6 +115,7 @@
 import { createSrc, imgUpload, getCustomModel } from "@/api/upload";
 import { getUploadImg, upload } from "@/utils/getUploadImg";
 import ImgShow from '@/components/ImgShow'
+import PaddleRuntimeSelector from "@/components/PaddleRuntimeSelector";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
 
@@ -116,7 +124,8 @@ export default {
   components: {
     Tabinfor,
     MyVueCropper,
-    ImgShow
+    ImgShow,
+    PaddleRuntimeSelector,
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -138,7 +147,8 @@ export default {
       fileList: [],
       uploadSrc: {
         list: [],
-        model_path: ''
+        model_path: '',
+        paddle_device: "gpu",
       },
       modelPathArr: [],
       imgArr: [],

@@ -1,0 +1,67 @@
+ARG RUNTIME_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260515-chunkfix1
+FROM ${RUNTIME_IMAGE}
+
+ARG PADDLE_GPU_VERSION=2.5.2.post117
+ARG PADDLE_WHEEL_INDEX=https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+
+WORKDIR /app
+
+RUN /opt/conda/envs/PaddleRS37/bin/python -m pip install --no-cache-dir --force-reinstall \
+    "paddlepaddle-gpu==${PADDLE_GPU_VERSION}" \
+    -f "${PADDLE_WHEEL_INDEX}" && \
+    /opt/conda/envs/PaddleRS37/bin/python -m pip install --no-cache-dir --upgrade "paddleslim==2.6.0" && \
+    /opt/conda/envs/PaddleRS37/bin/python - <<'PY'
+import paddle
+import paddleslim
+
+if paddle.__version__ != "2.5.2":
+    raise RuntimeError(f"Unexpected Paddle version: {paddle.__version__}")
+if not paddle.device.is_compiled_with_cuda():
+    raise RuntimeError("Paddle GPU wheel is not compiled with CUDA")
+print(
+    "Paddle runtime",
+    paddle.__version__,
+    "cuda_compiled",
+    paddle.device.is_compiled_with_cuda(),
+    "paddleslim",
+    getattr(paddleslim, "__version__", "unknown"),
+)
+PY
+
+COPY sync_model_assets.py /app/sync_model_assets.py
+COPY config.yaml /app/config.yaml
+COPY backend /app/backend
+COPY docker/patches/mmseg_cugrs_ms_deform_attn.py /app/backend/model/semantic_segmentation/mmseg_cugrs/support/dinov3/dinov3/eval/segmentation/models/utils/ms_deform_attn.py
+COPY PaddleRS /app/PaddleRS
+
+RUN conda run -n PaddleRS37 pip install -e /app/PaddleRS && \
+    conda run -n PaddleRS37 pip install -r /app/backend/requirements.txt && \
+    conda run -n PaddleRS37 pip install cryptography && \
+    conda run -n PaddleRS37 pip check
+
+WORKDIR /app/frontend
+COPY frontend/package*.json /app/frontend/
+RUN npm ci --no-audit
+COPY frontend /app/frontend
+RUN npm run build
+
+WORKDIR /app/miner
+COPY miner /app/miner
+
+WORKDIR /app
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod +x /app/sync_model_assets.py
+
+ENV GEOVIEW_EXTERNAL_STATIC_ROOT=/data/geoview/static \
+    GEOVIEW_INTERNAL_STATIC_ROOT=/app/backend/static \
+    UPLOADED_PHOTOS_DEST=/data/geoview/static/upload \
+    GEOVIEW_ASSET_READ_ORDER=external,internal \
+    GEOVIEW_ASSET_DEBUG=0 \
+    GEOVIEW_DEBUG_LOG=false \
+    GEOVIEW_FRONTEND_ENABLED=true \
+    FLASK_CONFIG=
+
+EXPOSE 5008 3000
+
+CMD ["entrypoint.sh"]

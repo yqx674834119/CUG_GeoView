@@ -113,6 +113,13 @@
               </el-radio>
             </div>
           </el-row>
+          <el-row justify="center">
+            <PaddleRuntimeSelector
+              v-model="uploadSrc.paddle_device"
+              :model-path="uploadSrc.model_path"
+              :models="modelPathArr"
+            />
+          </el-row>
           <div class="handle-button">
             <el-button
               type="primary"
@@ -192,6 +199,7 @@ import {getUploadImg, goCompress, upload} from "@/utils/getUploadImg";
 import Tabinfor from "@/components/Tabinfor";
 import MyVueCropper from "@/components/MyVueCropper";
 import ImgShow from "@/components/ImgShow";
+import PaddleRuntimeSelector from "@/components/PaddleRuntimeSelector";
 
 export default {
   name: "Restoreimgs",
@@ -199,6 +207,7 @@ export default {
     Tabinfor,
     MyVueCropper,
     ImgShow,
+    PaddleRuntimeSelector,
   },
   beforeRouteEnter(to, from, next) {
     next((vm) => {
@@ -218,7 +227,8 @@ export default {
       fileList: [],
       uploadSrc: {
         list: [],
-        model_path:''
+        model_path:'',
+        paddle_device: "gpu",
       },
       modelPathArr:[],
       imgArr:[],
