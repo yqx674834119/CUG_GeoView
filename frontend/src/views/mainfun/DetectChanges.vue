@@ -224,10 +224,41 @@
       </el-row>
       <el-row justify="center">
         <PaddleRuntimeSelector
+          v-if="!isSam3Model"
           v-model="upload.paddle_device"
           :model-path="upload.model_path"
           :models="modelPathArr"
         />
+      </el-row>
+      <el-row
+        v-if="isSam3Model"
+        justify="center"
+        class="sam3-prompt-row"
+      >
+        <div class="sam3-prompt-panel">
+          <span class="sam3-prompt-label">开放词汇目标：</span>
+          <el-select
+            v-model="sam3PromptPreset"
+            class="sam3-prompt-select"
+            placeholder="选择目标"
+            clearable
+          >
+            <el-option
+              v-for="item in sam3PromptOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-input
+            v-if="sam3PromptPreset === 'custom'"
+            v-model="sam3CustomPrompt"
+            class="sam3-prompt-input"
+            placeholder="输入一个目标描述"
+            clearable
+          />
+          <span class="sam3-prompt-hint">先分割两期目标，再按目标级匹配输出新增或消失区域。</span>
+        </div>
       </el-row>
 
       <div class="handle-button">
@@ -969,6 +1000,16 @@ export default {
         paddle_device: "cpu",
       },
       modelPathArr:[],
+      sam3PromptPreset: "vehicle",
+      sam3CustomPrompt: "",
+      sam3PromptOptions: [
+        { label: "车辆", value: "vehicle" },
+        { label: "船只", value: "ship" },
+        { label: "飞机", value: "airplane" },
+        { label: "建筑物", value: "building" },
+        { label: "储气罐", value: "storage tank" },
+        { label: "自定义", value: "custom" },
+      ],
       //直方图处理
       uploadSrc3: [],
       uploadSrc4: [],
@@ -1039,6 +1080,17 @@ export default {
     };
   },
   computed: {
+    selectedModel() {
+      return this.modelPathArr.find((item) => item.model_path === this.upload.model_path) || {};
+    },
+    isSam3Model() {
+      return this.selectedModel.backend === "sam3";
+    },
+    sam3PromptText() {
+      return this.sam3PromptPreset === "custom"
+        ? String(this.sam3CustomPrompt || "").trim()
+        : this.sam3PromptPreset;
+    },
     currentRecord() {
       return this.resultArr[this.currentIndex] || null;
     },
@@ -1217,7 +1269,11 @@ export default {
     },
     uploadfile() {
       this.uploadSrc = [];
-      if(this.upload.window_size===this.upload.stride){
+      if (this.isSam3Model && !this.sam3PromptText) {
+        this.$message.error("请输入开放词汇目标");
+        return;
+      }
+      if (!this.isSam3Model && this.upload.window_size === this.upload.stride) {
         this.$message.error('窗口大小不能等于步长')
         return
       }
@@ -1274,6 +1330,11 @@ export default {
                 );
               } else {
                 this.upload.list = this.getList(this.uploadSrc);
+                if (this.isSam3Model) {
+                  this.upload.prompt_text = this.sam3PromptText;
+                } else {
+                  Reflect.deleteProperty(this.upload, "prompt_text");
+                }
                 this.imgUpload(this.upload,'change_detection')
                     .then((res) => {
                       this.$refs.uploadA.clearFiles();
@@ -2170,6 +2231,36 @@ export default {
     margin: 10px;
     width: 450px;
   }
+}
+
+.sam3-prompt-row {
+  margin-top: 14px;
+}
+
+.sam3-prompt-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sam3-prompt-label {
+  font-size: 14px;
+  color: var(--theme-heading-color);
+}
+
+.sam3-prompt-select {
+  width: 260px;
+}
+
+.sam3-prompt-input {
+  width: 280px;
+}
+
+.sam3-prompt-hint {
+  font-size: 12px;
+  color: var(--theme-color);
 }
 
 </style>

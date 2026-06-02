@@ -1,0 +1,28 @@
+ARG RUNTIME_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260519-trackingasync1
+ARG SAM3_SOURCE_IMAGE=local/geoview-sam3-source:20260520-sam3prompt1
+
+FROM ${SAM3_SOURCE_IMAGE} AS sam3source
+FROM ${RUNTIME_IMAGE}
+
+COPY --from=sam3source /opt/conda/envs/SAM312 /opt/conda/envs/SAM312
+COPY --from=sam3source /opt/sam3 /opt/sam3
+COPY --from=sam3source /opt/geoview-models /opt/geoview-models
+COPY . /app
+
+ENV GEOVIEW_EXTERNAL_STATIC_ROOT=/data/geoview/static \
+    GEOVIEW_INTERNAL_STATIC_ROOT=/app/backend/static \
+    UPLOADED_PHOTOS_DEST=/data/geoview/static/upload \
+    GEOVIEW_ASSET_READ_ORDER=external,internal \
+    GEOVIEW_ASSET_DEBUG=0 \
+    GEOVIEW_DEBUG_LOG=false \
+    GEOVIEW_FRONTEND_ENABLED=true \
+    GEOVIEW_SAM3_PYTHON=/opt/conda/envs/SAM312/bin/python \
+    GEOVIEW_SAM3_CHECKPOINT=/opt/geoview-models/sam3/sam3.1_multiplex.pt \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1 \
+    FLASK_CONFIG=
+
+EXPOSE 5008 3000
+
+CMD ["entrypoint.sh"]

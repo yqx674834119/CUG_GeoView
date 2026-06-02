@@ -80,11 +80,12 @@ def requires_initial_rect(model_path: Optional[str]) -> bool:
         "botsort",
         "botsort_engineering",
         "botsort_official",
+        "sam3_prompt",
     }
 
 
 def execute(model_path: str, data_path: str, out_dir: str, names: List[dict],
-            rect: Optional[Sequence[int]]) -> dict:
+            rect: Optional[Sequence[int]], prompt_text: Optional[str] = None) -> dict:
     os.makedirs(out_dir, exist_ok=True)
 
     input_bundle = _prepare_tracking_input(names, data_path, out_dir)
@@ -98,6 +99,14 @@ def execute(model_path: str, data_path: str, out_dir: str, names: List[dict],
             return _execute_botsort_engineering(model_path, out_dir, frames, input_bundle)
         if tracker_mode == "botsort_official":
             return _execute_botsort_official(model_path, out_dir, frames, input_bundle)
+        if tracker_mode == "sam3_prompt":
+            return _execute_sam3_prompt_tracking(
+                model_path,
+                out_dir,
+                frames,
+                input_bundle,
+                prompt_text=prompt_text,
+            )
 
         if rect is None or len(rect) != 4:
             raise TrackingError("当前跟踪模型需要提供初始跟踪框")
@@ -287,6 +296,68 @@ def _execute_botsort_engineering(model_path: str, out_dir: str,
         "trajectory_path": generate_url + trajectory_name,
         "summary": summary,
         "tracked_frame_count": tracked_frames,
+        "total_frame_count": len(frames),
+    }
+
+
+def _execute_sam3_prompt_tracking(model_path: str, out_dir: str,
+                                  frames: Sequence[FrameItem],
+                                  input_bundle: TrackingInputBundle,
+                                  prompt_text: Optional[str]) -> dict:
+    from applications.interface import sam3_prompt as SAM3
+
+    manifest = load_model_manifest(model_path) or {}
+    checkpoint_path = SAM3.resolve_checkpoint(manifest)
+    prompt = SAM3.normalize_prompt(prompt_text or manifest.get("default_prompt") or "")
+
+    video_name = md5_name(f"tracking_{frames[0].filename}_sam3_prompt_sequence.mp4")
+    preview_name = md5_name(f"tracking_{frames[0].filename}_sam3_prompt_preview.png")
+    trajectory_name = md5_name(f"tracking_{frames[0].filename}_sam3_prompt_trajectory.json")
+
+    video_path = os.path.join(out_dir, video_name)
+    preview_path = os.path.join(out_dir, preview_name)
+    trajectory_path = os.path.join(out_dir, trajectory_name)
+
+    sam3_frame_dir = tempfile.mkdtemp(prefix="sam3_tracking_", dir=out_dir)
+    try:
+        for index, frame in enumerate(frames):
+            source = _load_bgr_image(frame.absolute_path)
+            frame_path = os.path.join(sam3_frame_dir, f"{index:06d}.jpg")
+            if not cv2.imwrite(frame_path, source, [int(cv2.IMWRITE_JPEG_QUALITY), 95]):
+                raise TrackingError(f"SAM3 跟踪帧写入失败: {frame_path}")
+
+        output_data = SAM3.run_video_prompt_tracking(
+            frame_dir=sam3_frame_dir,
+            output_video_path=video_path,
+            preview_path=preview_path,
+            trajectory_path=trajectory_path,
+            prompt_text=prompt,
+            checkpoint_path=checkpoint_path,
+            model_path=model_path,
+            fps=float(manifest.get("fps", 8.0)),
+            confidence_threshold=float(manifest.get("confidence_threshold", 0.5)),
+        )
+    finally:
+        shutil.rmtree(sam3_frame_dir, ignore_errors=True)
+
+    _rewrite_video_for_web(video_path)
+    summary = output_data.get("summary") or {}
+    return {
+        "status": "success",
+        "runtime_variant": "sam3",
+        "method_used": "sam3.1_prompt_dense_tracking",
+        "model_path": model_path,
+        "prompt_text": prompt,
+        "first_frame_input": input_bundle.first_frame_input,
+        "source_input_path": input_bundle.source_input_path,
+        "source_input_name": input_bundle.source_input_name,
+        "source_sequence_paths": _public_source_sequence_paths(input_bundle, frames),
+        "input_mode": input_bundle.input_mode,
+        "preview_path": generate_url + preview_name,
+        "output_video_path": generate_url + video_name,
+        "trajectory_path": generate_url + trajectory_name,
+        "summary": summary,
+        "tracked_frame_count": int(summary.get("tracked_frames", 0)),
         "total_frame_count": len(frames),
     }
 
@@ -520,6 +591,8 @@ def _resolve_tracking_runtime(model_path: Optional[str]) -> str:
     manifest = load_model_manifest(model_path)
     if manifest and manifest.get("backend") == "tracking":
         runtime = manifest.get("runtime", "auto")
+        if runtime == "sam3_prompt":
+            return "sam3_prompt"
         if runtime == "auto":
             return "botsort"
         if runtime in {"csrt", "kcf"}:

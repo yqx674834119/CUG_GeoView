@@ -1,0 +1,37 @@
+ARG RUNTIME_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260521-sam3single1-flat
+FROM ${RUNTIME_IMAGE}
+
+WORKDIR /app
+
+# Keep SAM3 fixes in their own stable small layer so future app-only releases
+# can reuse the large runtime/model layers and this dependency layer.
+RUN /opt/conda/envs/SAM312/bin/python -m pip install --no-cache-dir \
+    pycocotools \
+    psutil && \
+    /opt/conda/envs/SAM312/bin/python - <<'PY'
+from pycocotools import mask as mask_util
+import psutil
+from sam3 import build_sam3_image_model
+from sam3.model_builder import build_sam3_multiplex_video_predictor
+
+print("SAM3 runtime dependencies OK", mask_util.__file__, psutil.__version__)
+PY
+
+COPY . /app
+
+RUN cp /app/docker/entrypoint.sh /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod +x /app/sync_model_assets.py && \
+    chmod +x /app/backend/scripts/sam3_prompt_worker.py && \
+    /opt/conda/envs/PaddleRS37/bin/python -m py_compile \
+      /app/backend/applications/interface/analysis.py \
+      /app/backend/applications/interface/sam3_prompt.py \
+      /app/backend/scripts/sam3_prompt_worker.py
+
+ENV GEOVIEW_SAM3_PYTHON=/opt/conda/envs/SAM312/bin/python \
+    GEOVIEW_SAM3_CHECKPOINT=/opt/geoview-models/sam3/sam3.1_multiplex.pt \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1
+
+CMD ["entrypoint.sh"]

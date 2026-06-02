@@ -5,6 +5,8 @@
 __pycache__/
 frontend/node_modules
 frontend/dist
+!frontend/dist/
+!frontend/dist/**
 frontend/build.log
 miner/node_modules
 miner/dist
@@ -15,6 +17,9 @@ tmp
 deploy/frontend/dist
 deploy/frontend/helm/packages
 deploy/cloudflare-geoview-proxy/node_modules
+deploy/cloudflare-geoview-proxy/node_modules/
+deploy/cloudflare-geoview-proxy/.wrangler/
+deploy/cloudflare-geoview-proxy/.wrangler-state/
 *.tar
 *.tar.gz
 *.tgz
@@ -24,12 +29,17 @@ backend/model/**
 !backend/model/tracking/
 !backend/model/tracking/auto/
 !backend/model/tracking/auto/model_manifest.json
+!backend/model/tracking/sam3_prompt/
+!backend/model/tracking/sam3_prompt/model_manifest.json
 !backend/model/tracking/botsort/
 !backend/model/tracking/botsort/botsort.yaml
 !backend/model/tracking/csrt/
 !backend/model/tracking/csrt/model_manifest.json
 !backend/model/tracking/kcf/
 !backend/model/tracking/kcf/model_manifest.json
+!backend/model/change_detection/
+!backend/model/change_detection/sam3_prompt/
+!backend/model/change_detection/sam3_prompt/model_manifest.json
 !backend/model/registration/
 !backend/model/registration/auto/
 !backend/model/registration/auto/model_manifest.json
@@ -37,6 +47,10 @@ backend/model/**
 !backend/model/registration/opencv/model_manifest.json
 backend/app.log
 backend/static/upload
+backend/static/upload/
+static/upload
+static/upload/
+backend/applications/interface/checkpoints/*.pth
 tests/
 docker-compose.yml
 install.md

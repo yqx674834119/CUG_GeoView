@@ -30,6 +30,7 @@ if (fs.existsSync(configPath)) {
 module.exports = defineConfig({
   publicPath: './',
   transpileDependencies: true,
+  productionSourceMap: false,
   ...(devServer ? { devServer } : {}),
 
   // transpileDependencies: ['@arcgis']

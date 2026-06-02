@@ -1,0 +1,77 @@
+ARG RUNTIME_IMAGE=crpi-4r2gidb79yjyny4o.cn-hangzhou.personal.cr.aliyuncs.com/shawnyao/cugrs:20260519-trackingasync1
+FROM ${RUNTIME_IMAGE}
+
+ARG SAM3_COMMIT=2814fa619404a722d03e9a012e083e4f293a4e53
+ARG SAM3_CHECKPOINT_URL=https://www.modelscope.cn/models/facebook/sam3.1/resolve/master/sam3.1_multiplex.pt
+ARG SAM3_CHECKPOINT_SHA256=0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6
+
+WORKDIR /app
+
+# Keep this derived image shallow.  The stable H100 backend image already has
+# many layers, so SAM3 setup is intentionally compressed into one filesystem
+# layer and isolated from PaddleRS37, MMSeg310 and BoTSORTOfficial37.
+RUN export MAMBA_ROOT_PREFIX=/opt/conda && \
+    export CONDA_PKGS_DIRS=/tmp/conda-pkgs-sam312 && \
+    mkdir -p "$CONDA_PKGS_DIRS" && \
+    /opt/conda/bin/conda create --solver classic -y -n SAM312 python=3.12 && \
+    /opt/conda/bin/conda clean -afy && \
+    rm -rf "$CONDA_PKGS_DIRS" && \
+    /opt/conda/bin/conda run --no-capture-output -n SAM312 python -m pip install --no-cache-dir "setuptools<81" && \
+    /opt/conda/bin/conda run --no-capture-output -n SAM312 python -m pip install --no-cache-dir \
+    torch==2.10.0 torchvision --index-url https://download.pytorch.org/whl/cu128 && \
+    /opt/conda/bin/conda run --no-capture-output -n SAM312 python -m pip install --no-cache-dir \
+    "numpy>=1.26,<2" \
+    "opencv-python-headless<4.11" \
+    pillow \
+    matplotlib \
+    tqdm \
+    iopath \
+    huggingface_hub \
+    "timm>=1.0.17" \
+    einops \
+    pycocotools \
+    psutil \
+    ftfy==6.1.1 \
+    regex \
+    typing_extensions && \
+    git clone https://github.com/facebookresearch/sam3.git /opt/sam3 && \
+    cd /opt/sam3 && \
+    git checkout "${SAM3_COMMIT}" && \
+    /opt/conda/bin/conda run --no-capture-output -n SAM312 python -m pip install --no-cache-dir -e /opt/sam3 && \
+    mkdir -p /opt/geoview-models/sam3 && \
+    curl -fL --retry 5 --retry-delay 5 "${SAM3_CHECKPOINT_URL}" \
+      -o /opt/geoview-models/sam3/sam3.1_multiplex.pt && \
+    echo "${SAM3_CHECKPOINT_SHA256}  /opt/geoview-models/sam3/sam3.1_multiplex.pt" | sha256sum -c -
+
+COPY . /app
+
+RUN /opt/conda/bin/conda run --no-capture-output -n PaddleRS37 pip install -e /app/PaddleRS && \
+    /opt/conda/bin/conda run --no-capture-output -n PaddleRS37 pip install -r /app/backend/requirements.txt && \
+    /opt/conda/bin/conda run --no-capture-output -n PaddleRS37 pip install cryptography && \
+    /opt/conda/bin/conda run --no-capture-output -n PaddleRS37 pip check && \
+    cp /app/docker/patches/mmseg_cugrs_ms_deform_attn.py /app/backend/model/semantic_segmentation/mmseg_cugrs/support/dinov3/dinov3/eval/segmentation/models/utils/ms_deform_attn.py && \
+    cd /app/frontend && \
+    npm ci --no-audit && \
+    npm run build && \
+    cp /app/docker/entrypoint.sh /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh && \
+    chmod +x /app/sync_model_assets.py && \
+    chmod +x /app/backend/scripts/sam3_prompt_worker.py
+
+ENV GEOVIEW_EXTERNAL_STATIC_ROOT=/data/geoview/static \
+    GEOVIEW_INTERNAL_STATIC_ROOT=/app/backend/static \
+    UPLOADED_PHOTOS_DEST=/data/geoview/static/upload \
+    GEOVIEW_ASSET_READ_ORDER=external,internal \
+    GEOVIEW_ASSET_DEBUG=0 \
+    GEOVIEW_DEBUG_LOG=false \
+    GEOVIEW_FRONTEND_ENABLED=true \
+    GEOVIEW_SAM3_PYTHON=/opt/conda/envs/SAM312/bin/python \
+    GEOVIEW_SAM3_CHECKPOINT=/opt/geoview-models/sam3/sam3.1_multiplex.pt \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1 \
+    FLASK_CONFIG=
+
+EXPOSE 5008 3000
+
+CMD ["entrypoint.sh"]

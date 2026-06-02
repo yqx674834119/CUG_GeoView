@@ -46,6 +46,7 @@ def _analysis_functions():
         image_restoration,
         object_detection,
         registration,
+        sam3_change_detection,
         terrain_classification,
         tracking,
     )
@@ -57,6 +58,7 @@ def _analysis_functions():
         "image_restoration": image_restoration,
         "object_detection": object_detection,
         "registration": registration,
+        "sam3_change_detection": sam3_change_detection,
         "terrain_classification": terrain_classification,
         "tracking": tracking,
     }
@@ -154,6 +156,14 @@ def _validate_tracking_payload(req_json):
         need_initial_rect = requires_initial_rect(model_path)
     except Exception as exc:
         return None, None, None, fail_api(f"跟踪失败: {str(exc)}")
+    from applications.common.model_assets import load_model_manifest
+
+    manifest = load_model_manifest(model_path) or {}
+    if manifest.get("runtime") == "sam3_prompt":
+        prompt_text = req_json.get("prompt_text") or req_json.get("sam3_prompt") or ""
+        if not prompt_text.strip():
+            return None, None, None, fail_api("请提供 SAM3 文本 Prompt")
+        return model_path, list_, rect, None
     if need_initial_rect:
         if not rect or len(rect) != 4:
             return None, None, None, fail_api("请提供初始跟踪框")
@@ -171,12 +181,20 @@ def _validate_tracking_payload(req_json):
     return model_path, list_, rect, None
 
 
-def _run_tracking_job(app, job_id, model_path, list_, rect, chunk_size):
+def _run_tracking_job(app, job_id, model_path, list_, rect, chunk_size, prompt_text=None):
     started_at = time.time()
     _set_tracking_job(job_id, status="running", started_at=started_at, message="目标跟踪正在运行")
     try:
         with app.app_context():
-            result = _analysis_functions()["tracking"](model_path, up_dir, generate_dir, list_, rect, type_=7)
+            result = _analysis_functions()["tracking"](
+                model_path,
+                up_dir,
+                generate_dir,
+                list_,
+                rect,
+                type_=7,
+                prompt_text=prompt_text,
+            )
             manifest = create_result_manifest(result, route="tracking", chunk_size=chunk_size)
             _analysis_done(
                 "tracking_async",
@@ -235,6 +253,28 @@ def change_detection_api():
         return fail_api("步长和窗口大小必须大于0")
     if window_size < stride:
         return fail_api("步长必须小于等于窗口大小")
+    model_backend = infer_model_backend(model_path)
+    if model_backend == "sam3":
+        list_ = req_json.get("list")
+        if list_ is None:
+            return fail_api("请上传图片")
+        for pair in list_:
+            if "first" not in pair or "second" not in pair or pair["first"] == "" or pair["second"] == "":
+                return fail_api("请求参数异常")
+        try:
+            records = _analysis_functions()["sam3_change_detection"](
+                model_path,
+                up_dir,
+                generate_dir,
+                list_,
+                type_=1,
+                prompt_text=req_json.get("prompt_text") or req_json.get("sam3_prompt"),
+                confidence_threshold=float(req_json.get("confidence_threshold", 0.5)),
+            )
+            _analysis_done("change_detection_sam3", started_at, record_count=len(records), model_path=model_path)
+            return _transport_success("change_detection", {"records": records})
+        except Exception as exc:
+            return fail_api(f"SAM3 变化检测失败: {str(exc)}")
     try:
         model_info = _get_model_info(model_path)
         if model_info["_Attributes"]["model_type"] != "change_detector":
@@ -487,7 +527,15 @@ def tracking_api():
     if error:
         return error
     try:
-        result = _analysis_functions()["tracking"](model_path, up_dir, generate_dir, list_, rect, type_=7)
+        result = _analysis_functions()["tracking"](
+            model_path,
+            up_dir,
+            generate_dir,
+            list_,
+            rect,
+            type_=7,
+            prompt_text=req_json.get("prompt_text") or req_json.get("sam3_prompt"),
+        )
         _analysis_done("tracking", started_at, record_count=len(result) if hasattr(result, "__len__") else -1, model_path=model_path)
         return _transport_success("tracking", result)
     except Exception as exc:
@@ -529,6 +577,7 @@ def tracking_async_api():
         list_,
         rect,
         chunk_size,
+        req_json.get("prompt_text") or req_json.get("sam3_prompt"),
     )
     with _TRACKING_JOB_LOCK:
         if job_id in _TRACKING_JOBS:

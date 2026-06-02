@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 from applications.common.path_global import fun_type_1, fun_type_2, fun_type_3, fun_type_4, fun_type_5, \
-    fun_type_6, fun_type_7, generate_url, fun_type_8, up_url, generate_dir
+    fun_type_6, fun_type_7, generate_url, fun_type_8, up_url, generate_dir, md5_name
 from applications.common.visualization import (
     attach_visual_payload,
     build_visual_payload,
@@ -177,6 +177,175 @@ def _score_stats(detections):
         "max_score": round(float(max(scores)), 4),
         "min_score": round(float(min(scores)), 4),
     }
+
+
+def _sam3_connected_components(mask, min_area):
+    binary = (mask > 0).astype(np.uint8)
+    count, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, 8)
+    components = []
+    for label in range(1, count):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < min_area:
+            continue
+        x = int(stats[label, cv2.CC_STAT_LEFT])
+        y = int(stats[label, cv2.CC_STAT_TOP])
+        w = int(stats[label, cv2.CC_STAT_WIDTH])
+        h = int(stats[label, cv2.CC_STAT_HEIGHT])
+        component_mask = labels == label
+        components.append(
+            {
+                "index": len(components),
+                "area": area,
+                "bbox": (x, y, w, h),
+                "centroid": (float(centroids[label][0]), float(centroids[label][1])),
+                "mask": component_mask,
+            }
+        )
+    return components
+
+
+def _sam3_component_match_score(first, second, kernel):
+    first_mask = first["mask"]
+    second_mask = second["mask"]
+    actual_intersection = int(np.logical_and(first_mask, second_mask).sum())
+    actual_union = int(np.logical_or(first_mask, second_mask).sum())
+    actual_iou = actual_intersection / actual_union if actual_union else 0.0
+
+    first_match = cv2.dilate(first_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
+    second_match = cv2.dilate(second_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
+    match_intersection = int(np.logical_and(first_match, second_match).sum())
+    match_min_area = min(int(first_match.sum()), int(second_match.sum()))
+    match_coverage = match_intersection / match_min_area if match_min_area else 0.0
+
+    cx1, cy1 = first["centroid"]
+    cx2, cy2 = second["centroid"]
+    center_distance = float(np.hypot(cx1 - cx2, cy1 - cy2))
+    x1, y1, w1, h1 = first["bbox"]
+    x2, y2, w2, h2 = second["bbox"]
+    size_reference = max(12.0, min(np.hypot(w1, h1), np.hypot(w2, h2)) * 0.75)
+    center_close = center_distance <= size_reference
+
+    matched = actual_iou >= 0.08 or match_coverage >= 0.35 or (match_coverage >= 0.18 and center_close)
+    score = max(actual_iou, match_coverage)
+    return matched, score, actual_iou, match_coverage, center_distance
+
+
+def _sam3_patch_similarity(first_image, second_image, bbox):
+    if first_image is None or second_image is None:
+        return 0.0
+    if first_image.shape[:2] != second_image.shape[:2]:
+        second_image = cv2.resize(
+            second_image,
+            (first_image.shape[1], first_image.shape[0]),
+            interpolation=cv2.INTER_LINEAR,
+        )
+    x, y, w, h = bbox
+    if w <= 0 or h <= 0:
+        return 0.0
+    pad = max(8, int(round(max(w, h) * 0.35)))
+    x0 = max(0, x - pad)
+    y0 = max(0, y - pad)
+    x1 = min(first_image.shape[1], x + w + pad)
+    y1 = min(first_image.shape[0], y + h + pad)
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    first_crop = first_image[y0:y1, x0:x1]
+    second_crop = second_image[y0:y1, x0:x1]
+    first_gray = cv2.cvtColor(first_crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    second_gray = cv2.cvtColor(second_crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    first_norm = (first_gray - first_gray.mean()) / (first_gray.std() + 1e-6)
+    second_norm = (second_gray - second_gray.mean()) / (second_gray.std() + 1e-6)
+    return float(np.mean(first_norm * second_norm))
+
+
+def _sam3_object_level_change_mask(first_mask, second_mask, first_image=None, second_image=None):
+    first_binary = (first_mask > 0).astype(np.uint8)
+    second_binary = (second_mask > 0).astype(np.uint8)
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    first_binary = cv2.morphologyEx(first_binary, cv2.MORPH_OPEN, kernel)
+    second_binary = cv2.morphologyEx(second_binary, cv2.MORPH_OPEN, kernel)
+    first_binary = cv2.morphologyEx(first_binary, cv2.MORPH_CLOSE, kernel)
+    second_binary = cv2.morphologyEx(second_binary, cv2.MORPH_CLOSE, kernel)
+
+    image_area = max(int(first_binary.shape[0] * first_binary.shape[1]), 1)
+    min_area = max(12, int(round(image_area * 0.00002)))
+    first_components = _sam3_connected_components(first_binary, min_area)
+    second_components = _sam3_connected_components(second_binary, min_area)
+
+    matched_first = set()
+    matched_second = set()
+    match_details = []
+    candidates = []
+    for first in first_components:
+        for second in second_components:
+            matched, score, actual_iou, match_coverage, center_distance = _sam3_component_match_score(first, second, kernel)
+            if matched:
+                candidates.append((score, first, second, actual_iou, match_coverage, center_distance))
+
+    for score, first, second, actual_iou, match_coverage, center_distance in sorted(candidates, key=lambda item: item[0], reverse=True):
+        first_index = first["index"]
+        second_index = second["index"]
+        if first_index in matched_first or second_index in matched_second:
+            continue
+        matched_first.add(first_index)
+        matched_second.add(second_index)
+        match_details.append(
+            {
+                "first_index": first_index,
+                "second_index": second_index,
+                "first_area": first["area"],
+                "second_area": second["area"],
+                "actual_iou": round(float(actual_iou), 4),
+                "match_coverage": round(float(match_coverage), 4),
+                "center_distance": round(float(center_distance), 2),
+            }
+        )
+
+    change_mask = np.zeros_like(first_binary, dtype=np.uint8)
+    suppressed_by_appearance = []
+    for component in first_components:
+        if component["index"] not in matched_first:
+            similarity = _sam3_patch_similarity(first_image, second_image, component["bbox"])
+            if similarity >= 0.45:
+                suppressed_by_appearance.append(
+                    {
+                        "phase": "first",
+                        "index": component["index"],
+                        "area": component["area"],
+                        "bbox": list(component["bbox"]),
+                        "similarity": round(similarity, 4),
+                    }
+                )
+                continue
+            change_mask[component["mask"]] = 255
+    for component in second_components:
+        if component["index"] not in matched_second:
+            similarity = _sam3_patch_similarity(first_image, second_image, component["bbox"])
+            if similarity >= 0.45:
+                suppressed_by_appearance.append(
+                    {
+                        "phase": "second",
+                        "index": component["index"],
+                        "area": component["area"],
+                        "bbox": list(component["bbox"]),
+                        "similarity": round(similarity, 4),
+                    }
+                )
+                continue
+            change_mask[component["mask"]] = 255
+
+    diagnostics = {
+        "first_components": len(first_components),
+        "second_components": len(second_components),
+        "matched_components": len(match_details),
+        "removed_unchanged_components": len(match_details) * 2,
+        "unmatched_first_components": len(first_components) - len(matched_first),
+        "unmatched_second_components": len(second_components) - len(matched_second),
+        "suppressed_by_appearance": suppressed_by_appearance,
+        "min_component_area": min_area,
+        "matches": match_details[:20],
+    }
+    return change_mask, diagnostics
 
 
 def _round_matrix(matrix):
@@ -421,6 +590,217 @@ def change_detection(model_path,
         i += 1
     _inference_log("变化检测", "records-saved", elapsed_sec=round(time.time() - started_at, 3), records=_compact_records(records))
     print("变化检测----------------->end")
+    return records
+
+
+def sam3_change_detection(model_path,
+                          data_path,
+                          out_dir,
+                          names,
+                          type_,
+                          prompt_text,
+                          confidence_threshold=0.5):
+    """
+    SAM3 文本 Prompt 分割变化检测。
+
+    这里不复用 Paddle 推理环境，SAM3 通过独立 Conda 环境的子进程运行，避免影响
+    现有 Paddle/OpenMMLab/BoT-SORT 依赖链。
+    """
+    from applications.common.model_assets import load_model_manifest
+    from applications.interface import sam3_prompt as SAM3
+
+    print("SAM3变化检测----------------->start", flush=True)
+    started_at = time.time()
+    manifest = load_model_manifest(model_path) or {}
+    checkpoint_path = SAM3.resolve_checkpoint(manifest)
+    prompt = SAM3.normalize_prompt(prompt_text)
+    _inference_log(
+        "SAM3变化检测",
+        "request",
+        model_path=model_path,
+        prompt_text=prompt,
+        pairs=_compact_list(names),
+        data_path=data_path,
+        output_dir=out_dir,
+    )
+
+    os.makedirs(out_dir, exist_ok=True)
+    normalized_pairs = copy.deepcopy(names)
+    temp_names = copy.deepcopy(names)
+    jobs = []
+    job_lookup = {}
+    for index, pair in enumerate(normalized_pairs):
+        first_name = img_url_handle(pair["first"])
+        second_name = img_url_handle(pair["second"])
+        pair["first"] = first_name
+        pair["second"] = second_name
+        for phase, image_name in (("first", first_name), ("second", second_name)):
+            mask_name = md5_name(f"sam3_{phase}_{index}_{os.path.splitext(image_name)[0]}.png")
+            mask_path = os.path.join(out_dir, mask_name)
+            job_lookup[(index, phase)] = {
+                "mask_name": mask_name,
+                "mask_path": mask_path,
+                "image_name": image_name,
+            }
+            jobs.append(
+                {
+                    "image_path": os.path.join(data_path, image_name),
+                    "mask_path": mask_path,
+                }
+            )
+
+    SAM3.run_image_prompt_jobs(
+        jobs,
+        prompt_text=prompt,
+        checkpoint_path=checkpoint_path,
+        confidence_threshold=confidence_threshold,
+    )
+
+    records = []
+    for index, pair in enumerate(normalized_pairs):
+        first_mask = cv2.imread(job_lookup[(index, "first")]["mask_path"], cv2.IMREAD_GRAYSCALE)
+        second_mask = cv2.imread(job_lookup[(index, "second")]["mask_path"], cv2.IMREAD_GRAYSCALE)
+        if first_mask is None or second_mask is None:
+            raise RuntimeError("SAM3 分割结果缺失，无法计算变化检测")
+        first_image = cv2.imread(os.path.join(data_path, pair["first"]))
+        second_image = cv2.imread(os.path.join(data_path, pair["second"]))
+        if first_mask.shape != second_mask.shape:
+            second_mask = cv2.resize(
+                second_mask,
+                (first_mask.shape[1], first_mask.shape[0]),
+                interpolation=cv2.INTER_NEAREST,
+            )
+        change_mask, change_diagnostics = _sam3_object_level_change_mask(
+            first_mask,
+            second_mask,
+            first_image=first_image,
+            second_image=second_image,
+        )
+        change_rgb = cv2.cvtColor(change_mask, cv2.COLOR_GRAY2RGB)
+        change_name = md5_name(f"sam3_change_{index}_{os.path.basename(pair['first'])}.png")
+        change_path = os.path.join(out_dir, change_name)
+        if not cv2.imwrite(change_path, change_rgb):
+            raise RuntimeError(f"SAM3 变化检测结果写入失败: {change_path}")
+
+        ret_pic = generate_url + change_name
+        render_styles = handle(fun_type_6, [change_name], out_dir, out_dir)[0]
+        mask, count, areas = draw_masks(change_path)
+        mask_name = os.path.splitext(change_name)[0] + "_mask.png"
+        mask_full_path = os.path.join(out_dir, mask_name)
+        cv2.imwrite(mask_full_path, mask)
+
+        total_area = sum(areas) if areas else 0
+        avg_area = total_area / count if count > 0 else 0
+        small_changes = len([area for area in areas if area < 100])
+        medium_changes = len([area for area in areas if 100 <= area <= 500])
+        large_changes = len([area for area in areas if area > 500])
+
+        data_item = {
+            **render_styles,
+            "mask": generate_url + mask_name,
+            "count": count,
+            "prompt_text": prompt,
+            "sam3_first_mask": generate_url + job_lookup[(index, "first")]["mask_name"],
+            "sam3_second_mask": generate_url + job_lookup[(index, "second")]["mask_name"],
+            "sam3_change_method": "object_component_matching",
+            "sam3_change_diagnostics": change_diagnostics,
+            "total_area": total_area,
+            "avg_area": avg_area,
+            "size_distribution": {
+                "small": small_changes,
+                "medium": medium_changes,
+                "large": large_changes,
+            },
+            "top_changes": sorted(areas, reverse=True)[:10] if areas else [],
+            "fractional_variation": compute_variation(change_path),
+        }
+
+        after_img, _ = hole_handle(out_dir, out_dir + "hole/", [ret_pic])
+        data_item["hole"] = after_img
+        data_item["hole_style"] = handle(
+            fun_type_6,
+            [os.path.basename(after_img)],
+            out_dir + "hole/",
+            out_dir + "hole/",
+            prefix="hole",
+        )[0]
+        hole_mask_abs = os.path.join(out_dir + "hole/", os.path.basename(after_img))
+        hole_mask, count_hole, areas_hole = draw_masks(hole_mask_abs)
+        hole_mask_name = os.path.splitext(os.path.basename(after_img))[0] + "_mask.png"
+        cv2.imwrite(os.path.join(out_dir + "hole/", hole_mask_name), hole_mask)
+        data_item["mask_hole"] = generate_url + "hole/" + hole_mask_name
+        data_item["count_hole"] = count_hole
+        total_area_hole = sum(areas_hole) if areas_hole else 0
+        avg_area_hole = total_area_hole / count_hole if count_hole > 0 else 0
+        data_item["total_area_hole"] = total_area_hole
+        data_item["avg_area_hole"] = avg_area_hole
+        data_item["size_distribution_hole"] = {
+            "small": len([area for area in areas_hole if area < 100]),
+            "medium": len([area for area in areas_hole if 100 <= area <= 500]),
+            "large": len([area for area in areas_hole if area > 500]),
+        }
+        data_item["top_changes_hole"] = sorted(areas_hole, reverse=True)[:10] if areas_hole else []
+        data_item["fractional_variation_hole"] = compute_variation(hole_mask_abs)
+
+        first_public = up_url + pair["first"]
+        second_public = temp_names[index]["second"]
+        payload = build_visual_payload(
+            analysis_type="变化检测",
+            renderer="sam3_prompt_change_detection",
+            source={
+                "primary": _source_entry(first_public, os.path.join(data_path, pair["first"]), pair["first"]),
+                "secondary": _source_entry(second_public, os.path.join(data_path, pair["second"]), pair["second"]),
+            },
+            result={
+                "prompt_text": prompt,
+                "mask_path": data_item["mask"],
+                "mask_hole_path": data_item["mask_hole"],
+                "sam3_first_mask": data_item["sam3_first_mask"],
+                "sam3_second_mask": data_item["sam3_second_mask"],
+                "sam3_change_method": data_item["sam3_change_method"],
+                "sam3_change_diagnostics": data_item["sam3_change_diagnostics"],
+                "regions": extract_binary_regions(_load_mask_array(mask_full_path)),
+                "hole_regions": extract_binary_regions(_load_mask_array(os.path.join(out_dir + "hole/", hole_mask_name))),
+            },
+            metrics={
+                "change_count": count,
+                "total_area": total_area,
+                "avg_area": round(avg_area, 2),
+                "fractional_variation": data_item["fractional_variation"],
+                "change_count_hole": count_hole,
+                "total_area_hole": total_area_hole,
+                "avg_area_hole": round(avg_area_hole, 2),
+                "fractional_variation_hole": data_item["fractional_variation_hole"],
+            },
+            legacy_assets=_legacy_asset_bundle(
+                before_img=first_public,
+                before_img1=second_public,
+                after_img=ret_pic,
+                hole_path=after_img,
+                rendered_path=data_item.get("hole_style"),
+            ),
+            meta={"model_path": model_path, "checkpoint_path": checkpoint_path},
+        )
+        data = json.dumps(attach_visual_payload(data_item, payload), ensure_ascii=False)
+        records.append(
+            save_analysis(
+                type_,
+                first_public,
+                ret_pic,
+                pic2=second_public,
+                data=data,
+                checked=f"sam3:{prompt}",
+                is_hole=True,
+            )
+        )
+
+    _inference_log(
+        "SAM3变化检测",
+        "records-saved",
+        elapsed_sec=round(time.time() - started_at, 3),
+        records=_compact_records(records),
+    )
+    print("SAM3变化检测----------------->end", flush=True)
     return records
 
 
@@ -800,7 +1180,7 @@ def registration(model_path, data_path, out_dir, names, type_):
     return records
 
 
-def tracking(model_path, data_path, out_dir, names, rect, type_):
+def tracking(model_path, data_path, out_dir, names, rect, type_, prompt_text=None):
     """
     目标跟踪
     """
@@ -808,10 +1188,10 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
     
     print("目标跟踪----------------->start")
     started_at = time.time()
-    _inference_log("目标跟踪", "request", model_path=model_path, input=_compact_list(names), rect=rect, data_path=data_path, output_dir=out_dir)
+    _inference_log("目标跟踪", "request", model_path=model_path, input=_compact_list(names), rect=rect, prompt_text=prompt_text, data_path=data_path, output_dir=out_dir)
 
     _inference_log("目标跟踪", "model-execute-start", model_path=model_path, input=_compact_list(names))
-    result = TRACK.execute(model_path, data_path, out_dir, names, rect)
+    result = TRACK.execute(model_path, data_path, out_dir, names, rect, prompt_text=prompt_text)
     _inference_log("目标跟踪", "model-execute-done", elapsed_sec=round(time.time() - started_at, 3), outputs={
         "preview_path": result.get("preview_path"),
         "output_video_path": result.get("output_video_path"),
@@ -835,6 +1215,7 @@ def tracking(model_path, data_path, out_dir, names, rect, type_):
         "method_used": result.get("method_used"),
         "runtime_variant": result.get("runtime_variant"),
         "mot_result_path": result.get("mot_result_path"),
+        "prompt_text": result.get("prompt_text") or prompt_text,
     }
     trajectory_frame_count = 0
     trajectory_sample = []

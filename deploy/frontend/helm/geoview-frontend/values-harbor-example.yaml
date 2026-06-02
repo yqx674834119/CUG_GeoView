@@ -1,7 +1,7 @@
 frontend:
   image:
     repository: 172.20.20.107:8443/your-project/geoview-frontend
-    tag: "20260511-acceptance"
+    tag: "20260521-registration-preprocess2"
     pullPolicy: IfNotPresent
   runtimeConfig:
     backendUrl: "http://172.20.20.240:31839/186/5008"

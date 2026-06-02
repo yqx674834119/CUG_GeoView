@@ -123,6 +123,36 @@
           </el-radio>
         </div>
       </el-row>
+      <el-row
+        v-if="isSam3Model"
+        justify="center"
+        class="sam3-prompt-row"
+      >
+        <div class="sam3-prompt-panel">
+          <span class="sam3-prompt-label">开放词汇目标：</span>
+          <el-select
+            v-model="sam3PromptPreset"
+            class="sam3-prompt-select"
+            placeholder="选择目标"
+            clearable
+          >
+            <el-option
+              v-for="item in sam3PromptOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-input
+            v-if="sam3PromptPreset === 'custom'"
+            v-model="sam3CustomPrompt"
+            class="sam3-prompt-input"
+            placeholder="输入一个目标描述"
+            clearable
+          />
+          <span class="sam3-prompt-hint">按文本目标对全序列进行分割跟踪。</span>
+        </div>
+      </el-row>
 
       <div v-if="firstFrame && requiresInitialRect && !isVideoInput" class="frame-selector">
         <p class="frame-selector__hint">请在首帧图像中框选初始目标：</p>
@@ -721,6 +751,16 @@ export default {
       uploadSrc: {
         model_path: "",
       },
+      sam3PromptPreset: "vehicle",
+      sam3CustomPrompt: "",
+      sam3PromptOptions: [
+        { label: "车辆", value: "vehicle" },
+        { label: "船只", value: "ship" },
+        { label: "飞机", value: "airplane" },
+        { label: "建筑物", value: "building" },
+        { label: "储气罐", value: "storage tank" },
+        { label: "自定义", value: "custom" },
+      ],
       firstFrame: null,
       rect: { x: 0, y: 0, w: 0, h: 0 },
       isDrawing: false,
@@ -765,7 +805,9 @@ export default {
     },
     canStart() {
       const hasValidInput = this.isVideoInput ? this.fileList.length === 1 : this.fileList.length >= 2;
-      return hasValidInput && (!this.requiresInitialRect || (this.rect.w > 0 && this.rect.h > 0));
+      return hasValidInput
+        && (!this.isSam3Model || Boolean(this.sam3PromptText))
+        && (!this.requiresInitialRect || (this.rect.w > 0 && this.rect.h > 0));
     },
     resultSummary() {
       return (this.result && this.result.summary) || null;
@@ -784,6 +826,14 @@ export default {
     },
     selectedModel() {
       return this.modelPathArr.find((item) => item.model_path === this.uploadSrc.model_path) || null;
+    },
+    isSam3Model() {
+      return (this.selectedModel?.model_path || "").includes("/tracking/sam3_prompt");
+    },
+    sam3PromptText() {
+      return this.sam3PromptPreset === "custom"
+        ? String(this.sam3CustomPrompt || "").trim()
+        : this.sam3PromptPreset;
     },
     trackingStatusChartOption() {
       const summary = this.resultSummary || {};
@@ -913,6 +963,7 @@ export default {
       return !(
         modelPath.includes("/tracking/botsort")
         || modelPath.includes("/tracking/botsort_official")
+        || modelPath.includes("/tracking/sam3_prompt")
         || modelPath.endsWith(":botsort")
         || modelPath.endsWith(":botsort_official")
         || modelPath.endsWith(":botsort_engineering")
@@ -932,10 +983,18 @@ export default {
         const currentModels = res.data.data || [];
         this.modelPathArr = currentModels.filter((item) => {
           const path = item.model_path || "";
-          return path.includes("/tracking/botsort_official");
+          return path.includes("/tracking/botsort_official") || path.includes("/tracking/sam3_prompt");
         }).sort((a, b) => {
           const aOfficial = (a.model_path || "").includes("/tracking/botsort_official");
           const bOfficial = (b.model_path || "").includes("/tracking/botsort_official");
+          if (aOfficial !== bOfficial) {
+            return Number(bOfficial) - Number(aOfficial);
+          }
+          const aSam3 = (a.model_path || "").includes("/tracking/sam3_prompt");
+          const bSam3 = (b.model_path || "").includes("/tracking/sam3_prompt");
+          if (aSam3 !== bSam3) {
+            return Number(aSam3) - Number(bSam3);
+          }
           return Number(bOfficial) - Number(aOfficial);
         });
         if (this.modelPathArr.length > 0) {
@@ -1207,6 +1266,10 @@ export default {
         this.$message.error("请选择跟踪模型");
         return;
       }
+      if (this.isSam3Model && !this.sam3PromptText) {
+        this.$message.error("请输入开放词汇目标");
+        return;
+      }
 
       this.running = true;
       this.videoPreviewErrors.source = false;
@@ -1233,6 +1296,9 @@ export default {
             filename: item.filename,
           })),
         };
+        if (this.isSam3Model) {
+          payload.prompt_text = this.sam3PromptText;
+        }
         if (this.requiresInitialRect) {
           const img = this.$refs.firstFrameImg;
           const scaleX = img.naturalWidth / img.clientWidth;
@@ -1474,6 +1540,36 @@ export default {
 
 .model-row {
   margin-top: 18px;
+}
+
+.sam3-prompt-row {
+  margin-top: 12px;
+}
+
+.sam3-prompt-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sam3-prompt-label {
+  font-size: 14px;
+  color: var(--theme-heading-color);
+}
+
+.sam3-prompt-select {
+  width: 260px;
+}
+
+.sam3-prompt-input {
+  width: 280px;
+}
+
+.sam3-prompt-hint {
+  font-size: 12px;
+  color: var(--theme-color);
 }
 
 .custom-model {

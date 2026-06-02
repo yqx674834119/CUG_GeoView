@@ -314,6 +314,7 @@ import {
   TooltipComponent,
 } from "echarts/components";
 import VChart from "vue-echarts";
+import UTIF from "utif";
 
 import Tabinfor from "@/components/Tabinfor";
 import { createSrc, getCustomModel, imgUpload } from "@/api/upload";
@@ -368,11 +369,162 @@ function createCanvas(size) {
 function loadImage(source) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (typeof source === "string" && !source.startsWith("blob:") && !source.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = source;
   });
+}
+
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function isTiffFile(file) {
+  return /\.(tif|tiff)$/i.test(file?.name || "");
+}
+
+function canvasToBlob(canvas, type = "image/png", quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("影像预处理失败"));
+      }
+    }, type, quality);
+  });
+}
+
+async function canvasToFile(canvas, fileName, type = "image/png") {
+  const blob = await canvasToBlob(canvas, type);
+  return new File([blob], fileName, {
+    type,
+    lastModified: Date.now(),
+  });
+}
+
+function decodeTiffPage(buffer, pageIndex) {
+  const ifds = UTIF.decode(buffer);
+  if (!ifds || ifds.length <= pageIndex) {
+    throw new Error("Sentinel-1 参考影像缺少预处理所需信息");
+  }
+  const ifd = ifds[pageIndex];
+  UTIF.decodeImage(buffer, ifd);
+  const rgba = UTIF.toRGBA8(ifd);
+  return {
+    width: ifd.width,
+    height: ifd.height,
+    rgba,
+  };
+}
+
+function imagePlaneFromRgba(page) {
+  const values = new Uint8ClampedArray(page.width * page.height);
+  for (let i = 0; i < values.length; i += 1) {
+    values[i] = page.rgba[i * 4];
+  }
+  return {
+    width: page.width,
+    height: page.height,
+    values,
+  };
+}
+
+function resizePlaneNearest(plane, width, height) {
+  if (plane.width === width && plane.height === height) {
+    return plane.values;
+  }
+  const resized = new Uint8ClampedArray(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = Math.min(plane.height - 1, Math.floor((y * plane.height) / height));
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = Math.min(plane.width - 1, Math.floor((x * plane.width) / width));
+      resized[(y * width) + x] = plane.values[(sourceY * plane.width) + sourceX];
+    }
+  }
+  return resized;
+}
+
+async function createTiffPreviewUrl(file, pageIndex = 0) {
+  const buffer = await file.arrayBuffer();
+  const page = decodeTiffPage(buffer, pageIndex);
+  const canvas = document.createElement("canvas");
+  canvas.width = page.width;
+  canvas.height = page.height;
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.createImageData(page.width, page.height);
+  imageData.data.set(page.rgba);
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+async function createPreviewObjectUrl(file) {
+  if (isTiffFile(file)) {
+    return createTiffPreviewUrl(file, 0);
+  }
+  return URL.createObjectURL(file);
+}
+
+async function loadRasterImageData(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(url);
+    const width = img.naturalWidth || img.width;
+    const height = img.naturalHeight || img.height;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, width, height);
+    return ctx.getImageData(0, 0, width, height);
+  } finally {
+    revokeObjectUrl(url);
+  }
+}
+
+function preprocessedFileName(fileName) {
+  const baseName = (fileName || "sentinel2").replace(/\.[^.]+$/, "");
+  return `${baseName}_preprocessed.png`;
+}
+
+async function buildPreprocessedOpticalFile(referenceFile, opticalFile) {
+  if (!isTiffFile(referenceFile)) {
+    throw new Error("Sentinel-1 参考影像需使用 TIFF 格式");
+  }
+  const [referenceBuffer, opticalImage] = await Promise.all([
+    referenceFile.arrayBuffer(),
+    loadRasterImageData(opticalFile),
+  ]);
+  const maskPage = imagePlaneFromRgba(decodeTiffPage(referenceBuffer, 1));
+  const tonePage = imagePlaneFromRgba(decodeTiffPage(referenceBuffer, 2));
+  const { width, height } = opticalImage;
+  const mask = resizePlaneNearest(maskPage, width, height);
+  const toneMap = resizePlaneNearest(tonePage, width, height);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const output = ctx.createImageData(width, height);
+
+  for (let i = 0; i < width * height; i += 1) {
+    const offset = i * 4;
+    const alpha = mask[i] / 255;
+    const tone = toneMap[i] / 255;
+    const veilR = Math.max(145, Math.min(236, 214 + (-26 + (44 * tone)) + (-7 + (10 * tone))));
+    const veilG = Math.max(145, Math.min(236, 217 + (-26 + (44 * tone))));
+    const veilB = Math.max(145, Math.min(236, 212 + (-26 + (44 * tone)) + (-11 + (8 * tone))));
+    const divisor = Math.max(1 - alpha, 1e-6);
+    output.data[offset] = clampByte((opticalImage.data[offset] - (veilR * alpha)) / divisor);
+    output.data[offset + 1] = clampByte((opticalImage.data[offset + 1] - (veilG * alpha)) / divisor);
+    output.data[offset + 2] = clampByte((opticalImage.data[offset + 2] - (veilB * alpha)) / divisor);
+    output.data[offset + 3] = 255;
+  }
+
+  ctx.putImageData(output, 0, 0);
+  return canvasToFile(canvas, preprocessedFileName(opticalFile.name));
 }
 
 function drawCoverImage(ctx, img, size) {
@@ -493,6 +645,7 @@ export default {
       movingFileList: [],
       fixedPreviewUrl: "",
       movingPreviewUrl: "",
+      preprocessedMovingPreviewUrl: "",
       modelPathArr: [],
       uploadSrc: {
         model_path: ORIENTED_MODEL_PATH,
@@ -622,6 +775,7 @@ export default {
   beforeUnmount() {
     revokeObjectUrl(this.fixedPreviewUrl);
     revokeObjectUrl(this.movingPreviewUrl);
+    revokeObjectUrl(this.preprocessedMovingPreviewUrl);
   },
   methods: {
     syncDisplayMode() {},
@@ -671,24 +825,38 @@ export default {
       }
       return accepted.slice(-1);
     },
-    updatePreview(typeName, fileList) {
+    async updatePreview(typeName, fileList) {
       const nextFile = fileList[0];
-      const nextUrl = nextFile ? URL.createObjectURL(nextFile.raw) : "";
+      const nextUrl = nextFile ? await createPreviewObjectUrl(nextFile.raw) : "";
       if (typeName === "fixed") {
         revokeObjectUrl(this.fixedPreviewUrl);
         this.fixedPreviewUrl = nextUrl;
       } else {
         revokeObjectUrl(this.movingPreviewUrl);
         this.movingPreviewUrl = nextUrl;
+        revokeObjectUrl(this.preprocessedMovingPreviewUrl);
+        this.preprocessedMovingPreviewUrl = "";
       }
     },
-    checkFixed(file, fileList) {
+    async checkFixed(file, fileList) {
       this.fixedFileList = this.normalizeSingleFileList(fileList, "Sentinel-1 参考影像");
-      this.updatePreview("fixed", this.fixedFileList);
+      try {
+        await this.updatePreview("fixed", this.fixedFileList);
+      } catch (error) {
+        console.error(error);
+        this.fixedPreviewUrl = "";
+        this.$message.error(error?.message || "参考影像预览失败");
+      }
     },
-    checkMoving(file, fileList) {
+    async checkMoving(file, fileList) {
       this.movingFileList = this.normalizeSingleFileList(fileList, "Sentinel-2 影像");
-      this.updatePreview("moving", this.movingFileList);
+      try {
+        await this.updatePreview("moving", this.movingFileList);
+      } catch (error) {
+        console.error(error);
+        this.movingPreviewUrl = "";
+        this.$message.error(error?.message || "待检影像预览失败");
+      }
     },
     clearQueue() {
       this.fixedFileList = [];
@@ -708,8 +876,10 @@ export default {
       }
       revokeObjectUrl(this.fixedPreviewUrl);
       revokeObjectUrl(this.movingPreviewUrl);
+      revokeObjectUrl(this.preprocessedMovingPreviewUrl);
       this.fixedPreviewUrl = "";
       this.movingPreviewUrl = "";
+      this.preprocessedMovingPreviewUrl = "";
       this.$message.success("清除成功");
     },
     modalityGapValue(name) {
@@ -836,15 +1006,28 @@ export default {
       const formData = new FormData();
       const fixed = this.fixedFileList[0];
       const moving = this.movingFileList[0];
-      formData.append("files", fixed.raw || fixed);
-      formData.append("files", moving.raw || moving);
+      const fixedFile = fixed.raw || fixed;
+      const movingFile = moving.raw || moving;
+      const preprocessedMovingFile = await buildPreprocessedOpticalFile(fixedFile, movingFile);
+      const preprocessedMovingUrl = await createPreviewObjectUrl(preprocessedMovingFile);
+      revokeObjectUrl(this.preprocessedMovingPreviewUrl);
+      this.preprocessedMovingPreviewUrl = preprocessedMovingUrl;
+      formData.append("files", fixedFile);
+      formData.append("files", preprocessedMovingFile);
       formData.append("type", "目标检测");
       const response = await createSrc(formData);
       const items = response.data.data || [];
       if (items.length < 2) {
         throw new Error("上传结果为空");
       }
-      registerUploadedSources(items, [fixed, moving]);
+      registerUploadedSources(items, [
+        fixed,
+        {
+          ...moving,
+          raw: preprocessedMovingFile,
+          name: preprocessedMovingFile.name,
+        },
+      ]);
       return {
         fixed: items[0],
         moving: items[1],
@@ -854,7 +1037,8 @@ export default {
       return null;
     },
     async generateProcessVisuals() {
-      if (!this.fixedPreviewUrl || !this.movingPreviewUrl) {
+      const movingSource = this.preprocessedMovingPreviewUrl || this.movingPreviewUrl;
+      if (!this.fixedPreviewUrl || !movingSource) {
         this.processVisuals = {
           overlayUrl: "",
           fusionUrl: "",
@@ -862,8 +1046,8 @@ export default {
         return;
       }
       const [overlayUrl, fusionUrl] = await Promise.all([
-        createOverlayVisualization(this.fixedPreviewUrl, this.movingPreviewUrl),
-        createFeatureFusionVisualization(this.fixedPreviewUrl, this.movingPreviewUrl),
+        createOverlayVisualization(this.fixedPreviewUrl, movingSource),
+        createFeatureFusionVisualization(this.fixedPreviewUrl, movingSource),
       ]);
       this.processVisuals = {
         overlayUrl,
@@ -904,7 +1088,7 @@ export default {
         const outputUrl = await fetchBackendAssetBlobUrl(record.after_img);
         this.resultCard = {
           fixed_preview_url: this.fixedPreviewUrl,
-          moving_preview_url: this.movingPreviewUrl,
+          moving_preview_url: this.preprocessedMovingPreviewUrl || this.movingPreviewUrl,
           output_full_url: outputUrl,
           output_asset_path: record.after_img,
           model_name: selectedModel.model_name || REGISTRATION_MODEL_NAME,
